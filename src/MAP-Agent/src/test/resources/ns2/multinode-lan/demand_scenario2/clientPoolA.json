@@ -1,0 +1,36 @@
+[
+  {
+    "startTime": 10,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 25,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 1.0
+    }
+  },
+  {
+    "startTime": 170000,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 5,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 1.0
+    }
+  }
+]

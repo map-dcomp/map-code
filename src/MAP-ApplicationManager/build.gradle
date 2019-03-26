@@ -1,0 +1,186 @@
+import org.gradle.internal.os.OperatingSystem
+
+// Plugins
+plugins {
+    id 'scala'
+    id 'java'
+    id 'maven'
+    id 'eclipse'
+    id 'idea'
+    id "org.springframework.boot" version '1.5.4.RELEASE'
+    id 'maven-publish'
+    id 'findbugs'
+    id 'checkstyle'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+group = 'com.bbn.map'
+version = '0.0.17'
+
+defaultTasks 'bootRun'
+
+// Project Properties can be added here
+ext { }
+
+// Dependencies
+repositories {
+    mavenLocal()
+    jcenter()
+}
+
+dependencies {
+
+    compile group: 'com.bbn.protelis', name: 'P2Protelis', version:'0.24.9'
+      
+    // does not fix!
+    compile 'org.scala-lang:scala-library:2.11.11'
+    compile 'org.scala-lang:scala-reflect:2.11.11'
+    compile 'org.scala-lang:scala-compiler:2.11.11'
+
+    compile 'org.slf4j:slf4j-api:' + slf4j_version
+    compile 'org.apache.logging.log4j:log4j-slf4j-impl:' + log4j_version
+    compile 'org.apache.logging.log4j:log4j-api:' + log4j_version
+    compile 'org.apache.logging.log4j:log4j-core:' + log4j_version
+    compile 'org.apache.logging.log4j:log4j-jcl:' + log4j_version
+
+    compile group: 'com.google.guava', name: 'guava', version: guava_version
+    compile group: 'org.opensaml', name: 'opensaml', version: saml_version
+    compile group: 'org.projectlombok', name: 'lombok', version:lombok_version
+    compile group: 'javax.inject', name: 'javax.inject', version: javax_inject_version
+    compile group: 'org.reflections', name: 'reflections', version: reflections_version
+        
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: jackson_version
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: jackson_version
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: jackson_version
+    compile group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-xml', version: jackson_version
+    compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-guava', version:jackson_version
+    compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jdk8', version:jackson_version
+    compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version:jackson_version
+    compile group: 'com.fasterxml.jackson.module', name: 'jackson-module-parameter-names', version:jackson_version
+
+    compile group: 'org.apache.httpcomponents', name: 'fluent-hc', version: apache_hc_version
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-jetty', version: spring_boot_version
+    compile ('org.springframework.boot:spring-boot-starter-logging:' + spring_boot_version) {
+      exclude group: 'ch.qos.logback'
+    }
+   //    compile group: 'org.springframework.boot', name: 'spring-boot-starter-actuator', version: spring_boot_version // actuator can be enabled for monitoring health
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-data-rest', version: spring_boot_version
+    compile group: 'io.springfox', name: 'springfox-swagger2', version: springfox_version
+    compile(group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: spring_boot_version) {
+        exclude module: 'spring-boot-starter-tomcat'
+    }
+
+    // neo4j
+    compile group: 'org.neo4j', name: 'neo4j', version: neo4j_version
+    compile group: 'org.neo4j', name: 'neo4j-ogm-core', version: neo4j_ogm_version
+    compile group: 'org.neo4j', name: 'neo4j-ogm-embedded-driver', version: neo4j_ogm_version
+    compile group: 'org.neo4j', name: 'neo4j-ogm-bolt-driver', version: neo4j_ogm_version
+    compile group: 'org.springframework.data', name: 'spring-data-neo4j', version: spring_data_version
+
+    // lambda transformers
+    compile project(':lambda-transform')
+    //compile ('com.bbn.map:lambda-transform:0.0.2-DEV')
+
+    //testCompile project(':lambda-transform')
+    //compile group: 'org.scala-lang', name: 'scala-library', version: scala_version
+    
+    runtime group: 'io.springfox', name: 'springfox-swagger-ui', version: springfox_version
+    runtime group: 'org.springframework.data', name: 'spring-data-rest-hal-browser', version: spring_hal_browser_version
+
+    testCompile group: 'com.jayway.jsonpath', name: 'json-path'
+    testCompile group: 'com.jayway.awaitility', name: 'awaitility', version: awaility_version
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: spring_boot_version
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-jetty', version: spring_boot_version
+    testCompile group: 'org.assertj', name: 'assertj-core', version: assertj_core_version
+    testCompile group: 'javax.servlet', name: 'javax.servlet-api', version: java_servlet_api_version
+    testCompile group: 'org.hamcrest', name: 'hamcrest-all', version: hamcrest_version
+    testCompile group: 'com.github.springtestdbunit', name: 'spring-test-dbunit', version: spring_test_dbunit_version
+    testCompile group: 'org.dbunit', name: 'dbunit', version: dbunit_version
+    testCompile group: 'io.springfox', name: 'springfox-staticdocs', version: springfox_staticdocs_version
+    testCompile group: 'org.xmlmatchers', name: 'xml-matchers', version: xml_matchers_version
+    testCompile group: 'org.springframework', name: 'spring-test', version: spring_test_version
+    testCompile( group: 'junit', name: 'junit') {
+        exclude module: 'hamcrest-core'
+    }
+    testCompile( group: 'org.mockito', name: 'mockito-core', version: mockito_version) {
+        exclude module: 'hamcrest-core'
+    }
+}
+
+// Artifacts
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives sourcesJar
+}
+
+// Java Plugin
+processResources {
+    filesMatching('application.properties') {
+        expand(project.properties)
+    }
+}
+
+springBoot {
+    mainClass = 'com.bbn.map.appmgr.ApplicationManagerMain'
+    buildInfo()
+}
+
+test {
+    forkEvery = 1
+}
+
+configurations {
+    all*.exclude group: 'ch.qos.logback'
+}
+
+task stage(dependsOn: 'bootRepackage') { }
+
+task wrapper(type: Wrapper) {
+  gradleVersion = '4.0'
+}
+
+findbugs {
+    ignoreFailures = true
+}
+
+checkstyle {
+    config = resources.text.fromFile('style.xml', 'UTF-8')
+    showViolations = true
+    ignoreFailures = false
+}
+
+task sourceJar(type: Jar) {
+  classifier "sources"
+  from sourceSets.main.allJava
+}
+
+publishing {
+  repositories {
+    mavenLocal()
+  }
+
+  publications {
+  mavenJava(MavenPublication) {
+    from components.java
+    artifact sourceJar
+  }
+ }
+}
+
+// create both executable fat jar and regular jar
+jar {
+    enabled = true
+}
+
+bootRepackage {
+    classifier = 'executable'
+}
+
+
+

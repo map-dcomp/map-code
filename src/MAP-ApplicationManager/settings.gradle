@@ -1,0 +1,6 @@
+rootProject.name = 'MAP-ApplicationManager'
+
+include 'lambda-transform'
+
+
+

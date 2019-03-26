@@ -1,0 +1,115 @@
+import org.gradle.internal.os.OperatingSystem
+
+buildscript {
+  repositories {
+      mavenCentral()
+      jcenter()
+  }
+}
+
+// Plugins
+plugins {
+    id 'java'
+    id 'maven'
+    id 'eclipse'
+    id 'idea'
+    id 'org.springframework.boot' version '1.5.6.RELEASE'
+    id 'maven-publish'
+    id 'checkstyle'
+    id 'findbugs'
+    id 'com.dorongold.task-tree' version '1.3'
+}
+
+
+group = 'com.bbn.map'
+version = '0.1.15'
+
+description = """MAP Agent"""
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+}
+
+repositories {
+
+ mavenLocal()
+ mavenCentral()
+ jcenter()
+ maven {
+   url 'https://repository.apache.org/content/repositories/snapshots'
+ }
+}
+
+configurations {
+    providedRuntime
+    all*.exclude group: 'ch.qos.logback'
+}
+
+dependencies {
+    compile group: 'com.bbn.map', name: 'MAP-ApplicationManager', version: '0.0.17'
+       
+    compile group: 'org.jfree', name: 'jfreechart', version: '1.0.19'   
+    
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: spring_boot_version
+    testCompile group: 'org.springframework', name: 'spring-test', version: spring_test_version
+}
+
+// set gradle version when generating the wrapper
+task wrapper(type: Wrapper) {
+     gradleVersion = '4.0'
+}
+
+test {
+    testLogging.showStandardStreams = true
+}
+
+checkstyle {
+    config = resources.text.fromFile('style.xml', 'UTF-8')
+    showViolations = true
+    ignoreFailures = false
+}
+
+findbugs {
+    ignoreFailures = true
+}
+
+// need to delete the bin directory created by IDEs
+clean {
+  delete 'bin'
+}
+
+task sourceJar(type: Jar) {
+  classifier "sources"
+  from sourceSets.main.allJava
+}
+
+publishing {
+    repositories {
+        mavenLocal()
+    }
+    
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact sourceJar
+        }
+    }
+}
+
+jar {
+  baseName = "map-sim-runner"
+  manifest {
+      attributes 'Main-Class': 'com.bbn.map.simulator.SimulationRunner'
+  }
+}
+
+springBoot {
+    buildInfo()
+    mainClass = 'com.bbn.map.simulator.SimulationRunner'
+}
+
+bootRepackage {
+    classifier = 'executable'
+}

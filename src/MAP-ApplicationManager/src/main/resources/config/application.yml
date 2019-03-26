@@ -1,0 +1,17 @@
+#REST API version
+api:
+    version: v1
+
+neo4j:
+   dbPath: ./db
+
+server:
+    port: 8080
+
+query:
+    maxdepth: 1024
+
+info:
+    app:
+        java:
+            source: ${java.version}    

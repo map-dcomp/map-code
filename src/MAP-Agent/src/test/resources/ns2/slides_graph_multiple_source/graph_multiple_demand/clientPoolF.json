@@ -1,0 +1,104 @@
+[
+  {
+    "startTime": 0,
+    "serverDuration": 10000,
+    "networkDuration": 10000,
+    "numClients": 1,
+    "service": {
+      "group": "testF",
+      "artifact": "test-serviceF",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 2500
+    },
+    "networkLoad": {
+      "DATARATE": 5.0
+    }
+  },
+  {
+    "startTime": 0,
+    "serverDuration": 5000,
+    "networkDuration": 10000,
+    "numClients": 1,
+    "service": {
+      "group": "testE",
+      "artifact": "test-serviceE",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 2500
+    },
+    "networkLoad": {
+      "DATARATE": 5.0
+    }
+  },
+  {
+    "startTime": 0,
+    "serverDuration": 5000,
+    "networkDuration": 10000,
+    "numClients": 1,
+    "service": {
+      "group": "testD",
+      "artifact": "test-serviceD",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 2500
+    },
+    "networkLoad": {
+      "DATARATE": 5.0
+    }
+  },
+  {
+    "startTime": 0,
+    "serverDuration": 4000,
+    "networkDuration": 10000,
+    "numClients": 1,
+    "service": {
+      "group": "testC",
+      "artifact": "test-serviceC",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 2500
+    },
+    "networkLoad": {
+      "DATARATE": 5.0
+    }
+  },
+  {
+    "startTime": 0,
+    "serverDuration": 3000,
+    "networkDuration": 10000,
+    "numClients": 1,
+    "service": {
+      "group": "testB",
+      "artifact": "test-serviceB",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 2500
+    },
+    "networkLoad": {
+      "DATARATE": 5.0
+    }
+  },
+  {
+    "startTime": 0,
+    "serverDuration": 2000,
+    "networkDuration": 10000,
+    "numClients": 1,
+    "service": {
+      "group": "testA",
+      "artifact": "test-serviceA",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 2500
+    },
+    "networkLoad": {
+      "DATARATE": 5.0
+    }
+  }
+]

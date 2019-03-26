@@ -1,0 +1,42 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# NCPs
+set nodeA0 [$ns node]
+tb-set-node-os $nodeA0 XEN46-64-STD
+tb-set-hardware $nodeA0 simple
+
+set nodeA1 [$ns node]
+tb-set-node-os $nodeA1 XEN46-64-STD
+tb-set-hardware $nodeA1 simple
+
+set nodeB0 [$ns node]
+tb-set-node-os $nodeB0 XEN46-64-STD
+tb-set-hardware $nodeB0 simple
+
+set nodeB1 [$ns node]
+tb-set-node-os $nodeB1 XEN46-64-STD
+tb-set-hardware $nodeB1 simple
+
+set nodeC0 [$ns node]
+tb-set-node-os $nodeC0 XEN46-64-STD
+tb-set-hardware $nodeC0 simple
+
+set nodeC1 [$ns node]
+tb-set-node-os $nodeC1 XEN46-64-STD
+tb-set-hardware $nodeC1 simple
+
+# Links
+set linkA0A1 [$ns duplex-link $nodeA0 $nodeA1 100000.0kb 0.0ms DropTail]
+set linkA1B1 [$ns duplex-link $nodeA1 $nodeB1 100000.0kb 0.0ms DropTail]
+set linkB1B0 [$ns duplex-link $nodeB1 $nodeB0 100000.0kb 0.0ms DropTail]
+
+set linkA1C1 [$ns duplex-link $nodeA1 $nodeC1 100000.0kb 0.0ms DropTail]
+set linkC1C0 [$ns duplex-link $nodeC1 $nodeC0 100000.0kb 0.0ms DropTail]
+
+# A0 - A1 - B1 - B0
+#      |
+#      C1 - C0
+      
+$ns rtproto Static
+$ns run

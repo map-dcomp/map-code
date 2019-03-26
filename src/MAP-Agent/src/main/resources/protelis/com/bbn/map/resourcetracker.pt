@@ -1,0 +1,286 @@
+module com:bbn:map:resourcetracker
+
+import com.bbn.protelis.networkresourcemanagement.ResourceSummary.getNullSummary
+import com.bbn.protelis.networkresourcemanagement.ResourceSummary.merge
+import com.bbn.protelis.networkresourcemanagement.ResourceSummary.convertToSummary
+
+import com.bbn.protelis.networkresourcemanagement.ResourceReport.getShortEstimationWindow
+import com.bbn.protelis.networkresourcemanagement.ResourceReport.getLongEstimationWindow
+
+import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.getNullLoadBalancerPlan
+import com.bbn.protelis.networkresourcemanagement.RegionPlan.getNullRegionPlan
+
+import protelis:coord:accumulation
+import protelis:coord:spreading
+import protelis:coord:meta
+import protelis:lang:utils
+import protelis:coord:nonselfstabilizing:accumulation
+import protelis:state:nonselfstabilizing:time
+
+// Deprecated --> will be included in a future Protelis release
+public def once(f) {
+    rep (v <- f.apply()) { v }
+}
+
+// Deprecated --> will be included in a future Protelis release
+def hopDistanceTo(leader) {
+    rep(d <- Infinity) { mux(leader) { 0 } else { 1 + minHood(nbr(d)) } }
+}
+
+// Deprecated --> will be included in a future Protelis release
+public def G(source, initial, metric, accumulate) {
+    rep (distanceValue <- [Infinity, initial]) {
+        mux (source) {
+            // If the device is a source then G return a 0 potential
+            // and the initial value
+            [0, initial]
+        } else {
+            // The other device potentials are requested
+            let ndv = nbr(distanceValue);
+            // G returns the value related to the minimum potential
+            let minTuple = 
+                minHood([
+                    // potential estimation
+                    ndv.get(0) + metric.apply(),
+                    // values estimation
+                    accumulate.apply(ndv.get(1))
+                ]);
+            if (minTuple.get(0) == Infinity) { // if no neighbors or no path to source
+                [Infinity, initial] // default: reset to initial value
+            } else {
+                minTuple
+            }
+        }
+    }.get(1) // return the accumulated value
+}
+
+// Deprecated --> goes away when G is replaced in future Protelis release
+public def broadcastWithMetric(source, value, metric) {
+    G(source, value, metric, identity)
+}
+
+// Deprecated --> will be included in a future Protelis release
+def hopBroadcast(source, value) {
+    broadcastWithMetric(source, value, () -> { 1 });
+}
+
+// TODO: check if I can just do this as Tuple.union
+public def union(a, b) {
+    a.union(b);
+}
+
+public def regionSet(potential) {
+        C(potential, union, unionHood(nbr([self.getController().getRegionIdentifier()])), []);
+}
+
+def countNodes() {
+    let nonce = once(() -> {self.getController().nextRandomDouble()});
+    let leader = nonce == gossip(nonce, min);
+    //self.getController().getExecutionEnvironment().put("blue",leader);
+    self.getController().setRunRLG(leader);
+    let d = hopDistanceTo(leader);
+    countDevices(d);
+}
+
+def mergeSummaries(a,b) { merge(a,b); }
+/**
+ * Summarize the ResourceReports and elect a DCOP leader. 
+ * @param rgn (RegionIdentifier) the region to create the summary for
+ * @param localSummary (ResourceSummary) the local summary
+ * @param window (EstimationWindow) the estimation window to summarize over
+ * @return (ResourceSummary) the summary for the region, will only be complete on the DCOP node
+ */
+def summarizeReports(rgn, window, localSummary, leader) {
+    let d = hopDistanceTo(leader);
+    C(d, mergeSummaries, localSummary, getNullSummary(rgn, window))
+}
+
+/**
+ * Collect all of the ResourceReport objects for a region.
+ * 
+ * @return (Tuple<ResourceReport>) the reports for the region, will only be complete on the leader node
+ * @param leader (boolean) true if this is node is the one to receive all of the reports
+ */
+def collectReports(leader) {
+    let d = hopDistanceTo(leader);
+    C(d, union, [self.getController().getResourceReport(getShortEstimationWindow())], [])
+}
+
+/**
+ * Collect all of the ServiceReport objects for a region.
+ * 
+ * @return (Tuple<ServiceReport>) the reports for the region, will only be complete on the leader node
+ * @param leader (boolean) true if this is the one to receive all of the reports
+ */
+def collectServiceReports(leader) {
+    let d = hopDistanceTo(leader);
+    C(d, union, [self.getController().getServiceReport()], [])
+}
+
+def findNeighborRegions(leader) {
+    let rgn = self.getController().getRegionIdentifier();
+    let localNbrRgns = unionHood PlusSelf(nbr([rgn]));
+    multiRegion(rgn,(n) -> { rgn == n },
+        () -> { hopBroadcast(leader,C(hopDistanceTo(leader), union, localNbrRgns, [])); },
+        []
+    );
+}
+
+/**
+ * Make sure that all nodes in the region have the RLG plan.
+ * 
+ * @param rgn (RegionIdentifier) the region to work with
+ * @param isRlgLeader (boolean) true if self is the RLG leader
+ */
+def disseminateRlgPlan(rgn, isRlgLeader) {
+    let rlgPlan = self.getController().getNetworkState().getLoadBalancerPlan();
+    let rlgBroadcastedPlan = broadcastObjectToRegion(rgn, isRlgLeader, rlgPlan);
+    
+    self.getController().getNetworkState().setLoadBalancerPlan(rlgBroadcastedPlan);    
+}
+
+/**
+ * Make sure that all nodes in the region have the DCOP plan.
+ * 
+ * @param rgn (RegionIdentifier) the region to work with
+ * @param isDcopLeader (boolean) true if self is the DCOP leader
+ */
+def disseminateDcopPlan(rgn, isDcopLeader) {
+    let dcopPlan = self.getController().getNetworkState().getRegionPlan();
+    let dcopBroadcastedPlan = broadcastObjectToRegion(rgn, isDcopLeader, dcopPlan);
+    
+    self.getController().getNetworkState().setRegionPlan(dcopBroadcastedPlan);    
+}
+
+/**
+ * Broadcast an object to all nodes in the specified region.
+ * 
+ * @param rgn (RegionIdentifier) the region 
+ * @param isLeader (boolean) the leader node
+ * @param obj (Object) the object to broadcast
+ */
+def broadcastObjectToRegion(rgn, isLeader, obj) {
+    //self.getController().debug("Sending object to all nodes: " + obj + " leader: " + isLeader);
+    multiRegion(rgn,(n) -> { rgn == n },
+        () -> { 
+            hopBroadcast(isLeader, obj);
+        },
+        obj);
+}
+
+/**
+ * Compute the ResourceSummary for the specified estimation window and store the summary.
+ * The complete summary will only be present on the node running DCOP.
+ * 
+ * @param rgn (RegionIdentifier) the region to summarize across
+ * @param window (EstimationWindow) the estimation window to compute the summary for
+ * @param isDcopLeader (boolean) true if this node is the DCOP leader
+ */
+def computeResourceSummary(rgn, window, isDcopLeader) {
+    self.debug("Top of computeResourceSummary window: " + window);
+    // summarize all reports for the region
+    // Run the collection in the top-level so that we can get nbrs from other regions
+    let localReport = self.getController().getResourceReport(window);
+    self.debug("Local report serverLoad: " + localReport.getComputeLoad());
+    let localSummary = self.convertToSummary(localReport);
+    self.debug("Local summary serverLoad: " + localSummary.getServerLoad());
+    
+    let s = multiRegion(rgn,(n) -> { rgn == n },() -> {summarizeReports(rgn, window, localSummary, isDcopLeader)},[]);
+    self.debug("Setting summary on " + self.getName() + " to " + s.getServerLoad() + " is DCOP: " + isDcopLeader + " localLoad: " + localSummary.getServerLoad());
+    self.getController().getNetworkState().setRegionSummary(s);    
+    self.debug("Bottom of computeResourceSummary window: " + window);
+}
+
+/**
+ * Share DCOP shared information to all regions and store it as needed.
+ * 
+ * @param isDcopLeader (boolean) if this node is running DCOP
+ * @param rgn (RegionIdentifier) the region for this node
+ */
+def shareDcopInformation(rgn, isDcopLeader)  {
+    let nbrRegions = findNeighborRegions(isDcopLeader);
+    
+    let dcopShares = multiInstance(nbrRegions,
+        (key) -> { 
+            hopBroadcast(isDcopLeader && key==rgn, mux(isDcopLeader && key==rgn) {
+                self.getController().getLocalDcopSharedInformation()
+            }  else {
+                // default to empty Tuple specifying that there is no information for the region
+                // this value is filtered out in setAllDcopSharedInformation
+                []
+            });
+        },
+        []);
+    self.getController().setAllDcopSharedInformation(dcopShares);
+}
+
+/**
+ * Share RLG shared information to all regions and store it as needed.
+ * 
+ * @param isRlgLeader (boolean) if this node is running RLG
+ * @param rgn (RegionIdentifier) the region for this node
+ */
+def shareRlgInformation(rgn, isRlgLeader)  {
+    let nbrRegions = findNeighborRegions(isRlgLeader);
+    
+    let rlgShares = multiInstance(nbrRegions,
+        (key) -> {             
+            hopBroadcast(isRlgLeader && key==rgn, mux(isRlgLeader && key==rgn) {
+                self.getController().getLocalRlgSharedInformation()
+            } else { 
+                // default to empty Tuple specifying that there is no information for the region
+                // this value is filtered out in setAllRlgSharedInformation
+                []
+            });
+        },
+        []);
+    self.getController().setAllRlgSharedInformation(rlgShares);
+}
+
+
+// ---- main code
+
+let rgn = self.getController().getRegionIdentifier();
+
+let isDcopLeader = self.getController().isRunDCOP();
+let isRlgLeader = self.getController().isRunRLG();
+let isDnsHandler = self.getController().isHandleDnsChanges();
+
+// compute the resource summary for all estimation windows
+computeResourceSummary(rgn, getShortEstimationWindow(), isDcopLeader);
+computeResourceSummary(rgn, getLongEstimationWindow(), isDcopLeader);
+
+
+// collect all ResourceReport objects for this region
+let r = multiRegion(rgn,(n) -> { rgn == n },() -> {collectReports(isRlgLeader)},[]);
+self.getController().setRegionResourceReports(r);
+
+
+// collect service reports on the RLG node and the DNS handler node
+let serviceReportsRlg = multiRegion(rgn,(n) -> { rgn == n },() -> {collectServiceReports(isRlgLeader)},[]);
+self.getController().setRegionServiceReports(serviceReportsRlg);
+
+let serviceReportsDns = multiRegion(rgn,(n) -> { rgn == n },() -> {collectServiceReports(isDnsHandler)},[]);
+self.getController().setRegionServiceReports(serviceReportsDns);
+
+disseminateRlgPlan(rgn, isRlgLeader);
+
+disseminateDcopPlan(rgn, isDcopLeader);
+
+shareDcopInformation(rgn, isDcopLeader);
+
+shareRlgInformation(rgn, isRlgLeader);
+
+// add some debugging output
+self.getController().getExecutionEnvironment().put("blue",self.getController().isRLGRunning());
+self.getController().getExecutionEnvironment().put("red",self.getController().isDCOPRunning());
+
+// Value to report for debugging purposes:
+//[s.getRegion(), r.size() + " Reports", s.getServerCapacity()]
+//[s.getRegion(), r.size() + " Reports", s.getServerLoad(), s.getNetworkLoad()]
+[rgn, "Num reports: " + r.size()]
+
+//let report = self.getController().getResourceReport(getShortEstimationWindow());
+//let d = report.getClientDemand();
+//let c = report.getServerCapacity();
+//[d,c,s];

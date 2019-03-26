@@ -1,0 +1,19 @@
+[
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "hostname": "image-recognition-high",
+    "defaultNode": "nodeA2",
+    "defaultNodeRegion": "A",
+    "initialInstances": "10",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  }
+]

@@ -1,0 +1,87 @@
+[
+  {
+    "startTime": 10,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 50,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 0.1
+    }
+  },
+  {
+    "startTime": 30000,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 75,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 0.1
+    }
+  },
+  {
+    "startTime": 60000,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 50,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 0.1
+    }
+  },
+  {
+    "startTime": 90000,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 75,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 0.1
+    }
+  },
+  {
+    "startTime": 170000,
+    "serverDuration": 300000,
+    "networkDuration": 5000,
+    "numClients": 50,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.1
+    },
+    "networkLoad": {
+      "DATARATE": 0.1
+    }
+  }
+]

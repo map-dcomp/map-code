@@ -1,0 +1,7 @@
+target/
+*.log
+.gradle
+build/
+bin/
+.classpath
+build_log.txt

@@ -1,0 +1,3 @@
+[submodule "src/P2Protelis"]
+	path = src/P2Protelis
+	url = https://github.com/map-dcomp/P2Protelis.git

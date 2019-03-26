@@ -1,0 +1,6 @@
+target/
+*.log
+.classpath
+bin/
+build/
+.gradle/

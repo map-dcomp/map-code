@@ -1,0 +1,19 @@
+[
+  {
+    "startTime": 10000,
+    "serverDuration": 30000,
+    "networkDuration": 50000,
+    "numClients": 40,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 1.0
+    },
+    "networkLoad": {
+      "DATARATE": 50.0
+    }
+  }
+]

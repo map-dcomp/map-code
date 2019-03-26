@@ -1,0 +1,12 @@
+.DS_Store
+.cache-main
+.cache-tests
+.classpath
+.gradle
+.metadata/
+.project
+.settings/
+.tmp
+*.log
+bin
+build

@@ -1,0 +1,4 @@
+Public Release Version: 2018-04-19
+	+ MAP Agent Source Code
+	+ MAP Lo-fidelity Simulation Source Code
+	+ Example Algorithms

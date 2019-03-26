@@ -1,0 +1,121 @@
+[
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "hostname": "image-recognition-high",
+    "defaultNode": "serverB",
+    "defaultNodeRegion": "B",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-low",
+      "version": "1"
+    },
+    "hostname": "image-recognition-low",
+    "defaultNode": "serverB",
+    "defaultNodeRegion": "B",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "nu.pattern",
+      "artifact": "opencv",
+      "version": "2.4.9-7"
+    },
+    "hostname": "opencv.map",
+    "defaultNode": "serverB",
+    "defaultNodeRegion": "B",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition",
+      "version": "1"
+    },
+    "hostname": "image-recognition",
+    "defaultNode": "serverX",
+    "defaultNodeRegion": "X",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "federated-information-gateway",
+      "version": "1"
+    },
+    "hostname": "federated-information-gateway",
+    "defaultNode": "serverB",
+    "defaultNodeRegion": "B",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-configuration-low",
+      "version": "1"
+    },
+    "hostname": "image-recognition-configuration-low",
+    "defaultNode": "serverB",
+    "defaultNodeRegion": "B",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-configuration-high",
+      "version": "1"
+    },
+    "hostname": "image-recognition-configuration-high",
+    "defaultNode": "serverX",
+    "defaultNodeRegion": "X",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1"
+    },
+    "networkCapacity": {
+      "DATARATE": "100"
+    }
+  }
+]

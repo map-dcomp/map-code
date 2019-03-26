@@ -1,0 +1,26 @@
+#  A0 - B0
+#   \   /
+#  clientPoolA
+
+set ns [new Simulator]
+source tb_compat.tcl
+
+# NCPs
+set nodeA0 [$ns node]
+tb-set-node-os $nodeA0 XEN46-64-STD
+tb-set-hardware $nodeA0 small
+
+set nodeB0 [$ns node]
+tb-set-node-os $nodeB0 XEN46-64-STD
+tb-set-hardware $nodeB0 large
+
+set clientPoolA [$ns node]
+tb-set-node-os $clientPoolA XEN46-64-STD
+
+# Links
+set linkAB [$ns duplex-link $nodeA0 $nodeB0 100000.0kb 0.0ms DropTail]
+set linkClientA [$ns duplex-link $clientPoolA $nodeA0 100000.0kb 0.0ms DropTail]
+set linkClientA [$ns duplex-link $clientPoolA $nodeB0 100000.0kb 0.0ms DropTail]
+
+$ns rtproto Static
+$ns run

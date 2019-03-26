@@ -1,0 +1,18 @@
+${AnsiColor.MAGENTA}                ${AnsiColor.CYAN}                 ${AnsiColor.WHITE}
+${AnsiColor.MAGENTA}         ____   ${AnsiColor.CYAN}                 ${AnsiColor.WHITE} ,-.----.    
+${AnsiColor.MAGENTA}        ,'  , `.${AnsiColor.CYAN}    ,---,        ${AnsiColor.WHITE} \    /  \   
+${AnsiColor.MAGENTA}     ,-+-,.' _ |${AnsiColor.CYAN}   '  .' \       ${AnsiColor.WHITE} |   :    \  
+${AnsiColor.MAGENTA}  ,-+-. ;   , ||${AnsiColor.CYAN}  /  ;    '.     ${AnsiColor.WHITE} |   |  .\ : 
+${AnsiColor.MAGENTA} ,--.'|'   |  ;|${AnsiColor.CYAN} :  :       \    ${AnsiColor.WHITE} .   :  |: | 
+${AnsiColor.MAGENTA}|   |  ,', |  ':${AnsiColor.CYAN} :  |   /\   \   ${AnsiColor.WHITE} |   |   \ : 
+${AnsiColor.MAGENTA}|   | /  | |  ||${AnsiColor.CYAN} |  :  ' ;.   :  ${AnsiColor.WHITE} |   : .   / 
+${AnsiColor.MAGENTA}'   | :  | :  |,${AnsiColor.CYAN} |  |  ;/  \   \ ${AnsiColor.WHITE} ;   | |`-'  
+${AnsiColor.MAGENTA};   . |  ; |--' ${AnsiColor.CYAN} '  :  | \  \ ,' ${AnsiColor.WHITE} |   | ;     
+${AnsiColor.MAGENTA}|   : |  | ,    ${AnsiColor.CYAN} |  |  '  '--'   ${AnsiColor.WHITE} :   ' |     
+${AnsiColor.MAGENTA}|   : '  |/     ${AnsiColor.CYAN} |  :  :         ${AnsiColor.WHITE} :   : :     
+${AnsiColor.MAGENTA};   | |`-'      ${AnsiColor.CYAN} |  | ,'         ${AnsiColor.WHITE} |   | :     
+${AnsiColor.MAGENTA}|   ;/          ${AnsiColor.CYAN} `--''           ${AnsiColor.WHITE} `---'.|     
+${AnsiColor.MAGENTA}'---'           ${AnsiColor.CYAN}                 ${AnsiColor.WHITE} `---`
+${AnsiColor.MAGENTA}     
+${AnsiColor.DEFAULT}
+                                            
