@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,29 +31,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
-import java.net.UnknownHostException;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import javax.annotation.Nonnull;
 
 import org.apache.logging.log4j.ThreadContext;
-import org.junit.Assert;
-import org.junit.rules.ExternalResource;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.SpringApplication;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.core.env.SimpleCommandLinePropertySource;
 
-import com.bbn.map.AgentConfiguration;
-import com.bbn.map.Controller;
-import com.bbn.map.appmgr.ApplicationManagerMain;
-import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
@@ -78,35 +65,20 @@ public final class TestUtils {
      */
     public static final int DEFAULT_RETRY_COUNT = 3;
 
-    private TestUtils() {
-    }
+    /**
+     * The polling interval to use with the simulation for tests.
+     * 
+     * If this value is at 10 ms, then things start falling behind and the CPU
+     * usage ramps way up
+     */
+    public static final long POLLING_INTERVAL_MS = 500;
 
     /**
-     * Wait for the simulation to complete a number of AP iterations. When this
-     * method returns the {@link Controller#getExecutionCount()} will be greater
-     * than the current value by at least <code>numRounds</code>
-     * 
-     * @param sim
-     *            the simulation that is being run
-     * @param numRounds
-     *            the number of rounds to wait
+     * DNS TTL for tests.
      */
-    public static void waitForApRounds(@Nonnull final Simulation sim, final int numRounds) {
-        final long timeToWait = AgentConfiguration.getInstance().getApRoundDuration().toMillis();
+    public static final int DNS_TTL = 1;
 
-        // get current max number of executions so we know how long to wait
-        final Map<Controller, Long> currentMaxExecutions = sim.getScenario().getServers().entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getValue, e -> e.getValue().getExecutionCount()));
-
-        // poll the simulation until we have enough executions
-        boolean doneWaiting = false;
-        while (!doneWaiting) {
-            sim.getClock().waitForDuration(timeToWait);
-
-            doneWaiting = currentMaxExecutions.entrySet().stream().allMatch(e -> {
-                return e.getKey().getExecutionCount() >= e.getValue() + numRounds;
-            });
-        }
+    private TestUtils() {
     }
 
     /**
@@ -123,43 +95,6 @@ public final class TestUtils {
         protected void finished(final Description description) {
             LOGGER.info("Finished test {} in {}", description.getMethodName(), description.getClassName());
             ThreadContext.pop();
-        }
-    }
-
-    /**
-     * JUnit rule that starts and stops the {@link ApplicationManagerMain}
-     * around a test case.
-     * 
-     * @author jschewe
-     *
-     */
-    public static class UseMapApplicationManager extends ExternalResource {
-        private ConfigurableApplicationContext context = null;
-
-        @Override
-        protected void before() throws Throwable {
-            context = launchAppManager(new String[0]);
-        }
-
-        @Override
-        protected void after() {
-            // make sure that nothing is left hanging around
-            AppMgrUtils.getApplicationManager().clear();
-
-            if (null != context) {
-                context.close();
-                context = null;
-            }
-        }
-
-        private static ConfigurableApplicationContext launchAppManager(final String[] args)
-                throws UnknownHostException {
-            final SpringApplication app = new SpringApplication(ApplicationManagerMain.class);
-            final SimpleCommandLinePropertySource source = new SimpleCommandLinePropertySource(args);
-            ApplicationManagerMain.addDefaultProfile(app, source);
-            final ConfigurableApplicationContext ctx = app.run(args);
-
-            return ctx;
         }
     }
 
@@ -206,35 +141,6 @@ public final class TestUtils {
     }
 
     /**
-     * Each C/G operation in the AP program can take up to 2 times the network
-     * diameter to complete. As of 10/25/2017 our program is G -> C -> G
-     * (measure, collect, broadcast), so the multiplier is 6.
-     */
-    private static final int AP_ROUNDS_MULTIPLIER = 6;
-    /**
-     * Extra rounds to wait to handle differences in systems.
-     */
-    private static final int AP_ROUNDS_FUZZ = 10;
-
-    /**
-     * Compute the number of rounds it will take AP to stabilize. This is based
-     * on the AP program that we are running and the diameter of the network. If
-     * the network diameter cannot be determined an assertion violation occurs.
-     * 
-     * @param sim
-     *            the simulation containing the network
-     * @return the number of rounds for AP to stabilize
-     */
-    public static int computeRoundsToStabilize(@Nonnull final Simulation sim) {
-        final double networkDiameter = sim.getNetworkDiameter();
-        Assert.assertTrue("Cannot find the network diameter", Double.isFinite(networkDiameter));
-
-        final int numApRoundsToStabilize = (int) Math.ceil(networkDiameter * AP_ROUNDS_MULTIPLIER) + AP_ROUNDS_FUZZ;
-
-        return numApRoundsToStabilize;
-    }
-
-    /**
      * Default link rate to use for container parameters when testing.
      */
     public static final double DEFAULT_LINK_DATARATE = 100;
@@ -253,13 +159,16 @@ public final class TestUtils {
      * @return the dummy container parameters
      * @see #DEFAULT_CONTAINER_CAPACITY
      * @see #DEFAULT_LINK_DATARATE
+     * @see LinkMetricName#DATARATE_RX
+     * @see LinkMetricName#DATARATE_RX
      */
     public static ContainerParameters dummyContainerParameters(@Nonnull final ServiceIdentifier<?> service) {
         final ImmutableMap.Builder<NodeAttribute<?>, Double> computeCapacity = ImmutableMap.builder();
         computeCapacity.put(NodeMetricName.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
 
         final ImmutableMap.Builder<LinkAttribute<?>, Double> networkCapacity = ImmutableMap.builder();
-        networkCapacity.put(LinkMetricName.DATARATE, DEFAULT_LINK_DATARATE);
+        networkCapacity.put(LinkMetricName.DATARATE_TX, DEFAULT_LINK_DATARATE);
+        networkCapacity.put(LinkMetricName.DATARATE_RX, DEFAULT_LINK_DATARATE);
 
         return new ContainerParameters(computeCapacity.build(), networkCapacity.build());
     }

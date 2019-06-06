@@ -21,18 +21,69 @@ pipeline {
 		        sloccountPublish pattern: 'cloc.xml' 
 		    }
 		}
-		
-		stage('Build and Test') {
+
+		stage('P2Protelis') {
 			steps {
-                          wrap([$class: 'Xvfb']) {                          
 				timestamps {
-				  timeout(time: 2, unit: 'HOURS') {
-                                    sh script: "./continuous_integration/standard_build", returnStdout: true
-				} // timeout
-			    } // timestamps
-                          } // Xvfb
-			} // steps
-		} // stage build & test
+                                  dir("src/P2Protelis") {
+                                    timeout(time: 30, unit: 'MINUTES') {
+                                      sh "./gradlew --continue --no-daemon --gradle-user-home " + gradleRepo() + " -Dmaven.repo.local=" + mavenRepo() + " clean build publish -x test"
+                                    }
+                                  }
+				}
+			}
+		}
+
+		stage('MAP Agent') {
+			steps {
+				timestamps {
+                                  dir("src/MAP-Agent") {
+                                    timeout(time: 3, unit: 'HOURS') {
+                                      sh "./gradlew -Dtest.ignoreFailures=true --continue --no-daemon --gradle-user-home " + gradleRepo() + " -Dmaven.repo.local=" + mavenRepo() + " clean build check publish"
+                                    }
+                                  }
+				}
+			}
+		}
+
+		stage('MAP Visualization') {
+			steps {
+                          wrap([$class: 'Xvfb']) {
+				timestamps {
+                                  dir("src/MAP-Visualization") {
+                                    timeout(time: 1, unit: 'HOURS') {
+                                      sh "./gradlew -Dtest.ignoreFailures=true --continue --no-daemon --gradle-user-home " + gradleRepo() + " -Dmaven.repo.local=" + mavenRepo() + " clean build check"
+                                    }
+                                  }
+				}
+                            }
+			}
+		}
+
+		stage('MAP Chart Generation') {
+			steps {
+				timestamps {
+                                  dir("src/MAP-ChartGeneration") {
+                                    timeout(time: 1, unit: 'HOURS') {
+                                      sh "./gradlew -Dtest.ignoreFailures=true --continue --no-daemon --gradle-user-home " + gradleRepo() + " -Dmaven.repo.local=" + mavenRepo() + " clean build check"
+                                    }
+                                  }
+				}
+			}
+		}
+
+		stage('MAP Demand Generation GUI') {
+			steps {
+				timestamps {
+                                  dir("src/MAP-DemandGenerationGUI") {
+                                    timeout(time: 1, unit: 'HOURS') {
+                                      sh "./gradlew -Dtest.ignoreFailures=true --continue --no-daemon --gradle-user-home " + gradleRepo() + " -Dmaven.repo.local=" + mavenRepo() + " clean build check"
+                                    }
+                                  }
+				}
+			}
+		}
+
                 
 	} // stages
 		
@@ -50,7 +101,7 @@ pipeline {
                     junit testResults: "**/build/test-results/**/*.xml", keepLongStdio: true
                     
 			emailext recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'CulpritsRecipientProvider']], 
-					to: 'fill-in-email-address',
+					to: 'FILL-IN-EMAIL-HERE',
 					subject: '$DEFAULT_SUBJECT', 
 					body: '''${PROJECT_NAME} - Build # ${BUILD_NUMBER} - ${BUILD_STATUS}
 
@@ -71,3 +122,11 @@ ${BUILD_LOG, maxLines=50}
 	} // post
 
 } // pipeline
+
+def gradleRepo() {
+ "${WORKSPACE}/gradle-repo"
+}
+
+def mavenRepo() {
+ "${WORKSPACE}/maven-repo"
+}

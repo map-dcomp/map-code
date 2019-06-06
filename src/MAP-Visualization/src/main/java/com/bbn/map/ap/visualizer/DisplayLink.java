@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,6 +32,10 @@ BBN_LICENSE_END*/
 package com.bbn.map.ap.visualizer;
 
 import java.text.NumberFormat;
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.DoubleStream;
+import java.util.stream.Stream;
 
 import com.bbn.map.Controller;
 import com.bbn.map.common.value.LinkMetricName;
@@ -40,6 +44,7 @@ import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NetworkNode;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
+import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.visualizer.DisplayEdge;
 import com.bbn.protelis.networkresourcemanagement.visualizer.DisplayNode;
 import com.google.common.collect.ImmutableMap;
@@ -95,38 +100,67 @@ public class DisplayLink extends DisplayEdge {
             // computed for the short time interval
             final ResourceReport report = controller.getResourceReport(ResourceReport.EstimationWindow.SHORT);
 
-            final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> networkLoad = report
-                    .getAllNetworkLoad();
-            final ImmutableMap<LinkAttribute<?>, Double> linkDemand = networkLoad.get(neighbor.getNodeIdentifier());
-            if (null != linkDemand) {
-                final Double demand = linkDemand.get(LinkMetricName.DATARATE);
-                if (null != demand) {
-                    final double percentageUsed = demand / getLink().getBandwidth();
-                    if (!Double.isNaN(percentageUsed)) {
+            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad = report
+                    .getNetworkLoad();
+            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkLoad = networkLoad
+                    .get(neighbor.getNodeIdentifier());
+            if (null != linkLoad) {
 
-                        final String color;
-                        if (percentageUsed > DisplayController.RED_THRESHOLD) {
-                            color = "red";
-                        } else if (percentageUsed > DisplayController.ORANGE_THRESHOLD) {
-                            color = "orange";
-                        } else if (percentageUsed > DisplayController.YELLOW_THRESHOLD) {
-                            color = "yellow";
-                        } else {
-                            color = "black";
-                        }
+                final double loadTx = aggregateLinkData(linkLoad, LinkMetricName.DATARATE_TX);
+                final double percentageUsedTx = loadTx / getLink().getBandwidth();
 
-                        text.append(" - ");
-                        text.append("<font color='" + color + "'>");
-                        text.append(controller.getName());
-                        text.append(" : ");
-                        text.append(USAGE_FORMAT.format(percentageUsed * 100));
-                        text.append("%");
-                        text.append("</font>");
+                final double loadRx = aggregateLinkData(linkLoad, LinkMetricName.DATARATE_RX);
+                final double percentageUsedRx = loadRx / getLink().getBandwidth();
 
-                    } // not NaN
+                // choose largest no-NaN value
+                final double percentageUsed;
+                if (!Double.isNaN(percentageUsedRx) && !Double.isNaN(percentageUsedTx)) {
+                    percentageUsed = Math.max(percentageUsedRx, percentageUsedTx);
+                } else if (!Double.isNaN(percentageUsedRx)) {
+                    percentageUsed = percentageUsedRx;
+                } else {
+                    percentageUsed = percentageUsedTx;
+                }
 
-                } // have demand
+                if (!Double.isNaN(percentageUsed)) {
+
+                    final String color;
+                    if (percentageUsed > DisplayController.RED_THRESHOLD) {
+                        color = "red";
+                    } else if (percentageUsed > DisplayController.ORANGE_THRESHOLD) {
+                        color = "orange";
+                    } else if (percentageUsed > DisplayController.YELLOW_THRESHOLD) {
+                        color = "yellow";
+                    } else {
+                        color = "black";
+                    }
+
+                    text.append(" - ");
+                    text.append("<font color='" + color + "'>");
+                    text.append(controller.getName());
+                    text.append(" : ");
+                    text.append(USAGE_FORMAT.format(percentageUsed * 100));
+                    text.append("%");
+                    text.append("</font>");
+
+                } // not NaN
+
             } // have linkDemand for this neighbor
         } // have a controller
+    }
+
+    private double aggregateLinkData(
+            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkData,
+            final LinkMetricName linkAttribute) {
+        // aggregate across all of the data down to the value. The streams are
+        // all separated out to make it clear how the operations work.
+        final Stream<ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> s1 = linkData.values()
+                .stream();
+        final Stream<Collection<ImmutableMap<LinkAttribute<?>, Double>>> s2 = s1.map(Map::values);
+        final Stream<ImmutableMap<LinkAttribute<?>, Double>> s3 = s2.flatMap(Collection::stream);
+        final Stream<Double> s4 = s3.map(map -> map.getOrDefault(linkAttribute, 0D));
+        final DoubleStream s5 = s4.mapToDouble(Double::doubleValue);
+        final double sum = s5.sum();
+        return sum;
     }
 }

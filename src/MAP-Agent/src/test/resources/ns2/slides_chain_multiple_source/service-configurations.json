@@ -13,7 +13,8 @@
       "TASK_CONTAINERS": "3500"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   },
   {
@@ -30,7 +31,8 @@
       "TASK_CONTAINERS": "3500"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   },
   {
@@ -47,7 +49,8 @@
       "TASK_CONTAINERS": "3500"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   },
   {
@@ -64,7 +67,8 @@
       "TASK_CONTAINERS": "3500"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   },
   {
@@ -81,7 +85,8 @@
       "TASK_CONTAINERS": "3500"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   },
   {
@@ -98,7 +103,8 @@
       "TASK_CONTAINERS": "3500"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   }
 ]

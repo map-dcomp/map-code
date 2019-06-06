@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -36,21 +36,19 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.AgentConfiguration;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.ApplicationManagerApi;
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.ApplicationProfile;
 import com.bbn.map.common.value.ApplicationSpecification;
-import com.bbn.protelis.networkresourcemanagement.ContainerIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
+import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
@@ -92,10 +90,11 @@ public class PlanTranslator {
      *            traffic to send to neighboring regions
      * @param regionServiceState
      *            which services are running in which containers
-     * @return the DNS records that represent the inputs
+     * @return the DNS records and corresponding weights that represent the
+     *         inputs, null if there is a problem computing the records and no
+     *         changes should be made
      */
-    @Nonnull
-    public ImmutableCollection<DnsRecord> convertToDns(@Nonnull final LoadBalancerPlan loadBalancerPlan,
+    public ImmutableCollection<Pair<DnsRecord, Double>> convertToDns(@Nonnull final LoadBalancerPlan loadBalancerPlan,
             @Nonnull final RegionServiceState regionServiceState) {
         if (LOGGER.isTraceEnabled()) {
             LOGGER.trace("convertToDNS loadBalancerPlan: {} serviceState: {}", loadBalancerPlan, regionServiceState);
@@ -105,43 +104,63 @@ public class PlanTranslator {
         final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowDetails = loadBalancerPlan
                 .getOverflowPlan();
 
-        final Set<ContainerIdentifier> containersToIgnore = loadBalancerPlan.getStopTrafficTo().entrySet().stream()
-                .map(Map.Entry::getValue).flatMap(Set::stream).collect(Collectors.toSet());
+        // if a container is running, but told to stop traffic or to shutdown,
+        // don't create a DNS entry for it
+        // node -> containers
+        final Map<NodeIdentifier, Set<NodeIdentifier>> containersToIgnore = new HashMap<>();
 
-        final Map<ServiceIdentifier<?>, Set<ContainerIdentifier>> containersRunningServices = new HashMap<>();
+        loadBalancerPlan.getServicePlan().forEach((node, containers) -> {
+            containers.forEach(info -> {
+                if (info.isStop() || info.isStopTrafficTo()) {
+                    containersToIgnore.computeIfAbsent(node, k -> new HashSet<>()).add(info.getId());
+                }
+            });
+        });
+
+        final Map<ServiceIdentifier<?>, Set<NodeIdentifier>> containersRunningServices = new HashMap<>();
         regionServiceState.getServiceReports().forEach(serviceReport -> {
+            final NodeIdentifier node = serviceReport.getNodeName();
+
+            final Set<NodeIdentifier> nodeContainersToIgnore = containersToIgnore.getOrDefault(node,
+                    Collections.emptySet());
             serviceReport.getServiceState().forEach((containerId, serviceState) -> {
                 final ServiceState.Status status = serviceState.getStatus();
                 // TODO check if this service is synchronous or asynchronous -
                 // in the application manager. If synchronous then only add the
                 // record if RUNNING.
                 if (ServiceState.Status.STARTING.equals(status) || ServiceState.Status.RUNNING.equals(status)) {
-                    if (!containersToIgnore.contains(containerId)) {
+                    if (!nodeContainersToIgnore.contains(containerId)) {
                         final ServiceIdentifier<?> service = serviceState.getService();
-                        final Set<ContainerIdentifier> containers = containersRunningServices.computeIfAbsent(service,
+                        final Set<NodeIdentifier> containers = containersRunningServices.computeIfAbsent(service,
                                 k -> new HashSet<>());
                         containers.add(containerId);
+                    } else {
+                        LOGGER.trace("Ignoring running container {} because it's in {}", containerId,
+                                containersToIgnore);
                     }
+                } else {
+                    LOGGER.trace("Ignoring running container {} with state {}", containerId, status);
                 }
 
             });
         });
 
-        final ImmutableCollection.Builder<DnsRecord> dnsRecords = ImmutableList.builder();
+        LOGGER.trace("Containers running services {}", containersRunningServices);
+
+        final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords = ImmutableList.builder();
 
         // determine which containers are running which services and should be
         // entered into DNS
         final ApplicationManagerApi appManager = AppMgrUtils.getApplicationManager();
-        // TODO: should this be looking at dependencies as well?
         for (final ApplicationSpecification spec : appManager.getAllApplicationSpecifications()) {
-            final ApplicationProfile profile = spec.getProfile();
             final ApplicationCoordinates service = spec.getCoordinates();
-            final RegionIdentifier defaultNodeRegion = profile.getServiceDefaultRegion();
+            final RegionIdentifier defaultNodeRegion = spec.getServiceDefaultRegion();
 
-            final Set<ContainerIdentifier> serviceNodes = containersRunningServices.getOrDefault(service,
+            final Set<NodeIdentifier> serviceNodes = containersRunningServices.getOrDefault(service,
                     Collections.emptySet());
 
             final ImmutableMap<RegionIdentifier, Double> regionServicePlan = overflowDetails.get(service);
+            LOGGER.trace("Region service plan: {}", regionServicePlan);
             if (null == regionServicePlan) {
                 // no region plan for this service
 
@@ -149,8 +168,10 @@ public class PlanTranslator {
                     // no local nodes for this service, just add the default
                     if (localRegion.equals(defaultNodeRegion)) {
                         LOGGER.error(
-                                "Attempting to add a delegate to the current region ({}). This means that all of the nodes for service {} are stopped in the default region",
+                                "Attempting to add a delegate to the current region ({}). This means that all of the nodes for service {} are stopped in this region and it is the default region for the service.",
                                 localRegion, service);
+                        // don't make DNS changes here, just leave things in place as they are
+                        return null;
                     } else {
                         if (null == defaultNodeRegion) {
                             LOGGER.warn("Default region for service {} is null, cannot add a delegate record", service);
@@ -179,76 +200,69 @@ public class PlanTranslator {
             @Nonnull final ServiceIdentifier<?> service,
             final RegionIdentifier serviceDefaultRegion,
             @Nonnull final ImmutableMap<RegionIdentifier, Double> regionServicePlan,
-            @Nonnull final Set<ContainerIdentifier> serviceNodes,
-            @Nonnull final ImmutableCollection.Builder<DnsRecord> dnsRecords) {
+            @Nonnull final Set<NodeIdentifier> serviceNodes,
+            @Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords) {
 
-        final double weightPrecision = AgentConfiguration.getInstance().getDnsRecordWeightPrecision();
+        final int numServicesInLocalRegion = serviceNodes.size();
 
-        final double totalOfWeights = regionServicePlan.values().stream().mapToDouble(Number::doubleValue).sum();
-
-        // If there are 3 services running in the current region, then each 5%
-        // gets 3 records
-        final int numServicesInRegion = serviceNodes.size();
-        final int minPrecisionMultiplier = Math.max(1, numServicesInRegion);
+        // multiple the weight by the number of services to balance things out
+        // if there are no services, then multiple by 1
+        final double weightMultiplier = Math.max(1D, numServicesInLocalRegion);
 
         for (final ImmutableMap.Entry<RegionIdentifier, Double> regionEntry : regionServicePlan.entrySet()) {
             final RegionIdentifier destRegion = regionEntry.getKey();
             final double destRegionWeight = regionEntry.getValue();
-            final double destRegionPercentage = destRegionWeight / totalOfWeights;
-            final double rawNumRecords = destRegionPercentage / weightPrecision;
-            final int numRecords = (int) Math.round(minPrecisionMultiplier * rawNumRecords);
 
             if (destRegion.equals(localRegion)) {
                 // need to add entries to specific nodes
-
                 if (serviceNodes.isEmpty()) {
                     // delegate to the region that contains the default node,
                     // that DNS will know which container to talk to
                     if (null == serviceDefaultRegion) {
                         LOGGER.warn("Default region for service {} is null, cannot add a delegate record", service);
                     } else {
-                        addDelegateRecord(dnsRecords, service, serviceDefaultRegion, numRecords);
+                        // only add a single record since there are no other
+                        // nodes to round robin with
+                        addDelegateRecord(dnsRecords, service, serviceDefaultRegion, 1);
                     }
                 } else {
                     serviceNodes.forEach(containerId -> {
-                        LOGGER.trace("Adding name record for service {} -> {}", service, containerId);
-
-                        addNameRecord(dnsRecords, service, containerId, numRecords);
+                        addNameRecord(dnsRecords, service, containerId, 1);
                     });
                 }
             } else {
                 // need to add delegate entries
-                addDelegateRecord(dnsRecords, service, destRegion, numRecords);
+                addDelegateRecord(dnsRecords, service, destRegion, destRegionWeight * weightMultiplier);
             }
         } // foreach regionServicePlan entry
     }
 
-    private void addDelegateRecord(@Nonnull final ImmutableCollection.Builder<DnsRecord> dnsRecords,
+    private void addDelegateRecord(@Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords,
             @Nonnull final ServiceIdentifier<?> service,
             @Nonnull final RegionIdentifier delegateRegion,
-            final int numRecordsToAdd) {
+            final double weight) {
         if (null != delegateRegion) {
             // for now the source region is always null. If we decide to do
             // source based routing, then we'll need to add in the region
             // information and defaults for the null region
             final DelegateRecord record = new DelegateRecord(null, ttl, service, delegateRegion);
-            dnsRecords.addAll(Collections.nCopies(numRecordsToAdd, record));
+            dnsRecords.add(Pair.of(record, weight));
         } else {
             LOGGER.warn("Skipping adding delegate record for service because it's default region is null", service);
         }
     }
 
-    private void addNameRecord(@Nonnull final ImmutableCollection.Builder<DnsRecord> dnsRecords,
+    private void addNameRecord(@Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords,
             @Nonnull final ServiceIdentifier<?> service,
-            @Nonnull final ContainerIdentifier nodeId,
-            final int numRecordsToAdd) {
+            @Nonnull final NodeIdentifier nodeId,
+            final double weight) {
 
         if (null != service) {
             // for now the source region is always null. If we decide to do
             // source based routing, then we'll need to add in the region
             // information and defaults for the null region
             final NameRecord record = new NameRecord(null, ttl, service, nodeId);
-            dnsRecords.addAll(Collections.nCopies(numRecordsToAdd, record));
+            dnsRecords.add(Pair.of(record, weight));
         } else {
             LOGGER.warn("Not adding name record for service to container {} because it's FQDN is null", nodeId);
         }

@@ -1,0 +1,39 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# Clients
+set clientPoolB [$ns node]
+tb-set-node-os $clientPoolB XEN46-64-STD
+
+# NCPs
+set nodeB0 [$ns node]
+tb-set-node-os $nodeB0 XEN46-64-STD
+tb-set-hardware $nodeB0 simple
+
+set nodeB1 [$ns node]
+tb-set-node-os $nodeB1 XEN46-64-STD
+tb-set-hardware $nodeB1 simple
+
+set nodeB2 [$ns node]
+tb-set-node-os $nodeB2 XEN46-64-STD
+tb-set-hardware $nodeB2 simple
+
+set nodeB3 [$ns node]
+tb-set-node-os $nodeB3 XEN46-64-STD
+tb-set-hardware $nodeB3 simple
+
+set nodeB4 [$ns node]
+tb-set-node-os $nodeB4 XEN46-64-STD
+tb-set-hardware $nodeB4 simple
+
+# Links
+set linkB01 [$ns duplex-link $nodeB0 $nodeB1 100000.0kb 0.0ms DropTail]
+set linkB02 [$ns duplex-link $nodeB0 $nodeB2 100000.0kb 0.0ms DropTail]
+set linkB03 [$ns duplex-link $nodeB0 $nodeB3 100000.0kb 0.0ms DropTail]
+set linkB04 [$ns duplex-link $nodeB0 $nodeB4 100000.0kb 0.0ms DropTail]
+set linkB12 [$ns duplex-link $nodeB1 $nodeB2 100000.0kb 0.0ms DropTail]
+set linkB34 [$ns duplex-link $nodeB3 $nodeB4 100000.0kb 0.0ms DropTail]
+set linkBC1 [$ns duplex-link $clientPoolB $nodeB1 100000.0kb 0.0ms DropTail]
+
+$ns rtproto Static
+$ns run

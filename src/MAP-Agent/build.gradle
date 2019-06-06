@@ -2,7 +2,6 @@ import org.gradle.internal.os.OperatingSystem
 
 buildscript {
   repositories {
-      mavenCentral()
       jcenter()
   }
 }
@@ -13,16 +12,22 @@ plugins {
     id 'maven'
     id 'eclipse'
     id 'idea'
-    id 'org.springframework.boot' version '1.5.6.RELEASE'
     id 'maven-publish'
     id 'checkstyle'
     id 'findbugs'
     id 'com.dorongold.task-tree' version '1.3'
+    id "com.gorylenko.gradle-git-properties" version "1.5.2"
+    id 'com.github.johnrengelman.shadow' version '4.0.3'
+    id 'application'    
 }
 
+def props = new Properties()
+file("../gradle.common.properties").withInputStream { props.load(it) }
 
 group = 'com.bbn.map'
-version = '0.1.15'
+version = props.getProperty("map_agent_version")
+
+mainClassName = 'com.bbn.map.simulator.SimulationRunner'
 
 description = """MAP Agent"""
 
@@ -33,13 +38,10 @@ tasks.withType(JavaCompile) {
 }
 
 repositories {
-
- mavenLocal()
- mavenCentral()
- jcenter()
- maven {
-   url 'https://repository.apache.org/content/repositories/snapshots'
- }
+  // local repository first
+  mavenLocal()
+  
+  jcenter()
 }
 
 configurations {
@@ -48,12 +50,51 @@ configurations {
 }
 
 dependencies {
-    compile group: 'com.bbn.map', name: 'MAP-ApplicationManager', version: '0.0.17'
-       
-    compile group: 'org.jfree', name: 'jfreechart', version: '1.0.19'   
+    compile group: 'com.bbn.protelis', name: 'P2Protelis', version: '4.0.5'
+
+    compile group: 'org.slf4j', name: 'slf4j-api', version: props.getProperty("slf4j_version")
+    compile group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: props.getProperty("log4j_version")
+    compile group: 'org.apache.logging.log4j', name: 'log4j-api', version: props.getProperty("log4j_version")
+    compile group: 'org.apache.logging.log4j', name: 'log4j-core', version: props.getProperty("log4j_version")
+    compile group: 'org.apache.logging.log4j', name: 'log4j-jcl', version: props.getProperty("log4j_version")
+
+    compile group: 'com.google.guava', name: 'guava', version: props.getProperty("guava_version")
+    compile group: 'org.projectlombok', name: 'lombok', version: props.getProperty("lombok_version")
+
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-xml', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-guava', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jdk8', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: props.getProperty("jackson_version")
+    compile group: 'com.fasterxml.jackson.module', name: 'jackson-module-parameter-names', version: props.getProperty("jackson_version")
+
+    compile group: 'org.apache.httpcomponents', name: 'fluent-hc', version: props.getProperty("apache_hc_version")
     
-    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: spring_boot_version
-    testCompile group: 'org.springframework', name: 'spring-test', version: spring_test_version
+    compile group: 'com.diffplug.durian', name: 'durian', version: '2.0'
+    
+    compile group: 'org.jacop', name: 'jacop', version: '4.5.1', {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'org.mockito', module: 'mockito-all'
+      exclude group: 'org.scala-lang', module: 'scala-library'
+      exclude group: 'org.scala-lang', module: 'scala-compiler'
+    }
+    compile group: 'org.jfree', name: 'jfreechart', version: '1.0.19'
+    compile group: 'com.diffplug.durian', name: 'durian', version: props.getProperty("durian_version")
+    
+    
+    testCompile group: 'org.assertj', name: 'assertj-core', version: props.getProperty("assertj_core_version")
+    testCompile group: 'org.hamcrest', name: 'hamcrest', version: props.getProperty("hamcrest_version")
+    testCompile group: 'org.xmlmatchers', name: 'xml-matchers', version: props.getProperty("xml_matchers_version")
+    testCompile( group: 'junit', name: 'junit', version: props.getProperty("junit_version")) {
+        exclude module: 'hamcrest-core'
+    }
+    testCompile( group: 'org.mockito', name: 'mockito-core', version: props.getProperty("mockito_version")) {
+        exclude module: 'hamcrest-core'
+    }
+    
 }
 
 // set gradle version when generating the wrapper
@@ -61,23 +102,27 @@ task wrapper(type: Wrapper) {
      gradleVersion = '4.0'
 }
 
+eclipse {
+    classpath {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
 test {
     testLogging.showStandardStreams = true
+    ignoreFailures Boolean.getBoolean("test.ignoreFailures")
 }
 
 checkstyle {
     config = resources.text.fromFile('style.xml', 'UTF-8')
     showViolations = true
-    ignoreFailures = false
+    ignoreFailures = true
+    toolVersion = "8.10"
 }
 
 findbugs {
     ignoreFailures = true
-}
-
-// need to delete the bin directory created by IDEs
-clean {
-  delete 'bin'
 }
 
 task sourceJar(type: Jar) {
@@ -89,7 +134,7 @@ publishing {
     repositories {
         mavenLocal()
     }
-    
+
     publications {
         mavenJava(MavenPublication) {
             from components.java
@@ -100,16 +145,17 @@ publishing {
 
 jar {
   baseName = "map-sim-runner"
-  manifest {
-      attributes 'Main-Class': 'com.bbn.map.simulator.SimulationRunner'
-  }
 }
 
-springBoot {
-    buildInfo()
-    mainClass = 'com.bbn.map.simulator.SimulationRunner'
+gitProperties {
+    gitPropertiesDir = "${buildDir}/resources/main/com/bbn/map/simulator"
 }
 
-bootRepackage {
+shadowJar {
+    baseName = "map-sim-runner"
     classifier = 'executable'
-}
+    
+    // for some reason including the Log4j2 dat file causes problems
+    // excluding the file causes log4j4 to scan for plugins and everything works 
+    exclude 'META-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat'
+ }

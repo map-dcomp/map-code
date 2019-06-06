@@ -3,6 +3,9 @@ package com.bbn.map.dcop;
 import javax.annotation.Nonnull;
 
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionPlan;
+import com.bbn.protelis.networkresourcemanagement.ResourceReport;
+import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.google.common.collect.ImmutableMap;
 
 /**
@@ -26,5 +29,27 @@ public interface DcopInfoProvider {
      *            other regions
      */
     void setLocalDcopSharedInformation(@Nonnull DcopSharedInformation v);
+
+    /**
+     * @param estimationWindow
+     *            the estimation window for the demand
+     * @return the summary for the region.
+     */
+    @Nonnull
+    ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow);
+
+    /**
+     * 
+     * @return the most recent DCOP plan that this node has seen
+     */
+    @Nonnull
+    RegionPlan getDcopPlan();
+
+    /**
+     * 
+     * @param plan
+     *            the new plan to be published
+     */
+    void publishDcopPlan(@Nonnull RegionPlan plan);
 
 }

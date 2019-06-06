@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -36,6 +36,7 @@ import javax.annotation.Nonnull;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Objects;
 
 /**
@@ -59,10 +60,10 @@ public final class NameRecord extends DnsRecord {
      * @param node
      *            node to map name to
      */
-    public NameRecord(final RegionIdentifier sourceRegion,
-            final int ttl,
-            @Nonnull final ServiceIdentifier<?> service,
-            @Nonnull final NodeIdentifier node) {
+    public NameRecord(@JsonProperty("sourceRegion") final RegionIdentifier sourceRegion,
+            @JsonProperty("ttl") final int ttl,
+            @JsonProperty("service") @Nonnull final ServiceIdentifier<?> service,
+            @JsonProperty("node") @Nonnull final NodeIdentifier node) {
         super(sourceRegion, ttl, service);
         this.node = node;
     }

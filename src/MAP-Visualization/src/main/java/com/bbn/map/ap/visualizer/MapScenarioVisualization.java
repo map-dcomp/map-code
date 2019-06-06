@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -72,13 +72,13 @@ import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
 import com.bbn.map.Controller;
-import com.bbn.map.ap.ApplicationManagerUtils;
 import com.bbn.map.ap.visualizer.region.RegionGraphVisualizer;
 import com.bbn.map.ap.visualizer.utils.VisualizationViewerControlPanel;
-import com.bbn.map.appmgr.ApplicationManagerMain;
+import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.simulator.DNSSim;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.utils.LogExceptionHandler;
+import com.bbn.map.utils.MapLoggingConfigurationFactory;
 import com.bbn.protelis.common.testbed.termination.TerminationCondition;
 import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
@@ -95,6 +95,10 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  */
 @SuppressFBWarnings(value = "SE_BAD_FIELD", justification = "This class is not to be serialized")
 public final class MapScenarioVisualization extends JFrame {
+    // put this first to ensure that the correct logging configuration is used
+    static {
+        System.setProperty("log4j.configurationFactory", MapLoggingConfigurationFactory.class.getName());
+    }
 
     private static final long serialVersionUID = 1L;
 
@@ -128,13 +132,6 @@ public final class MapScenarioVisualization extends JFrame {
         final MapScenarioVisualization vis = new MapScenarioVisualization(scenarioPathArg, demandPathArg);
         vis.pack();
         vis.setVisible(true);
-
-        // start the application manager
-        try {
-            ApplicationManagerMain.main(args);
-        } catch (Exception e) {
-            LOGGER.warn("exception starting application manager", e);
-        }
     }
 
     private transient VirtualClock clock = null;
@@ -432,6 +429,16 @@ public final class MapScenarioVisualization extends JFrame {
                 lastElement = scenarioPath.toString();
             }
             topologyButton.setText(lastElement);
+            
+            // load the scenario just so it's visible
+            try {
+                loadScenario();
+            } catch (final IOException e) {
+                LOGGER.error("Error loading scenario", e);
+                JOptionPane.showMessageDialog(this, "Error loading scenario: " + e.getMessage(), "Error",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
         }
     }
 
@@ -471,7 +478,7 @@ public final class MapScenarioVisualization extends JFrame {
 
     private void loadScenario() throws IOException {
         if (null != sim) {
-            throw new IllegalStateException("Simulation is still running, cannot load another");
+            stopScenario();
         }
 
         if (null != visualizer) {
@@ -488,7 +495,7 @@ public final class MapScenarioVisualization extends JFrame {
 
         clock = new SimpleClock();
         sim = new Simulation(scenarioPath.toString(), scenarioPath, demandPath, clock, POLLING_INTERVAL_MS, TTL,
-                ApplicationManagerUtils::getContainerParameters);
+                AppMgrUtils::getContainerParameters);
 
         sim.getScenario().setTerminationCondition(termination);
 
@@ -498,7 +505,7 @@ public final class MapScenarioVisualization extends JFrame {
 
         viewerControl.setViewer(visualizer.getViewer());
 
-        // make sure that we know when something is seleccted in any mode
+        // make sure that we know when something is selected in any mode
         visualizer.getViewer().addGraphMouseListener(new GraphMouseListener<DisplayController>() {
             @Override
             public void graphClicked(final DisplayController v, final MouseEvent me) {
@@ -585,8 +592,7 @@ public final class MapScenarioVisualization extends JFrame {
         final Duration rlgDuration = parseDurationFromField(rlgDurationField.getText());
         AgentConfiguration.getInstance().setRlgRoundDuration(rlgDuration);
 
-        // need to wait to call loadScenario until the start button is pressed
-        // to ensure that the demand path is specified
+        // load scenario here to ensure we have the topology and the demand
         try {
             loadScenario();
         } catch (final IOException e) {

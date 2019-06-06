@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,71 +31,88 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import javax.annotation.Nonnull;
 
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.ImmutableTriple;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.utils.ImmutableUtils;
+import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableMap;
 
 /**
- * Track link information. This object is shared amoung the resource managers
- * for the nodes at both ends. This ensures that we don't need to compute load
- * twice for each end of the link and possibly have them inconsistent.
+ * Track link information. This object is shared among the resource managers for
+ * the nodes at both ends. This ensures that we don't need to compute load twice
+ * for each end of the link and possibly have them inconsistent.
+ * 
+ * The receiving node is defined to be the one with the lesser hashcode. This is
+ * done to make equality and hashcode operations easy.
  * 
  * @author jschewe
  *
  */
-class LinkResourceManager {
+/* package */ final class LinkResourceManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(LinkResourceManager.class);
 
     private final Object lock = new Object();
 
     private final int hashCode;
 
-    private final VirtualClock clock;
-    private final double bandwidth;
+    private final ImmutableMap<LinkAttribute<?>, Double> capacity;
 
-    private final NodeIdentifier left;
+    private final LinkLoadTracker loadTracker = new LinkLoadTracker();
 
     /**
      * 
-     * @return the lesser identifier
+     * @return the capacity of this link
      */
-    @Nonnull
-    public NodeIdentifier getLeft() {
-        return left;
+    public ImmutableMap<LinkAttribute<?>, Double> getCapacity() {
+        return capacity;
     }
 
-    private final NodeIdentifier right;
+    private final NodeIdentifier receiver;
+
+    /**
+     * @return The default node for receiving traffic.
+     * @see #addLinkLoad(long, ClientLoad, NodeIdentifier, NodeIdentifier)
+     */
+    @Nonnull
+    public NodeIdentifier getReceiver() {
+        return receiver;
+    }
+
+    private final NodeIdentifier transmitter;
 
     /**
      * 
-     * @return the greater identifier
+     * @return The default node for transmitting traffic.
+     * @see #addLinkLoad(long, ClientLoad, NodeIdentifier, NodeIdentifier)
      */
     @Nonnull
-    public NodeIdentifier getRight() {
-        return right;
+    public NodeIdentifier getTransmitter() {
+        return transmitter;
     }
 
     /**
      * Calls
-     * {@link #LinkResourceManager(VirtualClock, NodeIdentifier, NodeIdentifier, double)
+     * {@link #LinkResourceManager(VirtualClock, NodeIdentifier, NodeIdentifier, ImmutableMap)
      * with the values from link.
      * 
+     * @see LinkMetricName#DATARATE_RX
+     * @see LinkMetricName#DATARATE_TX
      */
-    /* package */ LinkResourceManager(@Nonnull final VirtualClock clock, @Nonnull final NetworkLink link) {
-        this(clock, link.getLeft().getNodeIdentifier(), link.getRight().getNodeIdentifier(), link.getBandwidth());
+    /* package */ LinkResourceManager(@Nonnull final NetworkLink link) {
+        this(link.getLeft().getNodeIdentifier(), link.getRight().getNodeIdentifier(), ImmutableMap
+                .of(LinkMetricName.DATARATE_RX, link.getBandwidth(), LinkMetricName.DATARATE_TX, link.getBandwidth()));
     }
 
     /**
@@ -103,38 +120,45 @@ class LinkResourceManager {
      * the two nodes. The one that compares less than is the left node. This is
      * done to aide in lookup.
      * 
-     * @param clock
-     *            the clock used when computing the current link load
      * @param one
      *            one of the nodes on the link
      * @param two
      *            the other node on the link
-     * @param bandwidth
-     *            the bandwidth of this link in bytes per second
+     * @param capacity
+     *            the capacity of this link in megabits per second
      * @throws IllegalArgumentException
      *             if the two identifiers are equal
+     * @throws IllegalArgumentException
+     *             if the datarate rx and tx are not equal, async links are not
+     *             supported
      */
-    /* package */ LinkResourceManager(@Nonnull final VirtualClock clock,
-            @Nonnull final NodeIdentifier one,
+    /* package */ LinkResourceManager(@Nonnull final NodeIdentifier one,
             @Nonnull final NodeIdentifier two,
-            final double bandwidth) throws IllegalArgumentException {
-        this.clock = clock;
-        this.bandwidth = bandwidth;
+            @Nonnull final ImmutableMap<LinkAttribute<?>, Double> capacity) throws IllegalArgumentException {
+        this.capacity = capacity;
 
         // this comparison for left and right needs to match
         // Simulation.getLinkResourceManager()
         final int compareResult = one.getName().compareTo(two.getName());
         if (compareResult < 0) {
-            left = one;
-            right = two;
+            receiver = one;
+            transmitter = two;
         } else if (compareResult > 0) {
-            left = two;
-            right = one;
+            receiver = two;
+            transmitter = one;
         } else {
             throw new IllegalArgumentException(
                     String.format("Links cannot go from a node to itself %s == %s", one, two));
         }
-        hashCode = Objects.hash(left, right);
+        hashCode = Objects.hash(receiver, transmitter);
+
+        final double capacityRx = this.capacity.getOrDefault(LinkMetricName.DATARATE_RX, 0D);
+        final double capacityTx = this.capacity.getOrDefault(LinkMetricName.DATARATE_TX, 0D);
+        final double capacityTolerance = 1E-6;
+        if (Math.abs(capacityRx - capacityTx) > capacityTolerance) {
+            throw new IllegalArgumentException(
+                    String.format("Rx (%f) and Tx (%f) capacities must be equal", capacityRx, capacityTx));
+        }
     }
 
     @Override
@@ -150,50 +174,79 @@ class LinkResourceManager {
             return true;
         } else if (getClass().equals(o.getClass())) {
             final LinkResourceManager other = (LinkResourceManager) o;
-            return getLeft().equals(other.getLeft()) && getRight().equals(other.getRight());
+            return getReceiver().equals(other.getReceiver()) && getTransmitter().equals(other.getTransmitter());
         } else {
             return false;
         }
     }
 
     /**
-     * The value specifies which linked node the load goes on.
-     */
-    private List<LinkLoadEntry> linkLoad = new LinkedList<>();
-
-    /**
      * Specify some load on the link.
      * 
+     * @param now
+     *            the current time from the clock used
      * @param req
      *            the client request, only networkLoad is used
      * @param client
-     *            the client causing the load
+     *            the client causing the load. This is the originator of the
+     *            traffic, not necessarily one of the end points of the link.
+     * @param transmittingNode
+     *            the end point that is doing the transmitting, must be one of
+     *            {@link #getReceiver()} or {@link #getTransmitter(). This is
+     *            used to determine how to store
+     *            {@link LinkMetricName#DATARATE_RX} and
+     *            {@link LinkMetricName#DATARATE_TX} so that this information
+     *            can be properly reported in resource reports.
      * @return status of the request, if the status is
      *         {@link ClientSim.RequestResult#FAIL}, then the link load is not
      *         modified. The {@link LinkLoadEntry} can be used to remove the
-     *         link load with {@link #removeLinkLoad(LinkLoadEntry)}
-     * @see #removeLinkLoad(ClientRequest, NodeIdentifier)
+     *         link load with {@link #removeLinkLoad(LinkLoadEntry)}. The
+     *         resulting load is also returned.
+     * @see #removeLinkLoad(ClientLoad, NodeIdentifier)
      */
-    public Pair<ClientSim.RequestResult, LinkLoadEntry> addLinkLoad(final NodeIdentifier client,
-            final ClientRequest req) {
+    public ImmutableTriple<ClientSim.RequestResult, LinkLoadEntry, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> addLinkLoad(
+            final long now,
+            @Nonnull final ClientLoad req,
+            @Nonnull final NodeIdentifier client,
+            @Nonnull final NodeIdentifier transmittingNode) {
         synchronized (lock) {
-            // need to add, then check the thresholds and then possibly
-            // remove
-            // TODO: ticket:29 will make the duration variable based on network
-            // path state
-            final LinkLoadEntry entry = new LinkLoadEntry(req, req.getNetworkDuration(), client);
-            linkLoad.add(entry);
-
-            final Pair<ImmutableMap<LinkAttribute<?>, Double>, ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>>> linkLoadResult = computeCurrentLinkLoad();
-            final ImmutableMap<LinkAttribute<?>, Double> load = linkLoadResult.getLeft();
-
-            final ClientSim.RequestResult result = determineClientRequestStatus(load);
-
-            if (result == ClientSim.RequestResult.FAIL) {
-                linkLoad.remove(entry);
+            final boolean flipDatarateDirection;
+            if (getTransmitter().equals(transmittingNode)) {
+                flipDatarateDirection = false;
+            } else if (getReceiver().equals(transmittingNode)) {
+                flipDatarateDirection = true;
+            } else {
+                throw new IllegalArgumentException(String.format("The transmitting node (%s) must be %s or %s",
+                        transmittingNode, getReceiver(), getTransmitter()));
             }
 
-            return Pair.of(result, entry);
+            final ImmutableMap<LinkAttribute<?>, Double> networkLoad;
+            if (flipDatarateDirection) {
+                networkLoad = req.getNetworkLoadAsAttributeFlipped();
+            } else {
+                networkLoad = req.getNetworkLoadAsAttribute();
+            }
+
+            // first remove expired entries
+            loadTracker.removeExpiredEntries(now, ignore -> {
+            });
+
+            // need to add, then check the thresholds and then possibly
+            // remove
+            final LinkLoadEntry entry = new LinkLoadEntry(this, client, req.getStartTime(), req.getNetworkDuration(),
+                    req.getService(), networkLoad);
+            loadTracker.addLoad(entry);
+
+            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> load = loadTracker
+                    .getCurrentLoad();
+
+            final ClientSim.RequestResult result = determineClientRequestStatus();
+
+            if (ClientSim.RequestResult.FAIL.equals(result)) {
+                loadTracker.removeLoad(entry);
+            }
+
+            return ImmutableTriple.of(result, entry, load);
         }
     }
 
@@ -201,131 +254,67 @@ class LinkResourceManager {
      * Undoes the changes done by {@Link #addLinkLoad(ClientRequest)}.
      *
      * @param entry
-     *            the return value from {@link #addLinkLoad(ClientRequest)}
+     *            the return value from {@link #addLinkLoad(ClientLoad)}
      * @return true if the load was removed
-     * @see #addLinkLoad(ClientRequest)
+     * @see #addLinkLoad(ClientLoad)
      */
-    public boolean removeLinkLoad(final LinkLoadEntry entry) {
+    public void removeLinkLoad(final LinkLoadEntry entry) {
         synchronized (lock) {
-            return linkLoad.remove(entry);
+            loadTracker.removeLoad(entry);
         }
     }
 
     /**
-     * Compute the current link load for the link. The lock must be held for
-     * this method to be called.
+     * Compute the current link load for the link.
      * 
-     * @return (aggregate link load, link load by client)
+     * @param now
+     *            the current time from the clock used
+     * @param receivingNode
+     *            the node that is receiving traffic. If this does not match
+     *            {@link #getReceiver()}, then the network RX/TX values will be
+     *            flipped.
+     * @return source -> service -> attribute -> value
      */
-    /* package */ Pair<ImmutableMap<LinkAttribute<?>, Double>, ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>>> computeCurrentLinkLoad() {
-        final long now = clock.getCurrentTime();
+    public ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> computeCurrentLinkLoad(
+            final long now,
+            @Nonnull final NodeIdentifier receivingNode) {
 
-        final Map<LinkAttribute<?>, Double> load = new HashMap<>();
-        final Map<NodeIdentifier, Map<LinkAttribute<?>, Double>> loadPerClient = new HashMap<>();
+        synchronized (lock) {
+            // first remove expired entries
+            loadTracker.removeExpiredEntries(now, ignore -> {
+            });
 
-        final Iterator<LinkLoadEntry> linkDemandIter = linkLoad.iterator();
-        while (linkDemandIter.hasNext()) {
-            final LinkLoadEntry entry = linkDemandIter.next();
-            final ClientRequest req = entry.getRequest();
-            final long duration = entry.getDuration();
-            final long end = req.getStartTime() + duration;
-            final NodeIdentifier client = entry.getClient();
-
-            if (req.getStartTime() <= now && now < end) {
-                final ImmutableMap<LinkAttribute<?>, Double> clientNetworkLoad = req.getNetworkLoadAsAttribute();
-                clientNetworkLoad.forEach((k, v) -> {
-                    load.merge(k, v, Double::sum);
-
-                    final Map<LinkAttribute<?>, Double> clientLoad = loadPerClient.computeIfAbsent(client,
-                            k1 -> new HashMap<>());
-                    clientLoad.merge(k, v, Double::sum);
-                });
-
-            } else if (end > now) {
-                // already happened, drop it
-                linkDemandIter.remove();
+            if (getTransmitter().equals(receivingNode)) {
+                return loadTracker.getCurrentLoadFlipped();
+            } else if (getReceiver().equals(receivingNode)) {
+                return loadTracker.getCurrentLoad();
+            } else {
+                throw new IllegalArgumentException(String.format("The receiving node (%s) must be %s or %s",
+                        receivingNode, getReceiver(), getTransmitter()));
             }
         }
-
-        return Pair.of(ImmutableMap.copyOf(load), ImmutableUtils.makeImmutableMap2(loadPerClient));
     }
 
-    private ClientSim.RequestResult determineClientRequestStatus(
-            final ImmutableMap<LinkAttribute<?>, Double> linkLoad) {
-        for (final Map.Entry<LinkAttribute<?>, Double> entry : linkLoad.entrySet()) {
+    private ClientSim.RequestResult determineClientRequestStatus() {
+        final Map<LinkAttribute<?>, Double> aggregateLinkLoad = loadTracker.getCurrentTotalLoad();
+
+        for (final Map.Entry<LinkAttribute<?>, Double> entry : aggregateLinkLoad.entrySet()) {
             final LinkAttribute<?> attribute = entry.getKey();
-            if (Simulation.LINK_BANDWIDTH_ATTRIBUTE.equals(attribute)) {
+            final double attributeValue = entry.getValue();
+            final double attributeCapacity = capacity.getOrDefault(attribute, 0D);
 
-                final double attributeValue = entry.getValue();
+            final double percentageOfCapacity = attributeValue / attributeCapacity;
+            if (percentageOfCapacity > 1) {
+                LOGGER.trace("adding link load failed attribute {} capacity: {} value: {}", attribute, capacity,
+                        attributeValue);
 
-                final double percentageOfCapacity = attributeValue / bandwidth;
-                if (percentageOfCapacity > 1) {
-                    return ClientSim.RequestResult.FAIL;
-                } else if (percentageOfCapacity > SimulationConfiguration.getInstance().getSlowNetworkThreshold()) {
-                    return ClientSim.RequestResult.SLOW;
-                }
-
+                return ClientSim.RequestResult.FAIL;
+            } else if (percentageOfCapacity > SimulationConfiguration.getInstance().getSlowNetworkThreshold()) {
+                return ClientSim.RequestResult.SLOW;
             }
         }
 
         return ClientSim.RequestResult.SUCCESS;
-    }
-
-    /**
-     * Class for storing information about the link load.
-     * 
-     * @author jschewe
-     *
-     */
-    public static final class LinkLoadEntry {
-        /**
-         * 
-         * @param request
-         *            see {@link #getRequest()}
-         * @param duration
-         *            see {@link #getDuration()}
-         * @param client
-         *            see {@Link #getClient()}
-         */
-        /* package */ LinkLoadEntry(@Nonnull final ClientRequest request,
-                final long duration,
-                @Nonnull final NodeIdentifier client) {
-            this.request = request;
-            this.duration = duration;
-            this.client = client;
-        }
-
-        private final ClientRequest request;
-
-        /**
-         * 
-         * @return the request that is creating the load
-         */
-        @Nonnull
-        public ClientRequest getRequest() {
-            return request;
-        }
-
-        private final long duration;
-
-        /**
-         * @return The duration that the load takes, this is based on the load
-         *         of the network at the time that the client requested the
-         *         service
-         */
-        public long getDuration() {
-            return duration;
-        }
-
-        private final NodeIdentifier client;
-
-        /**
-         * 
-         * @return the client generating the load
-         */
-        public NodeIdentifier getClient() {
-            return client;
-        }
     }
 
 }

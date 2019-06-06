@@ -4,3 +4,6 @@ target/
 bin/
 build/
 .gradle/
+test-output
+test-output-tables
+/.apt_generated/

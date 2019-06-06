@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,12 +31,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.annotation.Nonnull;
 
-import com.bbn.protelis.networkresourcemanagement.NetworkServer;
+import com.bbn.map.Controller;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceManagerFactory;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
@@ -45,12 +42,10 @@ import com.bbn.protelis.networkresourcemanagement.ResourceReport;
  * Create {@link SimResourceManager} objects.
  *
  */
-public class SimResourceManagerFactory implements ResourceManagerFactory<NetworkServer> {
+public class SimResourceManagerFactory implements ResourceManagerFactory<Controller> {
 
     private final Simulation simulation;
     private final long pollingInterval;
-
-    private final Map<NetworkServer, SimResourceManager> resourceManagers = new HashMap<>();
 
     /**
      * 
@@ -67,24 +62,9 @@ public class SimResourceManagerFactory implements ResourceManagerFactory<Network
 
     @Override
     @Nonnull
-    public ResourceManager createResourceManager(@Nonnull final NetworkServer node,
-            @Nonnull final Map<String, Object> ignored) {
-        final SimResourceManager manager = new SimResourceManager(simulation, node, pollingInterval);
-
-        resourceManagers.put(node, manager);
-
+    public ResourceManager<Controller> createResourceManager() {
+        final SimResourceManager manager = new SimResourceManager(simulation, pollingInterval);
         return manager;
     }
 
-    /**
-     * Get a resource manager that was created with
-     * {@link #createResourceManager(NetworkServer, Map)}.
-     * 
-     * @param node
-     *            the node to find the resource manager for
-     * @return the resource manager or null if not found
-     */
-    public SimResourceManager getResourceManager(@Nonnull final NetworkServer node) {
-        return resourceManagers.get(node);
-    }
 }

@@ -1,14 +1,12 @@
 package com.bbn.map.dcop;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import com.bbn.map.dcop.DCOPService.Stage;
-import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
-import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.DcopAlgorithm;
+
 
 /**
  * Information shared between DCOP instances in other regions.
@@ -19,24 +17,33 @@ public class DcopSharedInformation implements Serializable {
      * 
      */
     private static final long serialVersionUID = -2447204674044360290L;
-    private Map<Integer, DcopInfoMessage> iterationDcopInfoMap;
+    /** iterationDcopInfoMap of new algorithm.
+     * 
+     */
+    private final Map<Integer, MessagesPerIteration> iterationDcopInfoMap = new HashMap<>();
+    /** iterationDcopInfoMap for previous algorithm.
+     * 
+     */
+    private final Map<Integer, DcopInfoMessage> itDcopInfoMap = new HashMap<>(); 
 
     /**
      *  Default constructor.
      */
     public DcopSharedInformation() {
-        iterationDcopInfoMap = new HashMap<>();
     }
 
     /**
+     * Copy constructor.
+     * 
      * @param o
      *            is the object to copy
      */
     public DcopSharedInformation(DcopSharedInformation o) {
-        this();
-
-        if (o != null) {
-            for (Map.Entry<Integer, DcopInfoMessage> entry : o.getIterationDcopInfoMap().entrySet()) {
+        if (null != o) {
+            for (Map.Entry<Integer, MessagesPerIteration> entry : o.getIterationDcopInfoMap().entrySet()) {
+                this.addIterationDcopInfo(entry.getKey(), new MessagesPerIteration(entry.getValue()));
+            }
+            for (Map.Entry<Integer, DcopInfoMessage> entry : o.getItDcopInfoMap().entrySet()) {
                 this.addIterationDcopInfo(entry.getKey(), new DcopInfoMessage(entry.getValue()));
             }
         }
@@ -47,41 +54,40 @@ public class DcopSharedInformation implements Serializable {
      *            DCOP iteration
      * @return DcopInfoMessage
      */
-    public DcopInfoMessage getMessageAtIteration(int iteration) {
+    public MessagesPerIteration getMessageAtIteration(int iteration) {
         return iterationDcopInfoMap.get(iteration);
+
     }
 
     /**
      * @return a mapping from iteration to DcopInfoMessage
      */
-    public Map<Integer, DcopInfoMessage> getIterationDcopInfoMap() {
+    public Map<Integer, MessagesPerIteration> getIterationDcopInfoMap() {
         return iterationDcopInfoMap;
-    }
+    }  
 
-    /**
-     * @param iterationDcopInfoMap
-     *            iterationDcopInfoMap
-     */
-    public void setIterationDcopInfoMap(Map<Integer, DcopInfoMessage> iterationDcopInfoMap) {
-        this.iterationDcopInfoMap = iterationDcopInfoMap;
-    }
 
     /**
      * @param iteration
-     *            DCOP interation
+     *            DCOP iteration
      * @param dcopInfoMessage
      *            dcopInfoMessage to add
      */
-    public void addIterationDcopInfo(int iteration, DcopInfoMessage dcopInfoMessage) {
+    public void addIterationDcopInfo(int iteration, MessagesPerIteration dcopInfoMessage) {
         iterationDcopInfoMap.put(iteration, dcopInfoMessage);
     }
 
     @Override
     public String toString() {
         StringBuffer buf = new StringBuffer();
-        for (Map.Entry<Integer, DcopInfoMessage> entry : iterationDcopInfoMap.entrySet()) {
-            buf.append("ITERATION " + entry.getKey() + " " + entry.getValue() + "\n");
-        }
+        if(DcopAlgorithm.DISTRIBUTED_ROUTING_DIFFUSION.equals(AgentConfiguration.getInstance().getDcopAlgorithm()))
+            for (Map.Entry<Integer, MessagesPerIteration> entry : iterationDcopInfoMap.entrySet()) {
+                buf.append("ITERATION " + entry.getKey() + " " + entry.getValue() + "\n");
+            }
+        else
+            for (Map.Entry<Integer, DcopInfoMessage> entry : itDcopInfoMap.entrySet()) {
+                buf.append("ITERATION " + entry.getKey() + " " + entry.getValue() + "\n");
+            }
         return buf.toString();
     }
 
@@ -90,6 +96,56 @@ public class DcopSharedInformation implements Serializable {
      *            iteration to remove message in the inbox
      */
     public void removeMessageAtIteration(int iteration) {
-        iterationDcopInfoMap.remove(iteration);
+        if(DcopAlgorithm.DISTRIBUTED_ROUTING_DIFFUSION.equals(AgentConfiguration.getInstance().getDcopAlgorithm())) iterationDcopInfoMap.remove(iteration);
+        else itDcopInfoMap.remove(iteration);
+    }
+    
+    /**
+     * Clear all messages from all iterations.
+     */
+    public void clear() {
+        iterationDcopInfoMap.clear();
+    }
+    
+    /**
+     * Clear all messages from all iterations.
+     */
+    public void clearItDcopInfomap() {
+        itDcopInfoMap.clear();
+    }
+    
+    ///Methods for previous algorithm
+    /**
+     * @param iteration
+     *            DCOP iteration
+     * @param dcopInfoMessage
+     *            dcopInfoMessage to add
+     */
+    public void addIterationDcopInfo(int iteration, DcopInfoMessage dcopInfoMessage) {
+        itDcopInfoMap.put(iteration, dcopInfoMessage);
+    }
+    
+    /**
+     * @param iteration
+     *            DCOP iteration
+     * @return DcopInfoMessage
+     * Replaces to getMessageAtIteration (different return type)
+     */
+    public DcopInfoMessage getMsgAtIteration(int iteration) {
+        return itDcopInfoMap.get(iteration);
+    }
+    /**
+     * @return a mapping from iteration to DcopInfoMessage
+     */
+    public Map<Integer, DcopInfoMessage> getItDcopInfoMap() {
+        return itDcopInfoMap;
+    }
+        
+    
+    /** Check if the map is empty.
+     * @return true if the map is empty
+     */
+    public boolean isEmptyNewAlgorithm() {
+        return iterationDcopInfoMap.isEmpty();
     }
 }

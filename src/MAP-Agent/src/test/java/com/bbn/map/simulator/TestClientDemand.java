@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -54,11 +54,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.Controller;
-import com.bbn.map.ap.ApplicationManagerUtils;
+import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.map.common.value.NodeMetricName;
-import com.bbn.protelis.networkresourcemanagement.ContainerIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
@@ -89,7 +88,6 @@ public class TestClientDemand {
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
     public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new TestUtils.UseMapApplicationManager())
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     /**
@@ -106,15 +104,13 @@ public class TestClientDemand {
     public void testSimpleDemand() throws IOException, URISyntaxException {
         // needs to match simple/service-configurations.json
         final ApplicationCoordinates service = new ApplicationCoordinates("test", "test-service", "1");
-        final double expectedCpuDemand = 0.5;
-        final double demandTolerance = 1E-6;
-        final double expectedLinkDemand = 50;
+        final double expectedCpuLoad = 0.5;
+        final double loadTolerance = 8E-4;
+        final double expectedLinkLoad = 50;
         final String expectedSourceRegionName = "A";
         final RegionIdentifier expectedSourceRegion = new StringRegionIdentifier(expectedSourceRegionName);
         final String expectedSourceNodeName = "clientPoolA";
         final NodeIdentifier expectedSourceNode = new DnsNameIdentifier(expectedSourceNodeName);
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
         final Path baseDirectory = Paths.get(baseu.toURI());
@@ -122,21 +118,22 @@ public class TestClientDemand {
         final Path demandPath = baseDirectory.resolve("simple_demand");
 
         final VirtualClock clock = new SimpleClock();
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                false, false, false, ApplicationManagerUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
-            final int numApRoundsToStabilize = TestUtils.computeRoundsToStabilize(sim);
+            final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToStabilize);
-            sim.stopSimulation();
+            sim.startClients();
+            SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+            clock.stopClock();
 
             final NodeIdentifier nodeRunningServiceId = sim.getRegionalDNS(expectedSourceRegion)
-                    .resolveService(expectedSourceRegion, service);
+                    .resolveService("test-client", service);
             Assert.assertThat("Expecting a container,  but was: " + nodeRunningServiceId, nodeRunningServiceId,
-                    IsInstanceOf.instanceOf(ContainerIdentifier.class));
+                    IsInstanceOf.instanceOf(NodeIdentifier.class));
 
-            final ContainerIdentifier containerRunningServiceId = (ContainerIdentifier) nodeRunningServiceId;
+            final NodeIdentifier containerRunningServiceId = (NodeIdentifier) nodeRunningServiceId;
             LOGGER.info("Service is running in container {}", containerRunningServiceId);
 
             final ContainerSim containerRunningService = sim.getContainerById(containerRunningServiceId);
@@ -153,14 +150,13 @@ public class TestClientDemand {
                             .getContainerResourceReport(estimationWindow);
                     Assert.assertNotNull("Service resource report", serviceResourceReport);
 
-                    // check node demand
+                    // check node load
+                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> serviceNodeLoadByNode = serviceResourceReport
+                            .getComputeLoad();
+                    Assert.assertThat("service node load by node", serviceNodeLoadByNode, is(notNullValue()));
+                    Assert.assertThat("number of regions with load", serviceNodeLoadByNode.size(), is(1));
 
-                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> serviceNodeDemandByNode = serviceResourceReport
-                            .getComputeDemand();
-                    Assert.assertThat("service node demand by node", serviceNodeDemandByNode, is(notNullValue()));
-                    Assert.assertThat("number of regions with demand", serviceNodeDemandByNode.size(), is(1));
-
-                    final ImmutableMap<NodeAttribute<?>, Double> serviceLoad = serviceNodeDemandByNode
+                    final ImmutableMap<NodeAttribute<?>, Double> serviceLoad = serviceNodeLoadByNode
                             .get(expectedSourceNode);
                     Assert.assertThat("no service load for the expected source node", serviceLoad, is(notNullValue()));
 
@@ -168,9 +164,9 @@ public class TestClientDemand {
                     // processing time
                     // hasn't been computed yet
                     Assert.assertThat("Size of service load", serviceLoad.size(), is(1));
-                    final Double cpuDemand = serviceLoad.get(NodeMetricName.TASK_CONTAINERS);
-                    Assert.assertThat("Containers load", cpuDemand, is(notNullValue()));
-                    Assert.assertThat("Containers load", cpuDemand, closeTo(expectedCpuDemand, demandTolerance));
+                    final Double cpuLoad = serviceLoad.get(NodeMetricName.TASK_CONTAINERS);
+                    Assert.assertThat("Containers load", cpuLoad, is(notNullValue()));
+                    Assert.assertThat("Containers load", cpuLoad, closeTo(expectedCpuLoad, loadTolerance));
 
                     // check link demand
                     // because of the topology all links will have the same
@@ -188,18 +184,21 @@ public class TestClientDemand {
                         final ResourceReport report = resourceManager.getCurrentResourceReport(estimationWindow);
                         Assert.assertNotNull("Resource report", report);
 
-                        final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> networkLoad = report
+                        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad = report
                                 .getContainerNetworkLoad();
-                        for (final Map.Entry<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> loadEntry : networkLoad
-                                .entrySet()) {
+                        networkLoad.forEach((neighbor, neighborLoad) -> {
+                            neighborLoad.forEach((source, sourceLoad) -> {
+                                sourceLoad.forEach((svc, svcLoad) -> {
+                                    final Double value = svcLoad.get(LinkMetricName.DATARATE_TX);
+                                    Assert.assertThat(svc + " is missing datarate on network load", value,
+                                            is(notNullValue()));
 
-                            final Double value = loadEntry.getValue().get(LinkMetricName.DATARATE);
-                            Assert.assertThat(loadEntry.getKey() + " is missing datarate on network load", value,
-                                    is(notNullValue()));
+                                    Assert.assertThat("network load datarate", value,
+                                            closeTo(expectedLinkLoad, loadTolerance));
 
-                            Assert.assertThat("network load datarate", value,
-                                    closeTo(expectedLinkDemand, demandTolerance));
-                        }
+                                });
+                            });
+                        });
 
                     } // foreach controller
 
@@ -225,8 +224,6 @@ public class TestClientDemand {
         final double demandTolerance = 1E-6;
         final String regionName = "A";
         final RegionIdentifier region = new StringRegionIdentifier(regionName);
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
         final Path baseDirectory = Paths.get(baseu.toURI());
@@ -234,13 +231,14 @@ public class TestClientDemand {
         final Path demandPath = baseDirectory.resolve("simple_demand");
 
         final VirtualClock clock = new SimpleClock();
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                false, false, false, ApplicationManagerUtils::getContainerParameters)) {
-            final int numApRoundsToStabilize = TestUtils.computeRoundsToStabilize(sim);
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
+            final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToStabilize);
-            sim.stopSimulation();
+            sim.startClients();
+            SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+            clock.stopClock();
 
             // check all estimation windows
             for (final ResourceReport.EstimationWindow estimationWindow : ResourceReport.EstimationWindow.values()) {
@@ -355,9 +353,7 @@ public class TestClientDemand {
         final RegionIdentifier regionA = new StringRegionIdentifier(regionAName);
         final String regionBName = "B";
         final RegionIdentifier regionB = new StringRegionIdentifier(regionBName);
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
-        final LinkMetricName datarateAttribute = Simulation.LINK_BANDWIDTH_ATTRIBUTE;
+        final LinkMetricName datarateAttribute = LinkMetricName.DATARATE_TX;
         final NodeIdentifier nodeA0Id = new DnsNameIdentifier("nodeA0");
         final NodeIdentifier nodeB0Id = new DnsNameIdentifier("nodeB0");
 
@@ -367,10 +363,11 @@ public class TestClientDemand {
         final Path demandPath = null;
 
         final VirtualClock clock = new SimpleClock();
-        try (Simulation sim = new Simulation("test network capacity", baseDirectory, demandPath, clock, pollingInterval,
-                dnsTtlSeconds, false, false, false, ApplicationManagerUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("test network capacity", baseDirectory, demandPath, clock,
+                TestUtils.POLLING_INTERVAL_MS, TestUtils.DNS_TTL, false, false, false,
+                AppMgrUtils::getContainerParameters)) {
 
-            final int numApRoundsToStabilize = TestUtils.computeRoundsToStabilize(sim);
+            final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
 
             final Controller nodeA0 = sim.getControllerById(nodeA0Id);
             Assert.assertNotNull("Looking up nodeA0", nodeA0);
@@ -388,8 +385,9 @@ public class TestClientDemand {
             final double expectedNetworkCapacity = a0B0NetworkCapacity.doubleValue();
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToStabilize);
-            sim.stopSimulation();
+            sim.startClients();
+            SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+            clock.stopClock();
 
             boolean foundDcopA = false;
             boolean foundDcopB = false;
@@ -424,7 +422,8 @@ public class TestClientDemand {
                                     .getNetworkCapacity();
                             final ImmutableMap<LinkAttribute<?>, Double> networkCapacityToOther = networkCapacity
                                     .get(otherRegion);
-                            Assert.assertNotNull("No network capacity to " + otherRegion + " from " + thisRegion, networkCapacityToOther);
+                            Assert.assertNotNull("No network capacity to " + otherRegion + " from " + thisRegion,
+                                    networkCapacityToOther);
 
                             final Double capacityValue = networkCapacityToOther.get(datarateAttribute);
                             Assert.assertNotNull("No datarate", capacityValue);
@@ -465,10 +464,6 @@ public class TestClientDemand {
                                                    // divided by the number of
                                                    // containers
         final double tolerance = 1E-6;
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
-        final String expectedSourceRegionName = "A";
-        final RegionIdentifier expectedSourceRegion = new StringRegionIdentifier(expectedSourceRegionName);
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
         final Path baseDirectory = Paths.get(baseu.toURI());
@@ -476,24 +471,21 @@ public class TestClientDemand {
         final Path demandPath = baseDirectory.resolve("short_demand");
 
         final VirtualClock clock = new SimpleClock();
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                false, false, false, ApplicationManagerUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
-            final int numApRoundsToStabilize = TestUtils.computeRoundsToStabilize(sim);
+            final ClientSim clientSim = sim.getClientSimulators().stream()
+                    .filter(c -> c.getClientName().equals("clientPoolA")).findFirst().orElse(null);
+
+            final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToStabilize);
-            sim.stopSimulation();
+            sim.startClients();
+            SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+            clock.stopClock();
 
-            final NodeIdentifier nodeRunningServiceId = sim.getRegionalDNS(expectedSourceRegion)
-                    .resolveService(expectedSourceRegion, service);
-            Assert.assertThat("Expecting a container,  but was: " + nodeRunningServiceId, nodeRunningServiceId,
-                    IsInstanceOf.instanceOf(ContainerIdentifier.class));
-
-            final ContainerIdentifier containerRunningServiceId = (ContainerIdentifier) nodeRunningServiceId;
-            LOGGER.info("Service is running in container {}", containerRunningServiceId);
-
-            final ContainerSim containerRunningService = sim.getContainerById(containerRunningServiceId);
+            final ContainerSim containerRunningService = sim.getContainerForService(
+                    clientSim.getClient().getNodeIdentifier(), clientSim.getClientRegion(), service);
             Assert.assertThat(containerRunningService.getService(), IsEqual.equalTo(service));
 
             final NetworkServer parentNode = containerRunningService.getParentNode();
@@ -505,7 +497,10 @@ public class TestClientDemand {
                         .push(estimationWindow.toString())) {
                     LOGGER.info("Checking estimation window: " + estimationWindow);
 
+                    // force report updates
+                    containerRunningService.updateResourceReports();
                     parentNodeMgr.updateResourceReports();
+
                     final ResourceReport serviceResourceReport = parentNodeMgr
                             .getCurrentResourceReport(estimationWindow);
                     Assert.assertNotNull("Service resource report", serviceResourceReport);

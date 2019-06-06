@@ -13,7 +13,10 @@
       "TASK_CONTAINERS": "1"
     },
     "networkCapacity": {
-      "DATARATE": "100"
-    }
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    },
+    "priority": 5,
+    "trafficType": "RX_GREATER"
   }
 ]

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,25 +31,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bbn.map.appmgr.util.AppMgrUtils;
+import com.bbn.map.common.value.ApplicationCoordinates;
+import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.dns.DNSUpdateService;
 import com.bbn.map.dns.DelegateRecord;
 import com.bbn.map.dns.DnsRecord;
 import com.bbn.map.dns.NameRecord;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableCollection;
@@ -74,8 +83,7 @@ public class DNSSim implements DNSUpdateService {
     /**
      * fqdn -> region -> state
      */
-    private final Map<ServiceIdentifier<?>, Map<RegionIdentifier, DnsRecordList>> entries = new HashMap<>();
-    private final Map<ServiceIdentifier<?>, CacheEntry> cache = new HashMap<>();
+    private final Map<ServiceIdentifier<?>, DnsRecordList> entries = new HashMap<>();
     private final VirtualClock clock;
     // used to get the clock and delegate DNS servers
     private final Simulation simulation;
@@ -116,25 +124,31 @@ public class DNSSim implements DNSUpdateService {
         this.parent = parent;
     }
 
-    @Override
-    public synchronized void addRecord(@Nonnull final DnsRecord record) {
-        getLogger().info("{}: Simulation time {} - adding a record {}", name, clock.getCurrentTime(), record);
+    /**
+     * Add a DNS record. Calling {@link #replaceAllRecords(ImmutableCollection)}
+     * on this instance will replace this record.
+     * 
+     * @param record
+     *            the record to add
+     * @param weight
+     *            the weight of the record
+     */
+    public synchronized void addRecord(@Nonnull final DnsRecord record, final double weight) {
+        getLogger().info("{}: Simulation time {} - adding a record {} with weight {}", name, clock.getCurrentTime(),
+                record, weight);
 
-        internalAddRecord(record);
+        internalAddRecord(record, weight);
     }
 
-    private void internalAddRecord(@Nonnull final DnsRecord record) {
+    private void internalAddRecord(@Nonnull final DnsRecord record, final double weight) {
         final ServiceIdentifier<?> service = record.getService();
-        final RegionIdentifier sourceRegion = record.getSourceRegion();
-        final Map<RegionIdentifier, DnsRecordList> stateMap = entries.computeIfAbsent(service,
-                v -> new HashMap<RegionIdentifier, DnsRecordList>());
-        final DnsRecordList state = stateMap.computeIfAbsent(sourceRegion, v -> new DnsRecordList());
-        state.addRecord(record);
+        final DnsRecordList state = entries.computeIfAbsent(service, v -> new DnsRecordList());
+        state.addRecord(record, weight);
     }
 
     /**
-     * Used to visit records in {@link DNSSim#foreachRecord(RecordVisitor)} and
-     * {@link DNSSim#foreachCachedRecord(RecordVisitor)}.
+     * Used to visit records in {@link DNSSim#foreachRecord(DNSSim.RecordVisitor)} and
+     * {@link DNSSim#foreachCachedRecord(DNSSim.RecordVisitor)}.
      * 
      * @author jschewe
      *
@@ -144,8 +158,10 @@ public class DNSSim implements DNSUpdateService {
          * 
          * @param record
          *            the record being visited
+         * @param weight
+         *            the weight of the record
          */
-        void visit(DnsRecord record);
+        void visit(DnsRecord record, double weight);
     }
 
     /**
@@ -153,95 +169,51 @@ public class DNSSim implements DNSUpdateService {
      *            executed for each record in the DNS
      */
     public synchronized void foreachRecord(@Nonnull final RecordVisitor visitor) {
-        entries.forEach((fqdn, stateMap) -> {
-            stateMap.forEach((sourceRegion, recordList) -> {
-                recordList.getAllRecords().forEach(record -> {
-                    visitor.visit(record);
-                });
+        entries.forEach((fqdn, recordList) -> {
+            recordList.getAllRecords().forEach(pair -> {
+                visitor.visit(pair.getKey(), pair.getValue());
             });
         });
     }
 
-    /**
-     * @param visitor
-     *            executed for each record in the cache
-     */
-    public synchronized void foreachCachedRecord(@Nonnull final RecordVisitor visitor) {
-        cache.forEach((fqdn, cacheEntry) -> {
-            visitor.visit(cacheEntry.getRecord());
-        });
-    }
-
     @Override
-    public synchronized void removeRecord(@Nonnull final DnsRecord record) {
-        final ServiceIdentifier<?> service = record.getService();
-        final RegionIdentifier sourceRegion = record.getSourceRegion();
-        final Map<RegionIdentifier, DnsRecordList> stateMap = entries.get(service);
-        if (null != stateMap) {
-            final DnsRecordList state = stateMap.get(sourceRegion);
-            if (null != state) {
-                state.removeRecord(record);
-                if (state.getNumRecords() < 1) {
-                    stateMap.remove(sourceRegion);
-                }
-            }
-            if (stateMap.isEmpty()) {
-                entries.remove(service);
-            }
-        }
-    }
-
-    @Override
-    public synchronized void replaceAllRecords(@Nonnull final ImmutableCollection<DnsRecord> records) {
+    public synchronized boolean replaceAllRecords(@Nonnull final ImmutableCollection<Pair<DnsRecord, Double>> records) {
         getLogger().info("{}: simulation time {} - Replacing all records with {}", name, clock.getCurrentTime(),
                 records);
 
         entries.clear();
-        records.forEach(rec -> internalAddRecord(rec));
+        records.forEach(rec -> internalAddRecord(rec.getLeft(), rec.getRight()));
+        return true;
     }
 
     /**
      * Find a DNS record. This will check the parent DNS if not found locally.
      * The cache is first checked and then the entries and then the parent.
+     *
+     * Package visible for testing.
      * 
-     * @param clientRegion
-     *            the region where the DNS request originated, used to determine
+     * @param clientName
+     *            the client that originated the DNS request, used to determine
      *            which record to return
      * @param service
      *            the service to lookup
      * @return the record found, will be null if not found in this DNS or it's
      *         parent
      */
-    public synchronized DnsRecord lookup(final RegionIdentifier clientRegion,
-            @Nonnull final ServiceIdentifier<?> service) {
-        final CacheEntry cacheEntry = cache.get(service);
-        if (null != cacheEntry) {
-            final long now = clock.getCurrentTime();
-            if (now > cacheEntry.getExpiration()) {
-                if (getLogger().isTraceEnabled()) {
-                    getLogger().trace("Removing record from cache: {}", cacheEntry.getRecord());
-                }
-
-                cache.remove(service);
-            } else {
-                return cacheEntry.getRecord();
+    /* package */ DnsRecord lookup(final String clientName, @Nonnull final ServiceIdentifier<?> service) {
+        final DnsRecordList state = entries.get(service);
+        if (null != state) {
+            if (getLogger().isTraceEnabled()) {
+                getLogger().trace("Finding record for {} in {}", service, state);
             }
-        }
+            final DnsRecord record = state.getNextRecord();
 
-        final Map<RegionIdentifier, DnsRecordList> stateMap = entries.get(service);
-        if (null != stateMap) {
-            final DnsRecordList state = stateMap.getOrDefault(clientRegion, stateMap.get(null));
-            if (null != state) {
-                if (getLogger().isTraceEnabled()) {
-                    getLogger().trace("Finding record for {} in {}", service, state);
-                }
-                return state.getNextRecord();
-            }
+            return record;
         }
 
         // didn't find it locally, check the parent if one exists
         if (null != parent) {
-            final DnsRecord record = parent.lookup(clientRegion, service);
+            final DnsRecord record = parent.lookup(clientName, service);
 
             // If we needed to contact another DNS server to get the record,
             // cache it
@@ -257,16 +229,16 @@ public class DNSSim implements DNSUpdateService {
      * Map FQDNs to MAP nodes. This method will follow {@link DelegateRecord}s
      * until a {@link NameRecord} is found.
      * 
-     * @param clientRegion
-     *            passed to {@link #lookup(RegionIdentifier, String)}
+     * @param clientName
+     *            passed to {@link #lookup(String, String)}
      * @param service
      *            the service to find the node for
      * @return the node for this fqdn or null if not found
      * @throws DNSLoopException
      *             if there is a loop in the DNS setup
      */
-    public synchronized NodeIdentifier resolveService(final RegionIdentifier clientRegion,
-            final ServiceIdentifier<?> service) throws DNSLoopException {
+    public synchronized NodeIdentifier resolveService(final String clientName, final ServiceIdentifier<?> service)
+            throws DNSLoopException {
         final List<DNSSim> checked = new LinkedList<>();
 
         NameRecord retRecord = null;
@@ -277,7 +249,7 @@ public class DNSSim implements DNSUpdateService {
                         + " most recent dns: " + dns);
             }
 
-            final DnsRecord record = dns.lookup(clientRegion, service);
+            final DnsRecord record = dns.lookup(clientName, service);
             if (null == record) {
                 // can't continue checking
                 break;
@@ -304,9 +276,55 @@ public class DNSSim implements DNSUpdateService {
             // cannot resolve the name
             return null;
         } else {
+            logServiceResolution(clientName, service, retRecord);
+
             return retRecord.getNode();
         }
 
+    }
+
+    private void logServiceResolution(final String clientName,
+            final ServiceIdentifier<?> service,
+            final NameRecord retRecord) {
+        if (null != outputDirectory) {
+            final long now = clock.getCurrentTime();
+
+            final ApplicationSpecification appSpec = AppMgrUtils.getApplicationManager()
+                    .getApplicationSpecification((ApplicationCoordinates) service);
+            Objects.requireNonNull(appSpec, "Could not find application specification for: " + service);
+
+            final String row = String.format("%d,%s,%s,%s", now, clientName, appSpec.getServiceHostname(),
+                    retRecord.getNode().getName());
+
+            final Path path = outputDirectory.resolve(String.format("dns-%s.csv", name));
+            final boolean writeHeader = !Files.exists(path);
+
+            try (BufferedWriter logFileWriter = Files.newBufferedWriter(path, Charset.defaultCharset(),
+                    StandardOpenOption.APPEND, StandardOpenOption.WRITE, StandardOpenOption.CREATE)) {
+                if (writeHeader) {
+                    logFileWriter.write("timestamp, clientAddress, name_to_resolve, resolved_name");
+                    logFileWriter.newLine();
+                }
+
+                logFileWriter.write(row);
+                logFileWriter.newLine();
+            } catch (final IOException e) {
+                getLogger().error("Error writing row '{}' to logfile: {}", row, e.getMessage(), e);
+            }
+        }
+
+    }
+
+    private Path outputDirectory = null;
+
+    /**
+     * Specify the output directory for dns logs.
+     * 
+     * @param outputDirectory
+     *            the new output directory, null for don't write logs
+     */
+    public synchronized void setBaseOutputDirectory(final Path outputDirectory) {
+        this.outputDirectory = outputDirectory;
     }
 
     private void addToCache(final DnsRecord record) {
@@ -321,117 +339,95 @@ public class DNSSim implements DNSUpdateService {
     }
 
     /**
-     * DNS cache entry.
-     */
-    private static final class CacheEntry {
-        /**
-         * @param record
-         *            the record to cache
-         * @param expiration
-         *            when this cache entry expires, uses the
-         *            {@link VirtualClock}
-         */
-        CacheEntry(final DnsRecord record, final long expiration) {
-            this.record = record;
-            this.expiration = expiration;
-        }
-
-        private final DnsRecord record;
-
-        /**
-         * @return the cached record
-         */
-        @Nonnull
-        public DnsRecord getRecord() {
-            return record;
-        }
-
-        private final long expiration;
-
-        /**
-         * 
-         * @return when this cache entry expires
-         */
-        public long getExpiration() {
-            return expiration;
-        }
-
-        @Override
-        public String toString() {
-            return "CacheEntry [" + " record: " + record + " expiration: " + expiration + " ]";
-        }
-    }
-
-    /**
-     * Store information about multiple records that may exist for a name and
-     * which one was returned last. This implements a simple round robin DNS.
+     * Store information about multiple records that may exist for a name. Each
+     * record has a weight and the record to use is randomly chosen from the
+     * list based on the weight.
      */
     @ThreadSafe
     private static final class DnsRecordList {
         DnsRecordList() {
-            this.recordIndex = 0;
         }
 
-        private int recordIndex;
-
-        private final List<DnsRecord> records = new LinkedList<>();
+        private final List<Pair<DnsRecord, Double>> records = new LinkedList<>();
+        private double totalWeight = 0;
 
         /**
          * @param record
          *            record to add to the list for this fqdn
+         * @param weight
+         *            the weight of the record
          */
-        public synchronized void addRecord(final DnsRecord record) {
-            records.add(record);
+        public synchronized void addRecord(final DnsRecord record, final double weight) {
+            records.add(Pair.of(record, weight));
+            totalWeight += weight;
+            recomputeUseWeight();
         }
 
-        /**
-         * Remove a single occurrence of this record.
-         * 
-         * @param record
-         *            the record to remove
-         * @see List#remove(Object)
-         */
-        public synchronized void removeRecord(final DnsRecord record) {
-            records.remove(record);
-            if (recordIndex >= records.size()) {
-                recordIndex = 0;
+        private List<AtomicLong> recordUseWeight = new LinkedList<>();
+        private int recordUseWeightIndex = 0;
+
+        private void recomputeUseWeight() {
+            boolean foundNonZeroWeight = false;
+            recordUseWeight.clear();
+            for (final Pair<DnsRecord, Double> pair : records) {
+                //FIXME move 100 to AgentConfiguration
+                final long w = Math.round(pair.getRight() / totalWeight * 100);
+                if (w > 0) {
+                    foundNonZeroWeight = true;
+                }
+                recordUseWeight.add(new AtomicLong(w));
             }
-        }
-
-        /**
-         * @return the number of records stored
-         */
-        public synchronized int getNumRecords() {
-            return records.size();
+            if (!foundNonZeroWeight) {
+                throw new RuntimeException("Internal error, computed all zero weights!");
+            }
         }
 
         /**
          * 
          * @return the list of all records, used for display
          */
-        public synchronized ImmutableList<DnsRecord> getAllRecords() {
+        public synchronized ImmutableList<Pair<DnsRecord, Double>> getAllRecords() {
             return ImmutableList.copyOf(records);
         }
 
         /**
-         * @return the next record in the sequence, will be null if there are no
-         *         records
+         * @return the next record to use, will be null if there are no records
          */
         public synchronized DnsRecord getNextRecord() {
             if (records.isEmpty()) {
                 return null;
             } else {
-                final DnsRecord record = records.get(recordIndex);
-                if (LoggerFactory.getLogger(DnsRecordList.class).isTraceEnabled()) {
-                    LoggerFactory.getLogger(DnsRecordList.class)
-                            .trace("DnsRecordList returning record with index {} -> {}", recordIndex, record);
-                }
+                final int startingIndex = recordUseWeightIndex;
 
-                ++recordIndex;
-                if (recordIndex >= records.size()) {
-                    recordIndex = 0;
+                // loop until we find a use value that is greater than 0
+                while (true) {
+                    final int recordIndex = recordUseWeightIndex;
+                    final AtomicLong use = recordUseWeight.get(recordIndex);
+
+                    // always increment index
+                    incrementRecordIndex();
+
+                    if (use.get() > 0) {
+                        // found record to use
+                        final DnsRecord record = records.get(recordIndex).getLeft();
+
+                        // note that it's been used
+                        use.decrementAndGet();
+                        return record;
+                    }
+
+                    if (startingIndex == recordUseWeightIndex) {
+                        // looped, everything must be zero, reset the data
+                        recomputeUseWeight();
+                    }
                 }
-                return record;
+            }
+        }
+
+        private void incrementRecordIndex() {
+            ++recordUseWeightIndex;
+            if (recordUseWeightIndex >= records.size()) {
+                recordUseWeightIndex = 0;
             }
         }
 

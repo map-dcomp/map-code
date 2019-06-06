@@ -1,0 +1,42 @@
+[
+  {
+    "service": {
+      "group": "testC",
+      "artifact": "test-serviceC",
+      "version": "1"
+    },
+    "hostname": "test-serviceC",
+    "defaultNode": "nodeC",
+    "defaultNodeRegion": "C",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "35"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    },
+    "priority": 9,
+    "trafficType": "RX_GREATER"
+  },
+  {
+    "service": {
+      "group": "testA",
+      "artifact": "test-serviceA",
+      "version": "1"
+    },
+    "hostname": "test-serviceA",
+    "defaultNode": "nodeA",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "35"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    },
+    "priority": 8,
+    "trafficType": "RX_GREATER"
+  }
+]

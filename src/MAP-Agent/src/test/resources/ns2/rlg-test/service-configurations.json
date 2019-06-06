@@ -1,0 +1,20 @@
+[
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-high",
+      "version": "1"
+    },
+    "hostname": "image-recognition-high.map",
+    "defaultNode": "nodeA2"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "image-recognition-med",
+      "version": "1"
+    },
+    "hostname": "image-recognition-med.map",
+    "defaultNode": "nodeA0"
+  }
+]

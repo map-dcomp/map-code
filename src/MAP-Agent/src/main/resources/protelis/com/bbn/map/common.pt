@@ -1,0 +1,119 @@
+module protelis:com:bbn:map:common
+
+import protelis:coord:sparsechoice
+import protelis:coord:accumulation
+import protelis:coord:spreading
+import protelis:coord:meta
+import protelis:lang:utils
+import protelis:coord:nonselfstabilizing:accumulation
+import protelis:state:nonselfstabilizing:time
+import protelis:state:time
+
+// Deprecated --> will be included in a future Protelis release
+public def once(f) {
+    rep (v <- f.apply()) { v }
+}
+
+
+public def union(a, b) {
+    a.union(b);
+}
+
+public def regionSet(potential) {
+        C(potential, union, unionHood(nbr([self.getController().getRegionIdentifier()])), []);
+}
+
+public def countNodes() {
+    let nonce = once(() -> {self.getController().nextRandomDouble()});
+    let leader = nonce == gossip(nonce, min);
+    //self.getController().getExecutionEnvironment().put("blue",leader);
+    self.getController().setRunRLG(leader);
+    let d = hopDistanceTo(leader);
+    countDevices(d);
+}
+
+public def findNeighborRegions(leader) {
+    let rgn = self.getController().getRegionIdentifier();
+    let localNbrRgns = unionHood PlusSelf(nbr([rgn]));
+    multiRegion(rgn,(n) -> { rgn == n },
+        () -> { hopBroadcast(leader,C(hopDistanceTo(leader), union, localNbrRgns, [])); },
+        []
+    );
+}
+
+def randomUid() {
+    rep (v <- self.nextRandomDouble()) {
+        v
+    }
+}
+
+public def NewS(diameter, kL, kA) {
+let sigma = randomUid();  // make the index of each node fixed
+let temp_sigma = sigma;
+
+rep (dbar_sigma <- [0,temp_sigma]) {
+ let V_raw = nbr(dbar_sigma);
+ 
+
+ let V_set_kL = mux(V_raw.get(0) <= kL*diameter) {[V_raw.get(0),V_raw.get(1)]} else {[Infinity,V_raw.get(1)]};
+ let M_set_kL = mux(V_set_kL.get(1) < sigma) {[V_set_kL.get(0),V_set_kL.get(1)]} else {[Infinity,V_set_kL.get(1)]};
+
+ let V_set_kA = mux(V_raw.get(0) > kL*diameter && V_raw.get(0) <= kA*diameter) {[V_raw.get(0),V_raw.get(1)]} else {[Infinity,V_raw.get(1)]};
+ let M_set_kA = mux(V_set_kA.get(1) < sigma) {[V_set_kA.get(0),V_set_kA.get(1)]} else {[Infinity,V_set_kA.get(1)]};
+
+
+
+ let minTuple_kL = minHood([M_set_kL.get(1), M_set_kL.get(0)]);
+ let minTuple_kA = minHood([M_set_kA.get(1), M_set_kA.get(0)]);
+
+ mux(minTuple_kL.get(1)+1 < Infinity)
+ {
+ [minTuple_kL.get(1)+1, minTuple_kL.get(0)];
+ }
+ else
+ {
+ mux(minTuple_kA.get(1)+1 < Infinity)
+ {
+ [minTuple_kA.get(1)+1, minTuple_kA.get(0)];
+ }
+ else
+ {
+ [0,sigma];
+ };
+ }
+}.get(0) == 0
+}
+    
+
+
+
+public def electLeader() {
+  rep(state <- [true, 0, 1, 2]) {
+    let leader = state.get(0);
+    let distanceToLeader = state.get(1);
+    let estimatedDiameter = state.get(2);
+    let newDistance = hopDistanceTo(leader);
+    let timers = state.get(3);
+    let newDiameter = hopBroadcast(leader, cMultiMax(newDistance+1, maxHood PlusSelf(nbr(newDistance+1))));
+    if (newDiameter >= estimatedDiameter)
+    { 
+     timers = 2;
+    }
+    else{
+    if ( timers >= 1 )
+    {
+      newDiameter = estimatedDiameter;
+      timers = countDownWithDecay(2,1);
+    }
+    else
+      timers = 2;
+    };
+    };
+    //let k = 12;
+    let newLeader = NewS(newDiameter,3,12);
+    //let newLeader = S(newDiameter*k, ()->{1});
+    self.getController().apTraceMessage("newDiameter: " + newDiameter + " newDistanceToLeader: " + newDistance + " newLeader: " + newLeader + " timer " + timers);
+    [newLeader, newDistance, newDiameter,timers];
+  }.get(0);
+}
+

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,27 +31,32 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.dns;
 
-import java.util.Collection;
-import java.util.LinkedList;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.Matchers.closeTo;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-import org.junit.Assert;
+import java.util.Optional;
+
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 
-import com.bbn.map.AgentConfiguration;
 import com.bbn.map.ServiceConfiguration;
-import com.bbn.map.ap.ApplicationManagerUtils;
+import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
+import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.simulator.TestUtils;
-import com.bbn.protelis.networkresourcemanagement.ContainerIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
+import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlanBuilder;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -79,9 +84,8 @@ public class PlanTranslatorTest {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new TestUtils.UseMapApplicationManager());
-
+    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext());
+    
     private ImmutableMap<ApplicationCoordinates, ServiceConfiguration> serviceConfigurations;
     private static final int NUM_TEST_SERVICES = 5;
     private static final int TTL = 100;
@@ -115,7 +119,8 @@ public class PlanTranslatorTest {
         computeCapacity.put(NodeMetricName.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
 
         final ImmutableMap.Builder<LinkAttribute<?>, Double> networkCapacity = ImmutableMap.builder();
-        networkCapacity.put(LinkMetricName.DATARATE, DEFAULT_LINK_DATARATE);
+        networkCapacity.put(LinkMetricName.DATARATE_TX, DEFAULT_LINK_DATARATE);
+        networkCapacity.put(LinkMetricName.DATARATE_RX, DEFAULT_LINK_DATARATE);
 
         final ContainerParameters containerParameters = new ContainerParameters(computeCapacity.build(),
                 networkCapacity.build());
@@ -128,14 +133,16 @@ public class PlanTranslatorTest {
             final String defaultNodeName = "defaultFor" + serviceName;
             final NodeIdentifier defaultNode = new DnsNameIdentifier(defaultNodeName);
 
-            final ServiceConfiguration config = new ServiceConfiguration(serviceName, hostname, defaultNode,
-                    defaultRegion, 1, containerParameters);
+            final ServiceConfiguration config = new ServiceConfiguration(serviceName, hostname,
+                    ImmutableMap.of(defaultNode, 1), defaultRegion, containerParameters,
+                    ApplicationSpecification.DEFAULT_PRIORITY, true, null,
+                    ApplicationSpecification.ServiceTrafficType.TX_GREATER);
             serviceBuilder.put(serviceName, config);
         }
 
         serviceConfigurations = serviceBuilder.build();
 
-        ApplicationManagerUtils.populateApplicationManagerFromServiceConfigurations(serviceConfigurations);
+        AppMgrUtils.populateApplicationManagerFromServiceConfigurations(serviceConfigurations);
     }
 
     /**
@@ -150,11 +157,15 @@ public class PlanTranslatorTest {
         final LoadBalancerPlan loadBalancerPlan = LoadBalancerPlan.getNullLoadBalancerPlan(region);
 
         final RegionServiceState regionServiceState = new RegionServiceState(region, ImmutableSet.of());
-        final ImmutableCollection<DnsRecord> records = translator.convertToDns(loadBalancerPlan, regionServiceState);
+        final ImmutableCollection<Pair<DnsRecord, Double>> records = translator.convertToDns(loadBalancerPlan,
+                regionServiceState);
 
         serviceConfigurations.forEach((service, config) -> {
             final DelegateRecord expected = new DelegateRecord(null, TTL, service, config.getDefaultNodeRegion());
-            Assert.assertTrue("Did not find record for service: " + service, records.contains(expected));
+            final Optional<Pair<DnsRecord, Double>> found = records.stream()
+                    .filter(pair -> pair.getLeft().equals(expected)).findFirst();
+
+            assertTrue("Did not find record for service: " + service, found.isPresent());
         });
     }
 
@@ -165,33 +176,29 @@ public class PlanTranslatorTest {
     public void testSimpleRLGPlan() {
         final RegionIdentifier region = new StringRegionIdentifier("test");
         final NodeIdentifier nodeA1 = new DnsNameIdentifier("nodeA1");
-        final ContainerIdentifier nodeA1container0 = new DnsNameIdentifier("nodeA1c0");
+        final NodeIdentifier nodeA1container0 = new DnsNameIdentifier("nodeA1c0");
         final NodeIdentifier nodeA2 = new DnsNameIdentifier("nodeA2");
-        final ContainerIdentifier nodeA2container0 = new DnsNameIdentifier("nodeA2c0");
+        final NodeIdentifier nodeA2container0 = new DnsNameIdentifier("nodeA2c0");
         final ApplicationCoordinates service1 = generateSerivceName(1);
 
         final PlanTranslator translator = new PlanTranslator(TTL);
 
-        final ImmutableMap.Builder<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, Integer>> servicePlanBuilder = ImmutableMap
-                .builder();
-        servicePlanBuilder.put(service1, ImmutableMap.of(nodeA1, 1, nodeA2, 1));
+        final LoadBalancerPlanBuilder servicePlanBuilder = new LoadBalancerPlanBuilder(region);
+        servicePlanBuilder.addService(nodeA1, service1, 1);
+        servicePlanBuilder.addService(nodeA2, service1, 1);
 
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, Integer>> servicePlan = servicePlanBuilder
-                .build();
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overloadPlan = ImmutableMap
-                .of();
-        final LoadBalancerPlan loadBalancerPlan = new LoadBalancerPlan(region, servicePlan, overloadPlan,
-                ImmutableMap.of(), ImmutableMap.of());
+        final LoadBalancerPlan loadBalancerPlan = servicePlanBuilder
+                .toLoadBalancerPlan(new RegionServiceState(region, ImmutableSet.of()), ImmutableMap.of());
 
         final ImmutableSet.Builder<ServiceReport> serviceReports = ImmutableSet.builder();
 
-        final ImmutableMap.Builder<ContainerIdentifier, ServiceState> nodeA1ServiceState = ImmutableMap.builder();
+        final ImmutableMap.Builder<NodeIdentifier, ServiceState> nodeA1ServiceState = ImmutableMap.builder();
         nodeA1ServiceState.put(nodeA1container0, new ServiceState(service1, ServiceState.Status.RUNNING));
 
         final ServiceReport service1NodeA1 = new ServiceReport(nodeA1, nodeA1ServiceState.build());
         serviceReports.add(service1NodeA1);
 
-        final ImmutableMap.Builder<ContainerIdentifier, ServiceState> nodeA2ServiceState = ImmutableMap.builder();
+        final ImmutableMap.Builder<NodeIdentifier, ServiceState> nodeA2ServiceState = ImmutableMap.builder();
         nodeA2ServiceState.put(nodeA2container0, new ServiceState(service1, ServiceState.Status.RUNNING));
 
         final ServiceReport service1NodeA2 = new ServiceReport(nodeA2, nodeA2ServiceState.build());
@@ -199,20 +206,28 @@ public class PlanTranslatorTest {
 
         final RegionServiceState regionServiceState = new RegionServiceState(region, serviceReports.build());
 
-        final ImmutableCollection<DnsRecord> records = translator.convertToDns(loadBalancerPlan, regionServiceState);
+        final ImmutableCollection<Pair<DnsRecord, Double>> records = translator.convertToDns(loadBalancerPlan,
+                regionServiceState);
 
         serviceConfigurations.forEach((service, config) -> {
 
             if (service.equals(service1)) {
                 final NameRecord expected1 = new NameRecord(null, TTL, service, nodeA1container0);
-                Assert.assertTrue("Did not find A1 record for service: " + service, records.contains(expected1));
+                final Optional<Pair<DnsRecord, Double>> found1 = records.stream()
+                        .filter(pair -> pair.getLeft().equals(expected1)).findFirst();
+
+                assertTrue("Did not find A1 record for service: " + service, found1.isPresent());
 
                 final NameRecord expected2 = new NameRecord(null, TTL, service, nodeA2container0);
-                Assert.assertTrue("Did not find A2 record for service: " + service, records.contains(expected2));
+                final Optional<Pair<DnsRecord, Double>> found2 = records.stream()
+                        .filter(pair -> pair.getLeft().equals(expected2)).findFirst();
+                assertTrue("Did not find A2 record for service: " + service, found2.isPresent());
 
             } else {
                 final DelegateRecord expected = new DelegateRecord(null, TTL, service, config.getDefaultNodeRegion());
-                Assert.assertTrue("Did not find record for service: " + service, records.contains(expected));
+                final Optional<Pair<DnsRecord, Double>> found = records.stream()
+                        .filter(pair -> pair.getLeft().equals(expected)).findFirst();
+                assertTrue("Did not find record for service: " + service, found.isPresent());
             }
         });
     }
@@ -231,7 +246,7 @@ public class PlanTranslatorTest {
         final double regionAWeight = 0.5;
         final double regionBWeight = 0.25;
         final double regionCWeight = 0.25;
-        final double weightTolerance = AgentConfiguration.getInstance().getDnsRecordWeightPrecision();
+        final double weightTolerance = 1E-6;
 
         final PlanTranslator translator = new PlanTranslator(TTL);
 
@@ -239,56 +254,56 @@ public class PlanTranslatorTest {
         service1Plan.put(regionA, regionAWeight);
         service1Plan.put(regionB, regionBWeight);
         service1Plan.put(regionC, regionCWeight);
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> plan = ImmutableMap
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowPlan = ImmutableMap
                 .of(service1, service1Plan.build());
-        final LoadBalancerPlan loadBalancerPlan = new LoadBalancerPlan(region, ImmutableMap.of(), plan,
-                ImmutableMap.of(), ImmutableMap.of());
+        final LoadBalancerPlan loadBalancerPlan = new LoadBalancerPlan(region, ImmutableMap.of(), overflowPlan);
 
         final RegionServiceState regionServiceState = new RegionServiceState(region, ImmutableSet.of());
-        final ImmutableCollection<DnsRecord> records = translator.convertToDns(loadBalancerPlan, regionServiceState);
+        final ImmutableCollection<Pair<DnsRecord, Double>> records = translator.convertToDns(loadBalancerPlan,
+                regionServiceState);
 
         // check that the other services still just have the default values
         serviceConfigurations.forEach((service, config) -> {
             if (!service.equals(service1)) {
                 final DelegateRecord expected = new DelegateRecord(null, TTL, service, config.getDefaultNodeRegion());
-                Assert.assertTrue("Did not find record for service: " + service, records.contains(expected));
+                final Optional<Pair<DnsRecord, Double>> found = records.stream()
+                        .filter(pair -> pair.getLeft().equals(expected)).findFirst();
+
+                assertTrue("Did not find record for service: " + service, found.isPresent());
             }
         });
 
         // filter to service1 records
-        final Collection<DnsRecord> regionARecords = new LinkedList<>();
-        final Collection<DnsRecord> regionBRecords = new LinkedList<>();
-        final Collection<DnsRecord> regionCRecords = new LinkedList<>();
-        records.forEach(record -> {
+        double regionAactualWeight = 0;
+        double regionBactualWeight = 0;
+        double regionCactualWeight = 0;
+        for (final Pair<DnsRecord, Double> pair : records) {
+            final DnsRecord record = pair.getLeft();
+            final double weight = pair.getRight();
+
             final ServiceIdentifier<?> service = record.getService();
-            final ServiceIdentifier<?> expectedService = service1;
-            if (service.equals(expectedService)) {
-                Assert.assertTrue("All records for service1 shoudl be delegate records",
-                        record instanceof DelegateRecord);
+            if (service.equals(service1)) {
+                assertThat("All records for service1 should be delegate records", record,
+                        instanceOf(DelegateRecord.class));
+
                 final DelegateRecord drec = (DelegateRecord) record;
                 if (regionA.equals(drec.getDelegateRegion())) {
-                    regionARecords.add(drec);
+                    regionAactualWeight += weight;
                 } else if (regionB.equals(drec.getDelegateRegion())) {
-                    regionBRecords.add(drec);
+                    regionBactualWeight += weight;
                 } else if (regionC.equals(drec.getDelegateRegion())) {
-                    regionCRecords.add(drec);
+                    regionCactualWeight += weight;
                 } else {
-                    Assert.fail("Unknown delegate region: " + drec.getDelegateRegion());
+                    fail("Unknown delegate region: " + drec.getDelegateRegion());
                 }
             }
-        });
+        }
 
-        final double totalCount = regionARecords.size() + regionBRecords.size() + regionCRecords.size();
-        Assert.assertTrue(totalCount > 0);
+        final double totalActualWeight = regionAactualWeight + regionBactualWeight + regionCactualWeight;
 
-        final double regionAactualWeight = regionARecords.size() / totalCount;
-        Assert.assertEquals(regionAWeight, regionAactualWeight, weightTolerance);
-
-        final double regionBactualWeight = regionBRecords.size() / totalCount;
-        Assert.assertEquals(regionBWeight, regionBactualWeight, weightTolerance);
-
-        final double regionCactualWeight = regionCRecords.size() / totalCount;
-        Assert.assertEquals(regionCWeight, regionCactualWeight, weightTolerance);
+        assertThat("region A", regionAactualWeight / totalActualWeight, closeTo(regionAWeight, weightTolerance));
+        assertThat("region B", regionBactualWeight / totalActualWeight, closeTo(regionBWeight, weightTolerance));
+        assertThat("region C", regionCactualWeight / totalActualWeight, closeTo(regionCWeight, weightTolerance));
 
     }
 

@@ -13,7 +13,8 @@
       "TASK_CONTAINERS": "1"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   },
   {
@@ -26,11 +27,12 @@
     "defaultNode": "serverX",
     "defaultNodeRegion": "X",
     "initialInstances": "0",
-     "computeCapacity": {
+    "computeCapacity": {
       "TASK_CONTAINERS": "1"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   }
 ]

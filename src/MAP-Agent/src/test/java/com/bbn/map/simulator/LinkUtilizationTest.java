@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -37,7 +37,7 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.core.IsEqual;
 import org.hamcrest.core.IsNull;
@@ -49,7 +49,7 @@ import org.junit.Test;
 import org.junit.rules.RuleChain;
 
 import com.bbn.map.Controller;
-import com.bbn.map.ap.ApplicationManagerUtils;
+import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.map.simulator.ClientSim.RequestResult;
@@ -58,6 +58,7 @@ import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
+import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.SimpleClock;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableMap;
@@ -77,8 +78,7 @@ public class LinkUtilizationTest {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new TestUtils.UseMapApplicationManager());
+    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext());
 
     /**
      * Add information to one side of the link and make sure that both sides see
@@ -91,7 +91,6 @@ public class LinkUtilizationTest {
      */
     @Test
     public void bothSidesUpdated() throws URISyntaxException, IOException {
-        final LinkMetricName datarateAttribute = LinkMetricName.DATARATE;
         // how much error we are allowing on our double comparisons
         final double error = 1E-6;
         final String srcControllerName = "nodeA0";
@@ -101,22 +100,20 @@ public class LinkUtilizationTest {
         final long requestDuration = 10;
         final int requestNumClients = 1;
         final String serviceName = "test";
+        final ApplicationCoordinates service = new ApplicationCoordinates(serviceName, serviceName, serviceName);
         final double nodeLoad = 1;
 
-        final ClientRequest req = new ClientRequest(requestStart, requestDuration, requestDuration, requestNumClients,
-                new ApplicationCoordinates(serviceName, serviceName, serviceName), ImmutableMap.of(),
-                ImmutableMap.of(LinkMetricName.DATARATE, nodeLoad));
+        final ClientLoad req = new ClientLoad(requestStart, requestDuration, requestDuration, requestNumClients,
+                service, ImmutableMap.of(), ImmutableMap.of(LinkMetricName.DATARATE_TX, nodeLoad));
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
         final Path baseDirectory = Paths.get(baseu.toURI());
 
         final Path demandPath = null;
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
 
         final VirtualClock clock = new SimpleClock();
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                false, false, false, ApplicationManagerUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
             final Controller srcController = sim.getControllerById(new DnsNameIdentifier(srcControllerName));
             final Controller destController = sim.getControllerById(new DnsNameIdentifier(destControllerName));
@@ -125,11 +122,16 @@ public class LinkUtilizationTest {
             Assert.assertThat(destManager, CoreMatchers.is(IsNull.notNullValue()));
 
             // apply some load
+            final NodeIdentifier clientId = destController.getNodeIdentifier();
             final LinkResourceManager lmgr = sim.getLinkResourceManager(srcController.getNodeIdentifier(),
                     destController.getNodeIdentifier());
-            final Pair<RequestResult, LinkResourceManager.LinkLoadEntry> linkResult = lmgr
-                    .addLinkLoad(destController.getNodeIdentifier(), req);
-            Assert.assertThat("Link load should be added without a problem", linkResult.getLeft(),
+
+            final ImmutableTriple<ClientSim.RequestResult, LinkLoadEntry, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkResult = lmgr
+                    .addLinkLoad(clock.getCurrentTime(), req, clientId, clientId);
+
+            final ClientSim.RequestResult requestResult = linkResult.getLeft();
+
+            Assert.assertThat("Link load should be added without a problem", requestResult,
                     IsEqual.equalTo(RequestResult.SUCCESS));
 
             // get the reports and check that they match
@@ -145,22 +147,41 @@ public class LinkUtilizationTest {
             Assert.assertThat(srcReport, CoreMatchers.is(IsNull.notNullValue()));
 
             // test neighbor traffic as that should show this
-            final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> srcNetLoad = srcReport
-                    .getNodeNeighborNetworkLoad();
+            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> srcNetLoad = srcReport
+                    .getNetworkLoad();
             Assert.assertThat(srcNetLoad, CoreMatchers.is(IsNull.notNullValue()));
-            final ImmutableMap<LinkAttribute<?>, Double> srcNetNeighborLoad = srcNetLoad
+
+            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> srcNetNeighborLoad = srcNetLoad
                     .get(destController.getNodeIdentifier());
             Assert.assertThat(srcNetNeighborLoad, CoreMatchers.is(IsNull.notNullValue()));
-            final Double srcNetNeighborLoadValue = srcNetNeighborLoad.get(datarateAttribute);
+
+            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> srcNetSourceLoad = srcNetNeighborLoad
+                    .get(clientId);
+            Assert.assertThat(srcNetSourceLoad, CoreMatchers.is(IsNull.notNullValue()));
+
+            final ImmutableMap<LinkAttribute<?>, Double> srcNetServiceLoad = srcNetSourceLoad.get(service);
+            Assert.assertThat(srcNetServiceLoad, CoreMatchers.is(IsNull.notNullValue()));
+
+            final Double srcNetNeighborLoadValue = srcNetServiceLoad.get(LinkMetricName.DATARATE_TX);
             Assert.assertThat(srcNetNeighborLoadValue, CoreMatchers.is(IsNull.notNullValue()));
 
-            final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> destNetLoad = destReport
-                    .getNodeNeighborNetworkLoad();
+            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> destNetLoad = destReport
+                    .getNetworkLoad();
             Assert.assertThat(destNetLoad, CoreMatchers.is(IsNull.notNullValue()));
-            final ImmutableMap<LinkAttribute<?>, Double> destNetNeighborLoad = destNetLoad
+
+            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> destNetNeighborLoad = destNetLoad
                     .get(srcController.getNodeIdentifier());
             Assert.assertThat(destNetNeighborLoad, CoreMatchers.is(IsNull.notNullValue()));
-            final Double destNetNeighborLoadValue = destNetNeighborLoad.get(datarateAttribute);
+
+            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> destNetSourceLoad = destNetNeighborLoad
+                    .get(clientId);
+            Assert.assertThat(destNetSourceLoad, CoreMatchers.is(IsNull.notNullValue()));
+
+            final ImmutableMap<LinkAttribute<?>, Double> destNetServiceLoad = destNetSourceLoad.get(service);
+            Assert.assertThat(destNetServiceLoad, CoreMatchers.is(IsNull.notNullValue()));
+
+            // other side of the link will be RX
+            final Double destNetNeighborLoadValue = destNetServiceLoad.get(LinkMetricName.DATARATE_RX);
             Assert.assertThat(destNetNeighborLoadValue, CoreMatchers.is(IsNull.notNullValue()));
 
             Assert.assertThat("Must have load greater than 0", srcNetNeighborLoadValue,

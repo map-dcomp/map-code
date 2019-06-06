@@ -1,4 +1,5 @@
-Public Release Version: 2018-04-19
+Public Release Version: 2019-03-14
 	+ MAP Agent Source Code
 	+ MAP Lo-fidelity Simulation Source Code
 	+ Example Algorithms
+	+ Experimental framework/inputs for MAP SASO 2019 paper

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -37,14 +37,26 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
 
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
 import org.junit.rules.RuleChain;
+import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.bbn.map.ap.ApplicationManagerUtils;
+import com.bbn.map.AgentConfiguration.RlgAlgorithm;
+import com.bbn.map.AgentConfiguration.RlgStubChooseNcp;
 import com.bbn.map.ap.ReportUtils;
+import com.bbn.map.appmgr.util.AppMgrUtils;
+import com.bbn.map.simulator.SimUtils;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
@@ -62,7 +74,10 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * @author jschewe
  *
  */
+@RunWith(Theories.class)
 public class RegionalOverloadTest {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RegionalOverloadTest.class);
 
     /**
      * Add test name to logging and use the application manager.
@@ -70,8 +85,48 @@ public class RegionalOverloadTest {
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
     public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new TestUtils.UseMapApplicationManager())
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
+
+    /**
+     * Reset the {@link AgentConfiguration} object to default values. This is
+     * done before and after all tests to ensure that other tests are not
+     * effected by using the different algorithms here.
+     */
+    @Before
+    @After
+    public void resetAgentConfiguration() {
+        AgentConfiguration.resetToDefaults();
+    }
+
+    // CHECKSTYLE:OFF test data class
+    private static final class Parameters {
+        public RlgAlgorithm algorithm;
+        public RlgStubChooseNcp stubChooseAlgorithm;
+    }
+    // CHECKSTYLE:ON
+
+    /**
+     * @return the weights to use
+     */
+    @DataPoints
+    public static List<Parameters> algorithms() {
+        final List<Parameters> params = new LinkedList<>();
+        for (final RlgAlgorithm algorithm : RlgAlgorithm.values()) {
+            if (RlgAlgorithm.STUB.equals(algorithm)) {
+                for (final RlgStubChooseNcp choose : RlgStubChooseNcp.values()) {
+                    final Parameters p = new Parameters();
+                    p.algorithm = algorithm;
+                    p.stubChooseAlgorithm = choose;
+                    params.add(p);
+                }
+            } else {
+                final Parameters p = new Parameters();
+                p.algorithm = algorithm;
+                params.add(p);
+            }
+        }
+        return params;
+    }
 
     /**
      * @throws URISyntaxException
@@ -80,9 +135,18 @@ public class RegionalOverloadTest {
      * @throws IOException
      *             If there is an error reading the test files.
      * @see RegionalOverloadTest
+     * @param params
+     *            the algorithm parameters to run the test with
      */
-    @Test
-    public void test() throws URISyntaxException, IOException {
+    @Theory
+    public void test(final Parameters params) throws URISyntaxException, IOException {
+        AgentConfiguration.getInstance().setRlgAlgorithm(params.algorithm);
+        AgentConfiguration.getInstance().setRlgStubChooseNcp(params.stubChooseAlgorithm);
+
+        LOGGER.info("Running test with algorithm: {} stub choose: {}",
+                AgentConfiguration.getInstance().getRlgAlgorithm(),
+                AgentConfiguration.getInstance().getRlgStubChooseNcp());
+
         // nodes should not be above this value for task containers once MAP has
         // had a chance to balance things out
         final double thresholdPercentage = 0.75;
@@ -99,15 +163,15 @@ public class RegionalOverloadTest {
 
         final VirtualClock clock = new SimpleClock();
         try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                ApplicationManagerUtils::getContainerParameters)) {
+                AppMgrUtils::getContainerParameters)) {
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToWaitForResults);
-            sim.stopSimulation();
+            SimUtils.waitForApRounds(sim, numApRoundsToWaitForResults);
+            clock.stopClock();
 
             // check the resource utilization
             sim.getScenario().getServers().forEach((deviceUid, controller) -> {
-                final ResourceManager manager = sim.getResourceManager(controller);
+                final ResourceManager<?> manager = sim.getResourceManager(controller);
 
                 // we're just checking load, so the estimation window doesn't
                 // matter, so just use short

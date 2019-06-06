@@ -1,0 +1,49 @@
+module protelis:com:bbn:map:ap:shared_region_nodes
+
+import com.bbn.map.ap.LeaderElectionTests.TestNetworkSharing.NetworkNodes.nullNetworkNodes
+import com.bbn.map.ap.LeaderElectionTests.TestNetworkSharing.NetworkNodes.mergeNetworkNodes
+import com.bbn.map.ap.LeaderElectionTests.TestNetworkSharing.NetworkNodes.convertToNetworkNodes
+
+import com.bbn.map.ap.LeaderElectionTests.TestNetworkSharing.RegionNodes.convertToRegionNodes
+
+import protelis:coord:sparsechoice
+import protelis:coord:accumulation
+import protelis:coord:spreading
+import protelis:coord:meta
+import protelis:lang:utils
+import protelis:coord:nonselfstabilizing:accumulation
+import protelis:state:nonselfstabilizing:time
+
+import protelis:com:bbn:map:common
+
+def mergeNetworkNodesProtelis(a, b) {
+  self.getController().apDebugMessage("calling mergeNetworkNodes with " + a + " of type: " + a.getClass() + " and " + b + " of type: " + b.getClass());
+  let ret = mergeNetworkNodes(a, b);
+  ret;
+}
+
+def convertToNetworkNodesProtelis(controller) {
+  self.getController().apDebugMessage("calling convertToRegionNodes with " + controller + " of type: " + controller.getClass());
+  let regionNodes = convertToRegionNodes(controller);
+  convertToNetworkNodes(regionNodes);
+}
+
+def shareInformation() {
+    let globalLeader = electLeader();
+    self.getController().setGlobalLeader(globalLeader);
+    
+    let cResult = C(hopDistanceTo(globalLeader), 
+                    mergeNetworkNodesProtelis, 
+                    convertToNetworkNodesProtelis(self.getController()), 
+                    nullNetworkNodes());
+    self.getController().apDebugMessage("global leader is: " + globalLeader + " cResult is: " + cResult);
+                                        
+    let allNodes = hopBroadcast(globalLeader,cResult);
+    allNodes;
+} 
+
+// ---- main code
+
+let allNodes = shareInformation();
+
+allNodes;

@@ -1,0 +1,1921 @@
+[ {
+  "startTime" : 59900,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 59966,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 60033,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 60100,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 68176,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.012758620689655173
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 68242,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.012758620689655173
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 68309,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.012758620689655173
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 68376,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.012758620689655173
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 76452,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310345
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 76518,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310345
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 76585,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310345
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 76652,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310345
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 84728,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.018275862068965518
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 84794,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.018275862068965518
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 84861,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.018275862068965518
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 84928,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.018275862068965518
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 93003,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02103448275862069
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 93069,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02103448275862069
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 93136,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02103448275862069
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 93203,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02103448275862069
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 101279,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275864
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 101345,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275864
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 101412,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275864
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 101479,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275864
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 109555,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793104
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 109621,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793104
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 109688,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793104
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 109755,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793104
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 117831,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586213
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 117897,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586213
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 117964,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586213
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 118031,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586213
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 126107,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 126173,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 126240,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 126307,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 134383,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 134449,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 134516,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 134583,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 142659,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 142725,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 142792,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 142859,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 150934,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 151000,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 151067,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 151134,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 159210,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 159276,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 159343,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 159410,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 167486,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 167552,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 167619,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 167686,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 175762,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 175828,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 175895,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 175962,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 184038,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 184104,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 184171,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 184238,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 192314,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 192380,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 192447,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 192514,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 200590,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 200656,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 200723,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 200790,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 208866,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 208932,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 208999,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 209066,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 217141,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 217207,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 217274,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 217341,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 225417,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 225483,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 225550,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 225617,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 233693,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 233759,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 233826,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 233893,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 241969,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586186
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 242035,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586186
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 242102,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586186
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 242169,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.029310344827586186
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 250245,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793101
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 250311,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793101
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 250378,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793101
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 250445,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.02655172413793101
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 258521,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275836
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 258587,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275836
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 258654,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275836
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 258721,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.023793103448275836
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 266797,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.021034482758620666
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 266863,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.021034482758620666
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 266930,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.021034482758620666
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 266997,
+  "serverDuration" : 8275,
+  "networkDuration" : 8275,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.021034482758620666
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 275072,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01827586206896549
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 275138,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01827586206896549
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 275205,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01827586206896549
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 275272,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01827586206896549
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 283348,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310319
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 283414,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310319
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 283481,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310319
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 283548,
+  "serverDuration" : 8276,
+  "networkDuration" : 8276,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app1",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015517241379310319
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+}, {
+  "startTime" : 420000,
+  "serverDuration" : 1000,
+  "networkDuration" : 1000,
+  "numClients" : 125,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "app2",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.001
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+]

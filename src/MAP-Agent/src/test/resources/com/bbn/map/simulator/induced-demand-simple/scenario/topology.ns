@@ -1,0 +1,16 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+set clientPoolA [$ns node]
+tb-set-node-os $clientPoolA XEN46-64-STD
+
+set nodeService1 [$ns node]
+tb-set-node-os $nodeService1 XEN46-64-STD
+tb-set-hardware $nodeService1 simple
+
+set nodeService2 [$ns node]
+tb-set-node-os $nodeService2 XEN46-64-STD
+tb-set-hardware $nodeService2 simple
+
+set linkClientService1 [$ns duplex-link $clientPoolA $nodeService1 100000.0kb 0.0ms DropTail]
+set linkService1Service2 [$ns duplex-link $nodeService1 $nodeService2 100000.0kb 0.0ms DropTail]

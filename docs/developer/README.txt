@@ -29,8 +29,9 @@ Get the initial build setup
    
 For each project in src
 
-  1. ./gradlew eclipseClasspath
-  2. Tell eclipse to import a project and select the directory 
+  1. rm .classpath
+  2. ./gradlew eclipseClasspath
+  3. Tell eclipse to import a project and select the directory 
 
 
 After this, when you switch branches you'll need to execute `git submodule update` to ensure that the submodules are at the correct commit.
@@ -107,6 +108,7 @@ Switch branches
 When switching branches that reference different versions of one of the
 dependencies you will need to update the eclipse classpath with:
 
+    rm .classpath
     ./gradelew eclipseClasspath
     
 Logging

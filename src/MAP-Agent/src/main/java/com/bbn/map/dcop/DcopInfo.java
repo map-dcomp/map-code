@@ -12,7 +12,7 @@ public interface DcopInfo {
     /**
      * Time for each agent to sleep in waiting for messages.
      */
-    long SLEEPTIME_WAITING_FOR_MESSAGE = 500; // in miliseconds
+    long SLEEPTIME_WAITING_FOR_MESSAGE = 200; // in miliseconds
 
     /**
      * TIME TO STOP WHILE LOOP.

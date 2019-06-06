@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -44,10 +44,10 @@ import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkFactory;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NetworkNode;
-import com.bbn.protelis.networkresourcemanagement.NetworkServer;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeLookupService;
 import com.bbn.protelis.networkresourcemanagement.RegionLookupService;
+import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceManagerFactory;
 
 /**
@@ -59,39 +59,11 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
     private final RegionLookupService regionLookupService;
     private final String program;
     private final boolean anonymousProgram;
-    private final ResourceManagerFactory<NetworkServer> managerFactory;
+    private final ResourceManagerFactory<Controller> managerFactory;
     private final NetworkServices networkServices;
     private final boolean allowDnsChanges;
     private final boolean enableDcop;
     private final boolean enableRlg;
-
-    /**
-     * Standard constructor that allows dns changes.
-     * 
-     * @param nodeLookupService
-     *            how to find other nodes
-     * @param regionLookupService
-     *            how to find regions for nodes
-     * @param program
-     *            the program to put in all nodes
-     * @param anonymous
-     *            if true, parse as main expression; if false, treat as a module
-     *            reference
-     * @param managerFactory
-     *            used to create {@link ResourceManagers}
-     * @param networkServices
-     *            passed to
-     *            {@link Controller#Controller(NodeLookupService, ProtelisProgram, String, NetworkServices)}
-     */
-    public MapNetworkFactory(@Nonnull final NodeLookupService nodeLookupService,
-            @Nonnull final RegionLookupService regionLookupService,
-            @Nonnull final ResourceManagerFactory<NetworkServer> managerFactory,
-            @Nonnull final String program,
-            final boolean anonymous,
-            @Nonnull final NetworkServices networkServices) {
-        this(nodeLookupService, regionLookupService, managerFactory, program, anonymous, networkServices, true, true,
-                true);
-    }
 
     /**
      * Create a MAP factory.
@@ -122,7 +94,7 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
      */
     public MapNetworkFactory(@Nonnull final NodeLookupService nodeLookupService,
             @Nonnull final RegionLookupService regionLookupService,
-            @Nonnull final ResourceManagerFactory<NetworkServer> managerFactory,
+            @Nonnull final ResourceManagerFactory<Controller> managerFactory,
             @Nonnull final String program,
             final boolean anonymous,
             @Nonnull final NetworkServices networkServices,
@@ -159,8 +131,10 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
             instance = ProtelisLoader.parse(program);
         }
 
-        final Controller controller = new Controller(nodeLookupService, regionLookupService, instance, name,
-                managerFactory, extraData, networkServices, allowDnsChanges, enableDcop, enableRlg);
+        final ResourceManager<Controller> manager = managerFactory.createResourceManager();
+        final Controller controller = new Controller(nodeLookupService, regionLookupService, instance, name, manager,
+                extraData, networkServices, allowDnsChanges, enableDcop, enableRlg);
+        manager.init(controller, extraData);
 
         return controller;
     }

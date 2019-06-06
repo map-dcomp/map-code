@@ -1,0 +1,168 @@
+\documentclass[12pt]{article}
+% OR
+% \documentclass[letterpaper,11pt]{report}
+\usepackage{fullpage}
+\usepackage{float}
+\usepackage{alltt}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage[table,usenames,dvipsnames]{xcolor}
+
+% handle characters reasonably, especially <>
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% nice for tables
+\usepackage{tabularx}
+
+% FloatBarrier
+\usepackage{placeins}
+
+% html links
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, filecolor=blue, urlcolor=blue}
+\renewcommand*{\subsubsectionautorefname}{section}
+\renewcommand*{\subsectionautorefname}{section}
+
+% algorithm environment for pseudocode 
+\usepackage{algorithm}
+\usepackage{algorithmic}
+%\floatname{algorithm}{}
+
+% draft - include comments as footnotes and marginpars
+\newif\ifdraft
+\drafttrue
+\ifdraft
+\typeout{DRAFT - WITH COMMENTS}
+\newcommand{\doccomment}[3]%
+{\marginpar{\textcolor{#2}{\bf #1}}%
+%\footnote{\textcolor{#2}{#3}}%
+\footnote{{\color{#2}#3}}%
+}
+\else
+\typeout{NOT DRAFT - NO COMMENTS}
+\newcommand{\doccomment}[3]{}
+\fi
+
+% comments for individuals
+\newcommand{\jpscomment}[1]%
+{\doccomment{SCHEWE}{Bittersweet}{#1}}
+
+
+\title{RLG Plans}
+\author{Jon Schewe}
+
+\begin{document}
+
+\maketitle
+
+\section{Overview}
+\label{sec:overview}
+This document describes some aspects of the RLG plans as
+\texttt{LoadBalancerPlan} objects.
+
+The plan specifies the desired state of the network that MAP is
+controlling.
+The MAP agent will do it's best to make the network match the specified
+plan.
+The RLG can see if services are started by looking at the
+\texttt{ResourceReport} and \texttt{RegionNodeState} objects.
+It is expected that the RLG will pay attention to the capacity limits and
+not try to start more services than are allowed on an NCP.
+
+The MAP Agent will use the \texttt{service plan} property to determine how
+many containers should be running.  Containers will only be stopped when
+specified in the property \texttt{stop containers}.  If there are more
+services running on an NCP than specified in \texttt{service plan} and no
+containers are listed in \texttt{stop containers}, then the result will be
+that extra containers will be running.
+
+\section{Simple plan}
+\label{sec:simplePlan}
+
+\subsection{service plan}
+This plan specifies that there should be 2 instances of serviceA running
+\texttt{nodeA0} and 1 instance of serviceB running on nodeA1. The MAP agent will
+start services as needed to make this state happen. 
+
+\begin{itemize}
+\item serviceA
+  \begin{itemize}
+  \item nodeA0 -> 2
+  \end{itemize}
+
+\item serviceB
+  \begin{itemize}
+  \item nodeA1 -> 1
+  \end{itemize}
+
+\end{itemize}
+
+\section{Stop traffic}
+
+This shows how to stop traffic to a container, but keep it running.
+We will assume that the previous plan was the one from \autoref{sec:simplePlan} and that the MAP agent started services as follows
+\begin{itemize}
+\item nodeA0c0 -> serviceA
+\item nodeA0c1 -> serviceA
+\item nodeA1c0 -> serviceB
+\end{itemize}
+
+Assume that we want to stop traffic to container \texttt{nodeA0c1}.
+
+\subsection{service plan}
+
+\begin{itemize}
+\item serviceA
+  \begin{itemize}
+  \item nodeA0 -> 2
+  \end{itemize}
+
+\item serviceB
+  \begin{itemize}
+  \item nodeA1 -> 1
+  \end{itemize}
+
+\end{itemize}
+
+\subsection{stop traffic to}
+\begin{itemize}
+\item nodeA0c1
+\end{itemize}
+
+
+\section{Stop container}
+
+This shows how to stop a container. 
+We will assume that the previous plan was the one from \autoref{sec:simplePlan} and that the MAP agent started services as follows
+\begin{itemize}
+\item nodeA0c0 -> serviceA
+\item nodeA0c1 -> serviceA
+\item nodeA1c0 -> serviceB
+\end{itemize}
+
+Assume that we want to stop container \texttt{nodeA0c1}.
+We need to both reduce the number of services running on \texttt{nodeA0}
+and add \texttt{nodeA0c1} to the \texttt{stop containers} property.
+
+\subsection{service plan}
+
+\begin{itemize}
+\item serviceA
+  \begin{itemize}
+  \item nodeA0 -> 1
+  \end{itemize}
+
+\item serviceB
+  \begin{itemize}
+  \item nodeA1 -> 1
+  \end{itemize}
+
+\end{itemize}
+
+\subsection{stop containers}
+\begin{itemize}
+\item nodeA0c1
+  \end{itemize}
+
+\end{document}

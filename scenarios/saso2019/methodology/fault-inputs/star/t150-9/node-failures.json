@@ -1,0 +1,38 @@
+[
+	{
+		"time": 270446,
+		"node": "nodeA2"
+	},
+	{
+		"time": 569850,
+		"node": "nodeB2"
+	},
+	{
+		"time": 613013,
+		"node": "nodeC2"
+	},
+	{
+		"time": 819012,
+		"node": "nodeA3"
+	},
+	{
+		"time": 1209173,
+		"node": "nodeB3"
+	},
+	{
+		"time": 1324385,
+		"node": "nodeC3"
+	},
+	{
+		"time": 1580191,
+		"node": "nodeA4"
+	},
+	{
+		"time": 1958443,
+		"node": "nodeB4"
+	},
+	{
+		"time": 2183065,
+		"node": "nodeC4"
+	}
+]

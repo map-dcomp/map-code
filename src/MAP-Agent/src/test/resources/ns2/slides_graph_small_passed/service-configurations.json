@@ -13,7 +13,8 @@
       "TASK_CONTAINERS": "5000"
     },
     "networkCapacity": {
-      "DATARATE": "100"
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
     }
   }
 ]

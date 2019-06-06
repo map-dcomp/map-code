@@ -1,0 +1,56 @@
+[
+  {
+    "name": "A",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 10,
+      "DISK": 10,
+      "TASK_CONTAINERS": 2000
+    }
+  },
+  {
+    "name": "B",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 10,
+      "DISK": 10,
+      "TASK_CONTAINERS": 2000
+    }
+  },
+  {
+    "name": "C",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 10,
+      "DISK": 10,
+      "TASK_CONTAINERS": 250
+    }
+  },
+  {
+    "name": "D",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 10,
+      "DISK": 10,
+      "TASK_CONTAINERS": 250
+    }
+  },
+  {
+    "name": "E",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 10,
+      "DISK": 10,
+      "TASK_CONTAINERS": 250
+    }
+  },
+  {
+    "name": "F",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 10,
+      "DISK": 10,
+      "TASK_CONTAINERS": 2500
+    }
+  }
+]

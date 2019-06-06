@@ -1,0 +1,112 @@
+[
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "4z3+UUhL6wdvdn87+W68GWASquHG2O03ZuFpK/mrn13Afv+VvF8re/AAaANakM5i
+",
+      "version": "1"
+    },
+    "hostname": "4z3+UUhL6wdvdn87+W68GWASquHG2O03ZuFpK/mrn13Afv+VvF8re/AAaANakM5i
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "/QYaJTboNn4+BvBkGKTu4pnx4FTpPndls+BBzPuuboX3rr47gaLGhTL7aU7FW5yq
+",
+      "version": "1"
+    },
+    "hostname": "/QYaJTboNn4+BvBkGKTu4pnx4FTpPndls+BBzPuuboX3rr47gaLGhTL7aU7FW5yq
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "0fpsy/yA9AWhH80hAXtBONOsZ8+groab/oS/Dzmu1OjUL/keqhlPzHwd+meDkaqX
+",
+      "version": "1"
+    },
+    "hostname": "0fpsy/yA9AWhH80hAXtBONOsZ8+groab/oS/Dzmu1OjUL/keqhlPzHwd+meDkaqX
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "Mx0wcxMu0M7IsF2hDBuyx0ZyL6Ve+GZKw1n0WWkzs/dPUViIj8YBF6CSYenuWLDa
+",
+      "version": "1"
+    },
+    "hostname": "Mx0wcxMu0M7IsF2hDBuyx0ZyL6Ve+GZKw1n0WWkzs/dPUViIj8YBF6CSYenuWLDa
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "EGcWi04tipE9bKu8mMea9qQyQxXMH2i51C907ohmNx9vCB1JEw9n8m2ks9rpUr1Z
+",
+      "version": "1"
+    },
+    "hostname": "EGcWi04tipE9bKu8mMea9qQyQxXMH2i51C907ohmNx9vCB1JEw9n8m2ks9rpUr1Z
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "MdkYmOa+MyxtoUE5FsCkLby6jbATcdbCOiRWSyQ2jg+tw9ph0QGNGE8IGcp0Mi69
+",
+      "version": "1"
+    },
+    "hostname": "MdkYmOa+MyxtoUE5FsCkLby6jbATcdbCOiRWSyQ2jg+tw9ph0QGNGE8IGcp0Mi69
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "Vk6v+yWTWaNURSYcSqbEs8RgjH6GFPQT71mh7IOs3tWOGX8v+mN35Aoc+cosB2Id
+",
+      "version": "1"
+    },
+    "hostname": "Vk6v+yWTWaNURSYcSqbEs8RgjH6GFPQT71mh7IOs3tWOGX8v+mN35Aoc+cosB2Id
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "GxkpL8GbUueQE+B/rs8IQId/TF9/JvwaIWuJGFhqEu0BMdXDWzo1GbOGiunD8IAM
+",
+      "version": "1"
+    },
+    "hostname": "GxkpL8GbUueQE+B/rs8IQId/TF9/JvwaIWuJGFhqEu0BMdXDWzo1GbOGiunD8IAM
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "i1uAr/UhnV6UaQWYl3wDKVMV/xWcBd6eKGpaK1WnX1yjL+F8K8YgJ11EC9H7/PrE
+",
+      "version": "1"
+    },
+    "hostname": "i1uAr/UhnV6UaQWYl3wDKVMV/xWcBd6eKGpaK1WnX1yjL+F8K8YgJ11EC9H7/PrE
+.map",
+    "defaultNode": "nodeA0"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "GlHFHm4e5v3aCiiUJdiKFmdrrRhhDQ62E7V9VN0sznI03Af+D/MpaeLEyTDXE6fR
+",
+      "version": "1"
+    },
+    "hostname": "GlHFHm4e5v3aCiiUJdiKFmdrrRhhDQ62E7V9VN0sznI03Af+D/MpaeLEyTDXE6fR
+.map",
+    "defaultNode": "nodeA0"
+  }
+]

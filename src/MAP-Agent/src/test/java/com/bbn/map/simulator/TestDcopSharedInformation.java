@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -47,7 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.Controller;
-import com.bbn.map.ap.ApplicationManagerUtils;
+import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.dcop.DcopSharedInformation;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -72,7 +72,6 @@ public class TestDcopSharedInformation {
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
     public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new TestUtils.UseMapApplicationManager())
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TestDcopSharedInformation.class);
@@ -93,8 +92,6 @@ public class TestDcopSharedInformation {
         final RegionIdentifier regionA = new StringRegionIdentifier(regionAName);
         final String regionBName = "B";
         final RegionIdentifier regionB = new StringRegionIdentifier(regionBName);
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
         final int numApRoundsToInitialize = 5;
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/test-dcop-sharing");
@@ -104,13 +101,15 @@ public class TestDcopSharedInformation {
 
         final VirtualClock clock = new SimpleClock();
 
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                false, false, false, ApplicationManagerUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
-            final int numApRoundsToFinishSharing = TestUtils.computeRoundsToStabilize(sim);
+            final int numApRoundsToFinishSharing = SimUtils.computeRoundsToStabilize(sim);
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToInitialize);
+            sim.startClients();
+
+            SimUtils.waitForApRounds(sim, numApRoundsToInitialize);
 
             // set shared information on the 2 DCOP nodes
             final Controller nodeA0 = sim.getControllerById(new DnsNameIdentifier("nodeA0"));
@@ -123,8 +122,8 @@ public class TestDcopSharedInformation {
             regionBShared.setMessage("RegionB");
             nodeB0.setLocalDcopSharedInformation(regionBShared);
 
-            TestUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
-            sim.stopSimulation();
+            SimUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
+            clock.stopClock();
 
             // check that the data is consistent
 
@@ -172,9 +171,6 @@ public class TestDcopSharedInformation {
         final String regionCName = "C";
         final RegionIdentifier regionC = new StringRegionIdentifier(regionCName);
 
-        final long pollingInterval = 10;
-        final int dnsTtlSeconds = 60;
-
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/test-dcop-sharing-p2p");
         final Path baseDirectory = Paths.get(baseu.toURI());
 
@@ -183,13 +179,14 @@ public class TestDcopSharedInformation {
         final VirtualClock clock = new SimpleClock();
         final int numApRoundsToInitialize = 5;
 
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
-                false, false, false, ApplicationManagerUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
-            final int numApRoundsToFinishSharing = TestUtils.computeRoundsToStabilize(sim);
+            final int numApRoundsToFinishSharing = SimUtils.computeRoundsToStabilize(sim);
 
             sim.startSimulation();
-            TestUtils.waitForApRounds(sim, numApRoundsToInitialize);
+            sim.startClients();
+            SimUtils.waitForApRounds(sim, numApRoundsToInitialize);
 
             // set shared information on the 3 DCOP nodes
             final Controller nodeA0 = sim.getControllerById(new DnsNameIdentifier("nodeA0"));
@@ -216,11 +213,11 @@ public class TestDcopSharedInformation {
             regionCShared.addMessage(regionB, msgCB);
             nodeC0.setLocalDcopSharedInformation(regionCShared);
 
-            TestUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
+            SimUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
 
-            LOGGER.info("Stopping simulation");
-            sim.stopSimulation();
-            LOGGER.info("Simulation stopped");
+            LOGGER.info("Stopping clock");
+            clock.stopClock();
+            LOGGER.info("Clock stopped");
 
             // check that the data is correct
 

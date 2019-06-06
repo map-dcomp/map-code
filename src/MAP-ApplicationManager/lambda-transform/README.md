@@ -1,1 +1,0 @@
-Sub-project of MAP-ApplicationManager supporting lambda transformer functions

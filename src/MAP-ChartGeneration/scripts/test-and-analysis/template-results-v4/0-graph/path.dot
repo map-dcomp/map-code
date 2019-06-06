@@ -1,0 +1,19 @@
+
+graph {
+label="Test Topology: Total Regional Containers in Parens";
+labelloc=top;
+labeljust=left;
+rankdir=LR;
+splines="spline";//"curved";
+//K=0.2;
+node[color=blue,width=2,height=2]
+a[label="A (20)"]; 
+b[label="B (20)"]; 
+c[label="C (20)"]; 
+node[color=red,width=.8,height=.8]
+x[label="X (8)"]; 
+    a -- b[label="100mbps"];
+    a -- c[label="2mbps"];
+    b -- c[label="10mbps"];
+    b -- x[label="100mbps"];
+}

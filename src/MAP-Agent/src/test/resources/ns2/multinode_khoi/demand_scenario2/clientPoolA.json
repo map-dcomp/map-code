@@ -13,7 +13,8 @@
       "TASK_CONTAINERS": 0.1
     },
     "networkLoad": {
-      "DATARATE": 0.1
+      "DATARATE_TX": 0.1,
+      "DATARATE_RX": 0.1
     }
   },
   {
@@ -30,7 +31,8 @@
       "TASK_CONTAINERS": 0.1
     },
     "networkLoad": {
-      "DATARATE": 0.1
+      "DATARATE_TX": 0.1,
+      "DATARATE_RX": 0.1
     }
   },
   {
@@ -47,7 +49,8 @@
       "TASK_CONTAINERS": 0.1
     },
     "networkLoad": {
-      "DATARATE": 0.1
+      "DATARATE_TX": 0.1,
+      "DATARATE_RX": 0.1
     }
   },
   {
@@ -64,7 +67,8 @@
       "TASK_CONTAINERS": 0.1
     },
     "networkLoad": {
-      "DATARATE": 0.1
+      "DATARATE_TX": 0.1,
+      "DATARATE_RX": 0.1
     }
   },
   {
@@ -81,7 +85,8 @@
       "TASK_CONTAINERS": 0.1
     },
     "networkLoad": {
-      "DATARATE": 0.1
+      "DATARATE_TX": 0.1,
+      "DATARATE_RX": 0.1
     }
   }
 ]

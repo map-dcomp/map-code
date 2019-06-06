@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -63,8 +63,6 @@ import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
     private final Timer updateTimer;
     private final DefaultListModel<String> entriesModel = new DefaultListModel<>();
     private List<String> prevEntries = new LinkedList<>();
-    private final DefaultListModel<String> cacheModel = new DefaultListModel<>();
-    private List<String> prevCache = new LinkedList<>();
 
     /* package */ DnsInformation(@Nonnull final RegionIdentifier region, @Nonnull final DNSSim dns) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -76,10 +74,6 @@ import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
         final JList<String> entriesList = new JList<>(entriesModel);
         final ExpandablePanel entriesExpand = new ExpandablePanel("Entries", entriesList);
         add(entriesExpand);
-
-        final JList<String> cacheList = new JList<>(cacheModel);
-        final ExpandablePanel cacheExpand = new ExpandablePanel("Cache", cacheList);
-        add(cacheExpand);
 
         updateTimer = new Timer(ScenarioVisualizer.REFRESH_RATE, e -> update());
         updateTimer.start();
@@ -94,7 +88,7 @@ import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
 
     private void update() {
         final List<String> newEntries = new LinkedList<>();
-        dns.foreachRecord((record) -> {
+        dns.foreachRecord((record, weight) -> {
             newEntries.add(recordToString(record));
         });
 
@@ -103,18 +97,6 @@ import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
             entriesModel.clear();
             newEntries.forEach(s -> entriesModel.addElement(s));
             prevEntries = newEntries;
-        }
-
-        final List<String> newCache = new LinkedList<>();
-        dns.foreachCachedRecord((record) -> {
-            newCache.add(recordToString(record));
-        });
-
-        if (!newCache.equals(prevCache)) {
-            // only update the display if something changed
-            cacheModel.clear();
-            newCache.forEach(s -> cacheModel.addElement(s));
-            prevCache = newCache;
         }
 
     }

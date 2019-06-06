@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,11 +32,6 @@ BBN_LICENSE_END*/
 package com.bbn.map.rlg;
 
 import java.io.Serializable;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-
-import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 
 /**
  * Information shared between DCOP instances in other regions.
@@ -45,29 +40,7 @@ public class RlgSharedInformation implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private final Set<ServiceIdentifier<?>> runningServices = new HashSet<>();
+    // just a placeholder for now. If information needs to be shared among RLG
+    // services, this is where to do it.
 
-    /**
-     * This is used by RLG in other regions to know when load can be sent to
-     * this region.
-     * 
-     * @return the services running in the region, unmodifiable
-     */
-    public Set<ServiceIdentifier<?>> getRunningServices() {
-        return Collections.unmodifiableSet(runningServices);
-    }
-
-    /**
-     * 
-     * @param service
-     *            note that a service is running in this region
-     */
-    public void addRunningService(final ServiceIdentifier<?> service) {
-        runningServices.add(service);
-    }
-
-    @Override
-    public String toString() {
-        return "runningServices: " + runningServices;
-    }
 }

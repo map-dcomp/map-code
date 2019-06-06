@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -35,7 +35,6 @@ import java.time.Duration;
 
 import javax.annotation.Nonnull;
 
-import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 
 /**
@@ -113,8 +112,8 @@ public final class AgentConfiguration {
         apProgramAnonymous = v;
     }
 
-    private static final int DEFAULT_AP_ROUND_DURATION_SECONDS = 2;
-    private Duration apRoundDuration = Duration.ofSeconds(DEFAULT_AP_ROUND_DURATION_SECONDS);
+    private static final int DEFAULT_AP_ROUND_DURATION_MS = 500;
+    private Duration apRoundDuration = Duration.ofMillis(DEFAULT_AP_ROUND_DURATION_MS);
 
     /**
      * @return how long between rounds of AP
@@ -220,30 +219,6 @@ public final class AgentConfiguration {
         dcopRoundDuration = v;
     }
 
-    private static final double DEFAULT_DNS_WEIGHT_PRECISION = 0.05;
-    private double dnsWeightPrecision = DEFAULT_DNS_WEIGHT_PRECISION;
-
-    /**
-     * Any weight difference less than this is considered equal. This defaults
-     * to 0.05 (5%), which means that if the difference between two weights in
-     * {@link RegionPlan#getPlan()} is less than this value, then the weights
-     * are considered equal.
-     *
-     * @return The weight that is equivalent to one DNS record.
-     */
-    public double getDnsRecordWeightPrecision() {
-        return dnsWeightPrecision;
-    }
-
-    /**
-     *
-     * @param v
-     *            see {@link #getDnsRecordWeightPrecision()}
-     */
-    public void setDnsRecordWeightPrecision(final double v) {
-        dnsWeightPrecision = v;
-    }
-
     /**
      * When shutting down an {@link AbstractService}, how long to wait for the
      * thread to exit before moving on.
@@ -306,5 +281,192 @@ public final class AgentConfiguration {
      */
     public void setDcopCapacityThreshold(final double v) {
         dcopCapacityThreshold = v;
+    }
+
+    private static final DcopAlgorithm DEFAULT_DCOP_ALGORITHM = DcopAlgorithm.DISTRIBUTED_PRIORITY_ROUTING_DIFFUSION;
+    private DcopAlgorithm dcopAlgorithm = DEFAULT_DCOP_ALGORITHM;
+
+    /**
+     * @return the current DCOP algorithm in use
+     */
+    @Nonnull
+    public DcopAlgorithm getDcopAlgorithm() {
+        return dcopAlgorithm;
+    }
+
+    /**
+     * @param algorithm
+     *            specify the DCOP algorithm to use
+     */
+    public void setDcopAlgorithm(@Nonnull final DcopAlgorithm algorithm) {
+        dcopAlgorithm = algorithm;
+    }
+
+    /**
+     * Available DCOP algorithms to be run.
+     * 
+     * @author jschewe
+     *
+     */
+    public enum DcopAlgorithm {
+        /**
+         * Distributed Constraint-based Diffusion Algorithm. Migrates out from
+         * the data center to neighbors.
+         */
+        DISTRIBUTED_CONSTRAINT_DIFFUSION,
+
+        /** Distributed Routing-based Diffusion Algorithm. */
+        DISTRIBUTED_ROUTING_DIFFUSION,
+        /** Distributed Priority Routing-based Diffusion Algorithm. */
+        DISTRIBUTED_PRIORITY_ROUTING_DIFFUSION
+        
+    }
+
+    private boolean rlgNullOverflowPlan = false;
+
+    /**
+     * 
+     * @return if true, then RLG will ignore the DCOP plan and always return an
+     *         empty overflow plan
+     */
+    public boolean isRlgNullOverflowPlan() {
+        return rlgNullOverflowPlan;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #isRlgNullOverflowPlan()}
+     */
+    public void setRlgNullOverflowPlan(final boolean v) {
+        rlgNullOverflowPlan = v;
+    }
+
+    private static final RlgAlgorithm DEFAULT_RLG_ALGORITHM = RlgAlgorithm.BIN_PACKING;
+    private RlgAlgorithm rlgAlgorithm = DEFAULT_RLG_ALGORITHM;
+
+    /**
+     * @return the current RLG algorithm in use
+     */
+    @Nonnull
+    public RlgAlgorithm getRlgAlgorithm() {
+        return rlgAlgorithm;
+    }
+
+    /**
+     * @param algorithm
+     *            see {@link #getRlgAlgorithm()}
+     */
+    public void setRlgAlgorithm(@Nonnull final RlgAlgorithm algorithm) {
+        rlgAlgorithm = algorithm;
+    }
+
+    /**
+     * Available RLG algorithms to be run.
+     * 
+     * @author jschewe
+     *
+     */
+    public enum RlgAlgorithm {
+        /**
+         * Stub implementation by BBN.
+         */
+        STUB,
+
+        /** Bin packing algorithm. */
+        BIN_PACKING;
+    }
+
+    private boolean useLeaderElection = false;
+
+    /**
+     * Determine if the leader election algorithm should be used to find a
+     * global leader. If this is true, then the global leader will be determined
+     * by the Protelis program. If this value is false, then the global leader
+     * is determined by {@link Controller#isGlobalLeader()}.
+     * 
+     * @return if the global leader election algorithm should be used
+     */
+    public boolean isUseLeaderElection() {
+        return useLeaderElection;
+    }
+
+    /**
+     * Set the value for use leader election. This needs to be set before the
+     * protelis nodes start up.
+     * 
+     * @param v
+     *            the new value
+     * @see #isUseLeaderElection()
+     */
+    public void setUseLeaderElection(final boolean v) {
+        useLeaderElection = v;
+    }
+
+    /**
+     * Options for choosing the NCP to offload services onto in the RLG stub.
+     */
+    public enum RlgStubChooseNcp {
+        /**
+         * Find NCP with the greatest number of available containers.
+         */
+        MOST_AVAILABLE_CONTAINERS,
+        /**
+         * Pick an NCP randomly from those with available containers.
+         */
+        RANDOM,
+        /**
+         * Pick an NCP already running the service.
+         */
+        CURRENTLY_RUNNING_SERVICE,
+        /**
+         * Pick an NCP not running the service.
+         */
+        CURRENTLY_NOT_RUNNING_SERIVCE,
+        /**
+         * Pick the NCP with the lowest load percentage.
+         */
+        LOWEST_LOAD_PERCENTAGE;
+    }
+
+    private static final RlgStubChooseNcp DEFAULT_RLG_STUB_CHOOSE = RlgStubChooseNcp.MOST_AVAILABLE_CONTAINERS;
+
+    private RlgStubChooseNcp rlgStubChoose = DEFAULT_RLG_STUB_CHOOSE;
+
+    /**
+     * @return the algorithm to use for choosing an NCP in the RLG Stub
+     */
+    @Nonnull
+    public RlgStubChooseNcp getRlgStubChooseNcp() {
+        return rlgStubChoose;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getRlgStubChooseNcp()}
+     */
+    public void setRlgStubChooseNcp(@Nonnull final RlgStubChooseNcp v) {
+        rlgStubChoose = v;
+    }
+
+    private static final double DEFAULT_RLG_LOAD_THRESHOLD = 0.75;
+    private double rlgLoadThreshold = DEFAULT_RLG_LOAD_THRESHOLD;
+
+    /**
+     * @return The threshold used by RLG to determine when to allocate more
+     *         services
+     */
+    public double getRlgLoadThreshold() {
+        return rlgLoadThreshold;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getRlgLoadThreshold()}
+     */
+    public void setRlgLoadThreshold(final double v) {
+        rlgLoadThreshold = v;
     }
 }

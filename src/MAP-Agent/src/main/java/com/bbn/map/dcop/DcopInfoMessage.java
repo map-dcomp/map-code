@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import com.bbn.map.dcop.DCOPService.Stage;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -19,7 +21,7 @@ public class DcopInfoMessage implements Serializable {
 
     private RegionIdentifier sender;
     private int iteration;
-    private ServiceIdentifier<?> serviceID;
+
     // Message list for the aggregated message. Messages type 1 and 2 have only one element in the list
     private Map<RegionIdentifier, List<DcopMessage>> messages; 
     private Stage stage;
@@ -37,12 +39,9 @@ public class DcopInfoMessage implements Serializable {
      * Default constructor.
      */
     public DcopInfoMessage() {
-        sender = null;
         iteration = -1;
         messages = new HashMap<RegionIdentifier, List<DcopMessage>>();
-        serviceID = null;
         stage = Stage.FREE;
-        parent = null;
         type = -1;
     }
 
@@ -50,7 +49,6 @@ public class DcopInfoMessage implements Serializable {
      * @param sender sender
      * @param receiver receiver
      * @param iteration iteration
-     * @param serviceID serviceID
      * @param stage stage
      * @param parent parent
      * @postcondition type = 0
@@ -58,12 +56,10 @@ public class DcopInfoMessage implements Serializable {
     public DcopInfoMessage(RegionIdentifier sender,
             RegionIdentifier receiver,
             int iteration,
-            ServiceIdentifier<?> serviceID,
             Stage stage,
             RegionIdentifier parent) {
         this();
         this.sender = sender;
-        this.serviceID = serviceID;
         this.stage = stage;
         this.iteration = iteration;
         List<DcopMessage> l = new ArrayList<DcopMessage>();
@@ -101,7 +97,7 @@ public class DcopInfoMessage implements Serializable {
         this();
         this.sender = sender;
         this.iteration = iteration;
-        this.serviceID = serviceID;
+//        this.serviceID = serviceID;
         List<DcopMessage> messageList = new ArrayList<DcopMessage>();
         messageList.add(message);
         this.messages.put(receiver, messageList);
@@ -120,8 +116,6 @@ public class DcopInfoMessage implements Serializable {
      *            sent to parent
      * @param iteration
      *            iteration
-     * @param serviceID
-     *            serviceID
      * @param stage
      *            stage
      * @param parent
@@ -131,13 +125,11 @@ public class DcopInfoMessage implements Serializable {
             RegionIdentifier receiver,
             List<DcopMessage> aggregatedMessage,
             int iteration,
-            ServiceIdentifier<?> serviceID,
             Stage stage,
             RegionIdentifier parent) {
         this();
         this.sender = sender;
         this.iteration = iteration;
-        this.serviceID = serviceID;
         this.messages.put(receiver, aggregatedMessage);
         this.stage = stage;
         this.parent = parent;
@@ -145,6 +137,8 @@ public class DcopInfoMessage implements Serializable {
     }
 
     /**
+     * Copy constructor.
+     * 
      * @param object
      *            copy constructor
      */
@@ -153,11 +147,14 @@ public class DcopInfoMessage implements Serializable {
         this.sender = object.getSender();
         this.iteration = object.getIteration();
         for (Map.Entry<RegionIdentifier, List<DcopMessage>> entry : object.getMessages().entrySet()) {
-            this.messages.put(entry.getKey(), entry.getValue());
+//            this.messages.put(entry.getKey(), entry.getValue());
+            final List<DcopMessage> newValue = entry.getValue().stream().map(m -> new DcopMessage(m))
+                    .collect(Collectors.toList());
+            this.messages.put(entry.getKey(), newValue);
         }
 
         this.stage = object.stage;
-        this.serviceID = object.getServiceID();
+
         this.parent = object.getParent();
         this.type = object.getType();
     }
@@ -170,7 +167,7 @@ public class DcopInfoMessage implements Serializable {
     @Override
     public String toString() {
         return "[Stage=" + stage + ", type=" + type + ", sender=" + sender + ", iteration=" + iteration + ", messages="
-                + messages.toString() + ", parent=" + parent + ", service=" + serviceID + "]";
+                + messages.toString() + ", parent=" + parent + "]";
 
     }
 
@@ -247,21 +244,6 @@ public class DcopInfoMessage implements Serializable {
     }
 
     /**
-     * @return serviceID
-     */
-    public ServiceIdentifier<?> getServiceID() {
-        return serviceID;
-    }
-
-    /**
-     * @param serviceID
-     *            serviceID
-     */
-    public void setServiceID(ServiceIdentifier<?> serviceID) {
-        this.serviceID = serviceID;
-    }
-
-    /**
      * @return <receiver,list of messages>
      */
     public Map<RegionIdentifier, List<DcopMessage>> getMessages() {
@@ -294,5 +276,30 @@ public class DcopInfoMessage implements Serializable {
     public void setType(int type) {
         this.type = type;
     }
-
+    
+    @Override
+    public boolean equals(Object dcopInfoMsgObj) {
+      // If the object is compared with itself then return true  
+      if (dcopInfoMsgObj == this) {
+          return true;
+      }
+      
+      if (!(dcopInfoMsgObj instanceof DcopInfoMessage)) {
+        return false;
+      }
+         
+      DcopInfoMessage castedDcopInfoMsgObj = (DcopInfoMessage) dcopInfoMsgObj;
+        
+      return this.getSender().equals(castedDcopInfoMsgObj.getSender()) &&
+              this.getIteration() == castedDcopInfoMsgObj.getIteration() &&
+              this.getMessages().equals(castedDcopInfoMsgObj.getMessages()) &&
+              this.getStage() == castedDcopInfoMsgObj.getStage() &&
+              this.getParent() == castedDcopInfoMsgObj.getParent() &&
+              this.getType() == castedDcopInfoMsgObj.getType();
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(sender, iteration, messages, stage, parent, type);
+    }
 }

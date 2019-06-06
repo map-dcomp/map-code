@@ -1,0 +1,31 @@
+[
+  {
+    "application": {
+      "group": "test",
+      "artifact": "service1",
+      "version": "1"
+    },
+    "dependentApplication": {
+      "group": "test",
+      "artifact": "service2",
+      "version": "1"
+    },
+    "nodeAttributeMultipliers": {
+      "TASK_CONTAINERS": 0.5
+    },
+    "linkAttributeMultipliers": {
+      "DATARATE_TX": 0.5,
+      "DATARATE_RX": 3
+    },
+    "startStartMultiplier": 1,
+    "startServerDurationMultiplier": 1,
+    "startNetworkDurationMultiplier": 0,
+    "startConstant": 0,
+    "networkDurationServerMultiplier": 0,
+    "networkDurationNetworkMultiplier": 1,
+    "networkDurationConstant": 0,
+    "serverDurationServerMultiplier": 1,
+    "serverDurationNetworkMultiplier": 0,
+    "serverDurationConstant": 0
+  }
+]

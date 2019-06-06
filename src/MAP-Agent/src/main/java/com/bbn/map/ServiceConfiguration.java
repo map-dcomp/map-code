@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -36,21 +36,43 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.bbn.map.common.value.ApplicationCoordinates;
+import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.map.common.value.NodeMetricName;
+import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.ObjectCodec;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.BeanDescription;
+import com.fasterxml.jackson.databind.DeserializationConfig;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
+import com.fasterxml.jackson.databind.deser.BeanDeserializerModifier;
+import com.fasterxml.jackson.databind.deser.ResolvableDeserializer;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -62,33 +84,47 @@ public class ServiceConfiguration implements Serializable {
 
     private static final long serialVersionUID = 1356276032114705011L;
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServiceConfiguration.class);
+
     /**
      * 
      * @param service
      *            see {@link #getService()}
      * @param hostname
      *            see {@link #getHostname()}
-     * @param defaultNode
-     *            see {@link #getDefaultNode()}
-     * @param initialInstances
-     *            see {@link #getInitialInstances()}
+     * @param defaultNodes
+     *            see {@link #getDefaultNodes()}
      * @param defaultNodeRegion
      *            see {@link #getDefaultNodeRegion()}
      * @param containerParameters
      *            see {@link #getContainerParameters()}
+     * @param priority
+     *            see {@link #getPriority()}
+     * @param replicable
+     *            see {@link #isReplicable()}
+     * @param imageName
+     *            see {@link #getImageName()}
+     * @param trafficType
+     *            see {@link #getTrafficType()}
      */
     public ServiceConfiguration(@Nonnull final ApplicationCoordinates service,
             @Nonnull final String hostname,
-            @Nonnull final NodeIdentifier defaultNode,
+            @Nonnull final ImmutableMap<NodeIdentifier, Integer> defaultNodes,
             @Nonnull final RegionIdentifier defaultNodeRegion,
-            final int initialInstances,
-            final ContainerParameters containerParameters) {
+            final ContainerParameters containerParameters,
+            final int priority,
+            final boolean replicable,
+            final String imageName,
+            final ApplicationSpecification.ServiceTrafficType trafficType) {
         this.service = service;
         this.hostname = hostname;
-        this.defaultNode = defaultNode;
+        this.defaultNodes = defaultNodes;
         this.defaultNodeRegion = defaultNodeRegion;
-        this.initialInstances = initialInstances;
         this.containerParameters = containerParameters;
+        this.priority = priority;
+        this.replicable = replicable;
+        this.imageName = imageName;
+        this.trafficType = trafficType;
     }
 
     private final ApplicationCoordinates service;
@@ -113,15 +149,15 @@ public class ServiceConfiguration implements Serializable {
         return hostname;
     }
 
-    private final NodeIdentifier defaultNode;
+    private final ImmutableMap<NodeIdentifier, Integer> defaultNodes;
 
     /**
      * 
-     * @return the node that this service runs on by default
+     * @return node to run on : number of instances
      */
     @Nonnull
-    public NodeIdentifier getDefaultNode() {
-        return defaultNode;
+    public ImmutableMap<NodeIdentifier, Integer> getDefaultNodes() {
+        return defaultNodes;
     }
 
     private final RegionIdentifier defaultNodeRegion;
@@ -134,18 +170,6 @@ public class ServiceConfiguration implements Serializable {
         return defaultNodeRegion;
     }
 
-    private final int initialInstances;
-
-    /**
-     * The number of instances of this service to be started on
-     * {@link #getDefaultNode()} when the system starts up.
-     * 
-     * @return the number of instances
-     */
-    public int getInitialInstances() {
-        return initialInstances;
-    }
-
     private final ContainerParameters containerParameters;
 
     /**
@@ -155,7 +179,42 @@ public class ServiceConfiguration implements Serializable {
     public ContainerParameters getContainerParameters() {
         return containerParameters;
     }
-    
+
+    private final int priority;
+
+    /**
+     * @return the priority for this service
+     */
+    public int getPriority() {
+        return priority;
+    }
+
+    private final boolean replicable;
+
+    /**
+     * @return see {@link ApplicationSpecification#isReplicable()}
+     */
+    public boolean isReplicable() {
+        return replicable;
+    }
+
+    private final String imageName;
+
+    /**
+     * @return see {@link ApplicationSpecification#getImageName()}
+     */
+    public String getImageName() {
+        return imageName;
+    }
+
+    private final ApplicationSpecification.ServiceTrafficType trafficType;
+
+    /**
+     * @return see {@link ApplicationSpecification#getTrafficType()}
+     */
+    public ApplicationSpecification.ServiceTrafficType getTrafficType() {
+        return trafficType;
+    }
 
     /**
      * Read in the service configurations and populate the application manager
@@ -169,12 +228,27 @@ public class ServiceConfiguration implements Serializable {
      */
     public static ImmutableMap<ApplicationCoordinates, ServiceConfiguration> parseServiceConfigurations(
             @Nonnull final Path path) throws IOException {
+        LOGGER.debug("Loading service configurations from {}", path);
+
         if (!Files.exists(path)) {
-            // no hardware configs
+            // no configs
+            LOGGER.debug("No service configurations at {}", path);
             return ImmutableMap.of();
         }
 
-        final ObjectMapper mapper = new ObjectMapper().registerModule(new GuavaModule());
+        final SimpleModule module = new SimpleModule();
+        module.setDeserializerModifier(new BeanDeserializerModifier() {
+            @Override
+            public JsonDeserializer<?> modifyDeserializer(DeserializationConfig config,
+                    BeanDescription beanDesc,
+                    JsonDeserializer<?> deserializer) {
+                if (beanDesc.getBeanClass() == ParsedServiceConfiguration.class)
+                    return new DeserializeServiceConfig(deserializer);
+                return deserializer;
+            }
+        });
+        final ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper().registerModule(module)
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         try (BufferedReader reader = Files.newBufferedReader(path)) {
             final ImmutableList<ParsedServiceConfiguration> list = mapper.readValue(reader,
@@ -185,14 +259,21 @@ public class ServiceConfiguration implements Serializable {
             list.forEach(config -> {
                 final ApplicationCoordinates service = config.getService();
 
-                final NodeIdentifier defaultNode = new DnsNameIdentifier(config.getDefaultNode());
+                final ImmutableMap<NodeIdentifier, Integer> defaultNodes = ImmutableMap
+                        .copyOf(config.getDefaultNodes().entrySet().stream().collect(
+                                Collectors.toMap(e -> new DnsNameIdentifier(e.getKey()), Map.Entry::getValue)));
+
                 final RegionIdentifier defaultNodeRegion = new StringRegionIdentifier(config.getDefaultNodeRegion());
+                // map copies needed to get the generic types correct
                 final ContainerParameters containerParams = new ContainerParameters(
                         ImmutableMap.copyOf(config.getComputeCapacity()),
                         ImmutableMap.copyOf(config.getNetworkCapacity()));
 
+                LOGGER.debug("Loaded service {} with priority {}", service.getArtifact(), config.getPriority());
+
                 final ServiceConfiguration sconfig = new ServiceConfiguration(service, config.getHostname(),
-                        defaultNode, defaultNodeRegion, config.getInitialInstances(), containerParams);
+                        defaultNodes, defaultNodeRegion, containerParams, config.getPriority(), config.isReplicable(),
+                        config.getImageName(), config.getTrafficType());
                 map.put(sconfig.getService(), sconfig);
             });
 
@@ -201,44 +282,11 @@ public class ServiceConfiguration implements Serializable {
 
     }
 
-
+    // @JsonDeserialize(using = DeserializeServiceConfig.class)
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private static final class ParsedServiceConfiguration {
 
-        /**
-         * 
-         * @param service
-         *            see {@link #getService()}
-         * @param hostname
-         *            see {@link #getHostname()}
-         * @param defaultNode
-         *            see {@link #getDefaultNode()}
-         * @param initialInstances
-         *            see {@link #getInitialInstances()}
-         * @param computeCapacity
-         *            see {@link #getComputeCapacity()}
-         * @param networkCapacity
-         *            see {@link #getNetworkCapacity()}
-         * @param defaultNodeRegion
-         *            see {@link #getDefaultNodeRegion()}
-         */
-        @SuppressWarnings("unused") // called from JSON parser
-        ParsedServiceConfiguration(@JsonProperty("service") @Nonnull final ApplicationCoordinates service,
-                @JsonProperty("hostname") @Nonnull final String hostname,
-                @JsonProperty("defaultNode") @Nonnull final String defaultNode,
-                @JsonProperty("defaultNodeRegion") @Nonnull final String defaultNodeRegion,
-                @JsonProperty("initialInstances") final int initialInstances,
-                @JsonProperty("computeCapacity") final ImmutableMap<NodeMetricName, Double> computeCapacity,
-                @JsonProperty("networkCapacity") final ImmutableMap<LinkMetricName, Double> networkCapacity) {
-            this.service = service;
-            this.hostname = hostname;
-            this.defaultNode = defaultNode;
-            this.defaultNodeRegion = defaultNodeRegion;
-            this.initialInstances = initialInstances;
-            this.computeCapacity = computeCapacity;
-            this.networkCapacity = networkCapacity;
-        }
-
-        private final ApplicationCoordinates service;
+        private ApplicationCoordinates service;
 
         /**
          * 
@@ -249,7 +297,12 @@ public class ServiceConfiguration implements Serializable {
             return service;
         }
 
-        private final String hostname;
+        @SuppressWarnings("unused")
+        private void setService(final ApplicationCoordinates v) {
+            service = v;
+        }
+
+        private String hostname;
 
         /**
          * 
@@ -260,18 +313,32 @@ public class ServiceConfiguration implements Serializable {
             return hostname;
         }
 
-        private final String defaultNode;
+        @SuppressWarnings("unused")
+        private void setHostname(final String v) {
+            hostname = v;
+        }
+
+        private Map<String, Integer> defaultNodes = new HashMap<>();
 
         /**
          * 
-         * @return the node that this service runs on by default
+         * @return node to run on : number of instances
          */
         @Nonnull
-        public String getDefaultNode() {
-            return defaultNode;
+        public Map<String, Integer> getDefaultNodes() {
+            return defaultNodes;
         }
 
-        private final String defaultNodeRegion;
+        @SuppressWarnings("unused")
+        private void setDefaultNodes(final Map<String, Integer> v) {
+            if (null == v) {
+                defaultNodes = new HashMap<>();
+            } else {
+                defaultNodes = v;
+            }
+        }
+
+        private String defaultNodeRegion;
 
         /**
          * 
@@ -282,19 +349,12 @@ public class ServiceConfiguration implements Serializable {
             return defaultNodeRegion;
         }
 
-        private final int initialInstances;
-
-        /**
-         * 
-         * @return the initial number of instances of the service to run on the
-         *         default node
-         * @see #getDefaultNode()
-         */
-        public int getInitialInstances() {
-            return initialInstances;
+        @SuppressWarnings("unused")
+        private void setDefaultNodeRegion(final String v) {
+            defaultNodeRegion = v;
         }
 
-        private final ImmutableMap<NodeMetricName, Double> computeCapacity;
+        private ImmutableMap<NodeMetricName, Double> computeCapacity = ImmutableMap.of();
 
         /**
          * 
@@ -305,7 +365,16 @@ public class ServiceConfiguration implements Serializable {
             return computeCapacity;
         }
 
-        private final ImmutableMap<LinkMetricName, Double> networkCapacity;
+        @SuppressWarnings("unused")
+        private void setComputeCapacity(final ImmutableMap<NodeMetricName, Double> v) {
+            if (null == v) {
+                computeCapacity = ImmutableMap.of();
+            } else {
+                computeCapacity = v;
+            }
+        }
+
+        private ImmutableMap<LinkMetricName, Double> networkCapacity = ImmutableMap.of();
 
         /**
          * 
@@ -315,6 +384,151 @@ public class ServiceConfiguration implements Serializable {
         @Nonnull
         public ImmutableMap<LinkMetricName, Double> getNetworkCapacity() {
             return networkCapacity;
+        }
+
+        @SuppressWarnings("unused")
+        private void setNetworkCapacity(final ImmutableMap<LinkMetricName, Double> v) {
+            if (null == v) {
+                networkCapacity = ImmutableMap.of();
+            } else {
+                networkCapacity = v;
+            }
+        }
+
+        private int priority = ApplicationSpecification.DEFAULT_PRIORITY;
+
+        /**
+         * @return the priority for this service
+         */
+        public int getPriority() {
+            return priority;
+        }
+
+        @SuppressWarnings("unused")
+        private void setPriority(final int v) {
+            priority = v;
+        }
+
+        private boolean replicable = true;
+
+        /**
+         * @return see {@link ApplicationSpecification#isReplicable()}
+         */
+        @SuppressWarnings("unused")
+        public boolean isReplicable() {
+            return replicable;
+        }
+
+        /**
+         * 
+         * @param v
+         *            see {@link #isReplicable()}
+         */
+        @SuppressWarnings("unused")
+        public void setReplicable(final boolean v) {
+            this.replicable = v;
+        }
+
+        private String imageName = null;
+
+        /**
+         * @return see {@link ApplicationSpecification#getImageName()}
+         */
+        @SuppressWarnings("unused")
+        public String getImageName() {
+            return imageName;
+        }
+
+        /**
+         * 
+         * @param v
+         *            see {@link #getImageName()}
+         */
+        @SuppressWarnings("unused")
+        public void setImageName(final String v) {
+            this.imageName = v;
+        }
+
+        private ApplicationSpecification.ServiceTrafficType trafficType = ApplicationSpecification.ServiceTrafficType.UNKNOWN;
+
+        /**
+         * @return see {@link ApplicationSpecification#getTrafficType()}
+         */
+        @SuppressWarnings("unused")
+        public ApplicationSpecification.ServiceTrafficType getTrafficType() {
+            return trafficType;
+        }
+
+        /**
+         * 
+         * @param v
+         *            see {@link #getTrafficType()}
+         */
+        @SuppressWarnings("unused")
+        public void setTrafficType(final ApplicationSpecification.ServiceTrafficType v) {
+            this.trafficType = v;
+        }
+    }
+
+    private static final class DeserializeServiceConfig extends StdDeserializer<ParsedServiceConfiguration>
+            implements ResolvableDeserializer {
+
+        private static final long serialVersionUID = 1L;
+
+        private final JsonDeserializer<?> delegate;
+
+        DeserializeServiceConfig(final JsonDeserializer<?> delegate) {
+            super(ParsedServiceConfiguration.class);
+            this.delegate = delegate;
+        }
+
+        @Override
+        public ParsedServiceConfiguration deserialize(final JsonParser parser, final DeserializationContext ctx)
+                throws IOException, JsonProcessingException {
+
+            final ObjectCodec codec = parser.getCodec();
+            final JsonNode node = codec.readTree(parser);
+
+            final JsonParser secondParser = codec.treeAsTokens(node);
+            // need to call next token since delegate believes it's in the
+            // middle of parsing. This logic comes from how
+            // ObjectMapper.readValue() initializes the parser for reading.
+            JsonToken t = secondParser.getCurrentToken();
+            if (t == null) {
+                // and then we must get something...
+                t = secondParser.nextToken();
+                if (t == null) {
+                    // Throw mapping exception, since it's failure to map,
+                    // not an actual parsing problem
+                    throw JsonMappingException.from(secondParser, "No content to map due to end-of-input");
+                }
+            }
+            if (t == JsonToken.VALUE_NULL) {
+                return null;
+            } else if (t == JsonToken.END_ARRAY || t == JsonToken.END_OBJECT) {
+                return null;
+            }
+
+            final ParsedServiceConfiguration parsed = (ParsedServiceConfiguration) delegate.deserialize(secondParser,
+                    ctx);
+
+            if (node.has("defaultNode")) {
+                // old code, need to add in the extra fields
+                final String defaultNode = node.get("defaultNode").asText();
+                final int instances = node.get("initialInstances").asInt();
+
+                parsed.getDefaultNodes().put(defaultNode, instances);
+            }
+
+            return parsed;
+        }
+
+        // for some reason you have to implement ResolvableDeserializer when
+        // modifying BeanDeserializer
+        // otherwise deserializing throws JsonMappingException??
+        @Override
+        public void resolve(DeserializationContext ctxt) throws JsonMappingException {
+            ((ResolvableDeserializer) delegate).resolve(ctxt);
         }
     }
 

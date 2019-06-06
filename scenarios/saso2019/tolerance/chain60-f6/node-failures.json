@@ -1,0 +1,26 @@
+[
+	{
+		"time": 305636,
+		"node": "nodeA2"
+	},
+	{
+		"time": 766553,
+		"node": "nodeB2"
+	},
+	{
+		"time": 1076767,
+		"node": "nodeC2"
+	},
+	{
+		"time": 1143202,
+		"node": "nodeA3"
+	},
+	{
+		"time": 1539531,
+		"node": "nodeB3"
+	},
+	{
+		"time": 1906264,
+		"node": "nodeC3"
+	}
+]

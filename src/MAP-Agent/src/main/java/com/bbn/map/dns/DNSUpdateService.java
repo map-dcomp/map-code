@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -34,6 +34,8 @@ package com.bbn.map.dns;
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
 
+import org.apache.commons.lang3.tuple.Pair;
+
 import com.google.common.collect.ImmutableCollection;
 
 /**
@@ -46,29 +48,17 @@ import com.google.common.collect.ImmutableCollection;
  */
 @ThreadSafe
 public interface DNSUpdateService {
-    /**
-     * Add a record to the DNS.
-     * 
-     * @param record
-     *            the record to add
-     */
-    void addRecord(@Nonnull DnsRecord record);
 
     /**
-     * Remove a record from the DNS.
-     * 
-     * @param record
-     *            the record to remove
-     */
-    void removeRecord(@Nonnull DnsRecord record);
-
-    /**
-     * Replace all records with the specified records. This is like replacing a
-     * zone file.
+     * Replace all records that were added by the last call to this method with
+     * the specified records. Implementors need to make sure that this is a
+     * transactional operation so that either all records are modified or none
+     * are modified.
      * 
      * @param records
-     *            the new records
+     *            the new records and their relative weights
+     * @return if the change was successful
      */
-    void replaceAllRecords(@Nonnull ImmutableCollection<DnsRecord> records);
+    boolean replaceAllRecords(@Nonnull ImmutableCollection<Pair<DnsRecord, Double>> records);
 
 }

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -33,11 +33,18 @@ package com.bbn.map.rlg;
 
 import javax.annotation.Nonnull;
 
+import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNodeState;
+import com.bbn.protelis.networkresourcemanagement.RegionPlan;
+import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
+import com.bbn.protelis.networkresourcemanagement.ResourceReport;
+import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
+import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
 
 /**
- * Interface for access the {@link RlgSharedInformation} object.
+ * Interface used by RLG to interact with the MAP system.
  */
 public interface RlgInfoProvider {
 
@@ -57,5 +64,58 @@ public interface RlgInfoProvider {
      *            regions
      */
     void setLocalRlgSharedInformation(@Nonnull RlgSharedInformation v);
+
+    /**
+     * @param estimationWindow
+     *            the estimation window for the demand
+     * @return the summary for the region.
+     */
+    @Nonnull
+    ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow);
+
+    /**
+     * 
+     * @return the most recent DCOP plan that this node has seen
+     */
+    @Nonnull
+    RegionPlan getDcopPlan();
+
+    /**
+     * 
+     * @return the most recent RLG plan that this node has seen
+     */
+    @Nonnull
+    LoadBalancerPlan getRlgPlan();
+
+    /**
+     * 
+     * @param plan
+     *            the new plan to be published
+     */
+    void publishRlgPlan(@Nonnull LoadBalancerPlan plan);
+
+    /**
+     * 
+     * @return the current node state
+     */
+    @Nonnull
+    RegionNodeState getRegionNodeState();
+
+    /**
+     * 
+     * @return the current service state
+     */
+    @Nonnull
+    RegionServiceState getRegionServiceState();
+
+    /**
+     * 
+     * @param region
+     *            the region to check
+     * @param service
+     *            the service to check for
+     * @return check if a service is availahble in a region
+     */
+    boolean isServiceAvailable(RegionIdentifier region, ServiceIdentifier<?> service);
 
 }

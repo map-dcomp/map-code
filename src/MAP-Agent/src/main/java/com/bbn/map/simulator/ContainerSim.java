@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,26 +31,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
 
+import org.apache.commons.io.output.FileWriterWithEncoding;
+import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.CloseableThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
-import com.bbn.protelis.networkresourcemanagement.ContainerIdentifier;
+import com.bbn.map.Controller;
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
@@ -58,8 +58,8 @@ import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceState;
-import com.bbn.protelis.utils.ImmutableUtils;
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.collect.ImmutableMap;
 
 /**
@@ -71,12 +71,16 @@ import com.google.common.collect.ImmutableMap;
  */
 public class ContainerSim {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ContainerSim.class);
+    private final Logger logger;
 
     private final Object lock = new Object();
     private ContainerResourceReport shortResourceReport;
     private ContainerResourceReport longResourceReport;
-    private final NetworkLoadTracker networkLoadTracker;
+    private final LinkResourceManager networkLoadTracker;
+    private final NetworkDemandTracker networkDemandTracker;
+    private final NodeLoadTracker loadTracker = new NodeLoadTracker();
+
+    private ObjectWriter mapper = Controller.createDumpWriter();
 
     /**
      * 
@@ -87,21 +91,31 @@ public class ContainerSim {
      * @param computeCapacity
      *            see {@link #getComputeCapacity()}
      * @param networkCapacity
-     *            see {@link #getNeighborNetworkCapacity()}
+     *            see {@link #getNetworkCapacity()}
+     * @param serviceId
+     *            see {@link #getService()}
      */
     public ContainerSim(@Nonnull final SimResourceManager parent,
-            @Nonnull final ContainerIdentifier id,
+            @Nonnull final ServiceIdentifier<?> serviceId,
+            @Nonnull final NodeIdentifier id,
             @Nonnull final ImmutableMap<NodeAttribute<?>, Double> computeCapacity,
-            @Nonnull final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> networkCapacity) {
+            @Nonnull final ImmutableMap<LinkAttribute<?>, Double> networkCapacity) {
+        logger = LoggerFactory.getLogger(ContainerSim.class.getName() + "." + id);
+
         this.identifier = id;
+        this.service = serviceId;
         this.parent = parent;
         this.computeCapacity = computeCapacity;
-        this.neighborNetworkCapacity = networkCapacity;
         this.shortResourceReport = ContainerResourceReport.getNullReport(getIdentifier(),
                 ResourceReport.EstimationWindow.SHORT);
         this.longResourceReport = ContainerResourceReport.getNullReport(getIdentifier(),
                 ResourceReport.EstimationWindow.LONG);
-        this.networkLoadTracker = new NetworkLoadTracker();
+        this.networkLoadTracker = new LinkResourceManager(parent.getNode().getNodeIdentifier(), id, networkCapacity);
+        this.networkDemandTracker = new NetworkDemandTracker();
+
+        // TODO: eventually make this be starting and then delay for a
+        // bit
+        this.serviceStatus = ServiceState.Status.RUNNING;
 
         updateResourceReports();
     }
@@ -117,16 +131,6 @@ public class ContainerSim {
         return computeCapacity;
     }
 
-    private final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> neighborNetworkCapacity;
-
-    /**
-     * @return the capacity of this container to each neighboring node.
-     */
-    @Nonnull
-    public ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> getNeighborNetworkCapacity() {
-        return neighborNetworkCapacity;
-    }
-
     private final SimResourceManager parent;
 
     /**
@@ -138,24 +142,25 @@ public class ContainerSim {
         return parent.getNode();
     }
 
-    private final ContainerIdentifier identifier;
+    private final NodeIdentifier identifier;
 
     /**
      * 
      * @return the name of the container
      */
     @Nonnull
-    public ContainerIdentifier getIdentifier() {
+    public NodeIdentifier getIdentifier() {
         return identifier;
     }
 
-    private ServiceIdentifier<?> service;
+    private final ServiceIdentifier<?> service;
 
     /**
      * 
      * @return the current running service, will be null if no service is
      *         running
      */
+    @Nonnull
     public ServiceIdentifier<?> getService() {
         synchronized (lock) {
             return service;
@@ -177,45 +182,15 @@ public class ContainerSim {
     }
 
     /**
-     * 
-     * @param service
-     *            the service to start
-     * @return if the service was started, will fail if there is already a
-     *         service running
-     */
-    public boolean startService(@Nonnull final ServiceIdentifier<?> service) {
-        synchronized (lock) {
-            if (null == this.service) {
-                this.service = service;
-
-                // TODO: eventually make this be starting and then delay for a
-                // bit
-                serviceStatus = ServiceState.Status.RUNNING;
-                return true;
-            } else {
-                return false;
-            }
-        }
-    }
-
-    /**
      * Stop the service in this container. Calling this method when the service
      * is stopping or already stopped is a nop.
      * 
-     * @return if the service was stopped, will fail if the service is not
-     *         running in this container
+     * @return if the service was stopped
      */
     public boolean stopService() {
         synchronized (lock) {
-            if (null == service) {
-                return false;
-            } else {
-                // TODO: eventually make this go to stopping and delay for a bit
-                serviceStatus = ServiceState.Status.STOPPED;
-
-                this.service = null;
-                return true;
-            }
+            serviceStatus = ServiceState.Status.STOPPED;
+            return true;
         }
     }
 
@@ -231,120 +206,107 @@ public class ContainerSim {
         }
     }
 
-    private List<NodeLoadEntry> nodeLoad = new LinkedList<>();
-
     /**
      * Specify that a client is causing load on this server.
      * 
      * @param req
      *            the client request, only the nodeLoad is used.
-     * @param client
+     * @param clientId
      *            the client creating the connection
+     * @param regionId
+     *            the region that the client is in
      * @return status of the request, if the status is
      *         {@link ClientSim.RequestResult#FAIL}, then the node load is not
      *         modified.
+     * @param now
+     *            whe the load started
      * 
      */
-    public ClientSim.RequestResult addNodeLoad(final NetworkClient client, final ClientRequest req) {
-        synchronized (lock) {
-            final long newDuration = computeServerDurationForRequest(req);
+    public ClientSim.RequestResult addNodeLoad(@Nonnull final NodeIdentifier clientId,
+            final long now,
+            @Nonnull final RegionIdentifier regionId,
+            @Nonnull final ClientLoad req) {
+        long timeReceived = parent.getClock().getCurrentTime();
 
+        synchronized (lock) {
             final ServiceIdentifier<?> service = req.getService();
             if (!getService().equals(service)) {
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Attempting to use service {} on container {} when it's running service {}", service,
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Attempting to use service {} on container {} when it's running service {}", service,
                             getIdentifier(), getService());
                 }
                 return ClientSim.RequestResult.FAIL;
             }
 
+            // expire old entries first
+            loadTracker.removeExpiredEntries(now, entry -> recordRequestFinishedServer(entry));
+
             // need to add, then check the thresholds and then possibly
             // remove
-            final NodeLoadEntry entry = new NodeLoadEntry(client, req, newDuration);
-            nodeLoad.add(entry);
+            final NodeLoadEntry entry = new NodeLoadEntry(now, clientId, req, req.getServerDuration());
+            loadTracker.addLoad(entry);
 
-            final ClientSim.RequestResult result = computeCurrentNodeLoad();
+            final Pair<ClientSim.RequestResult, Map<NodeAttribute<?>, Double>> result = computeCurrentNodeLoad();
 
-            if (result == ClientSim.RequestResult.FAIL) {
+            if (result.getLeft() == ClientSim.RequestResult.FAIL) {
                 // don't record processing time as the request was not completed
-                nodeLoad.remove(entry);
+                loadTracker.removeLoad(entry);
             } else {
-                final RegionIdentifier sourceRegion = client.getRegionIdentifier();
-                numRequestsPerRegion.merge(sourceRegion, 1, Integer::sum);
+                numRequestsPerRegion.merge(regionId, 1, Integer::sum);
 
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Adding node load to {} with start: {} duration: {}", identifier,
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Adding node load to {} with start: {} duration: {}", identifier,
                             entry.getRequest().getStartTime(), entry.getDuration());
                 }
             }
 
-            return result;
+            try {
+                dumpClientRequestRecord(new ClientRequestReceivedRecord(clientId, req, timeReceived, result.getLeft(),
+                        result.getRight(), computeCapacity), mapper);
+            } catch (IOException e) {
+                logger.error("Unable to dump client request record.", e);
+            }
+
+            return result.getLeft();
         }
     }
 
-    private static final double NODE_LOAD_SLOW_MULTIPLIER = 1.5;
-    private static final double NODE_LOAD_FAIL_MULTIPLIER = 2.0;
-
     /**
-     * Compute the duration that the request will take on the server. The
-     * duration of the request is the minimum duration. The duration may be
-     * increased based on the current load.
+     * Records a client request and other relevant information to a JSON file.
      * 
-     * @param request
-     *            the request being made
-     * @return the duration that will actually be used
+     * @param record
+     *            the object storing the request information
+     * @param mapper
+     *            the {@link ObjectWriter} for outputting the information to
+     *            JSON
+     * @throws IOException
+     *             if the JSON file could not be written
+     * 
      */
-    private long computeServerDurationForRequest(final ClientRequest request) {
-        // Simple implementation that just checks if the load is currently SLOW
-        // or FAIL and then multiplies based on that.
-        // This should ask the ApplicationManager for how the service responds
-        // to load.
-        final ClientSim.RequestResult result = computeCurrentNodeLoad();
-        final double multiplier;
-        switch (result) {
-        case SLOW:
-            multiplier = NODE_LOAD_SLOW_MULTIPLIER;
-            break;
-        case FAIL:
-            multiplier = NODE_LOAD_FAIL_MULTIPLIER;
-            break;
-        default:
-            multiplier = 1.0;
-            break;
-        }
+    private void dumpClientRequestRecord(@Nonnull final ClientRequestReceivedRecord record,
+            @Nonnull final ObjectWriter mapper) throws IOException {
+        final Path outputDirectory = this.parent.getNode().getNodeOutputDirectory();
 
-        final long minDuration = request.getServerDuration();
-        final long newDuration = (long) Math.ceil(minDuration * multiplier);
-        return newDuration;
+        if (outputDirectory != null) {
+            final Path clientRequestsLogFilename = outputDirectory
+                    .resolve(String.format("client_requests_received-%s.json", getIdentifier().getName()));
+
+            try (FileWriterWithEncoding writer = new FileWriterWithEncoding(clientRequestsLogFilename.toFile(),
+                    Charset.defaultCharset(), true)) {
+                mapper.writeValue(writer, record);
+                logger.debug("Write to client request log file: {}", clientRequestsLogFilename);
+            }
+        }
     }
 
     /**
      * Compute the current load for the node. The lock must be held for this
      * method to be called.
      * 
-     * @return the result at the current point in time
+     * @return the result and load at the current point in time
      */
-    private ClientSim.RequestResult computeCurrentNodeLoad() {
-        final long now = parent.getClock().getCurrentTime();
-
-        final Map<NodeAttribute<?>, Double> load = new HashMap<>();
-
-        final Iterator<NodeLoadEntry> nodeDemandIter = nodeLoad.iterator();
-        while (nodeDemandIter.hasNext()) {
-            final NodeLoadEntry entry = nodeDemandIter.next();
-            final ClientRequest req = entry.getRequest();
-            final long end = req.getStartTime() + entry.getDuration();
-            if (req.getStartTime() <= now && now < end) {
-                final ImmutableMap<NodeAttribute<?>, Double> nodeServiceLoad = req.getNodeLoadAsAttribute();
-                nodeServiceLoad.forEach((k, v) -> load.merge(k, v, Double::sum));
-            } else if (end > now) {
-                // finished request, add to averages and remove from
-                // nodeLoad
-                recordRequestFinishedServer(entry.getDuration(), req.getNumberOfContainers());
-
-                nodeDemandIter.remove();
-            }
-        }
+    private Pair<ClientSim.RequestResult, Map<NodeAttribute<?>, Double>> computeCurrentNodeLoad() {
+        final Map<NodeAttribute<?>, Double> load = loadTracker.getTotalCurrentLoad();
 
         final ImmutableMap<NodeAttribute<?>, Double> serverCapacity = getComputeCapacity();
 
@@ -354,28 +316,28 @@ public class ContainerSim {
             final double attributeCapacity = serverCapacity.getOrDefault(attribute, 0D);
 
             final double percentageOfCapacity = attributeValue / attributeCapacity;
-            if (percentageOfCapacity > 1) {
-                if (LOGGER.isTraceEnabled()) {
-                    LOGGER.debug("Client request is FAIL because attribute {} is at {} out of {}", attribute,
-                            attributeValue, attributeCapacity);
-                }
-                return ClientSim.RequestResult.FAIL;
+            
+            logger.trace("Checking attribute: {} value: {} capacity: {} percentage: {}", attribute, attributeValue,
+                    attributeCapacity, percentageOfCapacity);
+
+            if (attributeValue > attributeCapacity || percentageOfCapacity > 1) {
+                logger.trace("Client request is FAIL because attribute {} is at {} out of {}", attribute,
+                        attributeValue, attributeCapacity);
+                return Pair.of(ClientSim.RequestResult.FAIL, load);
             } else if (percentageOfCapacity > SimulationConfiguration.getInstance().getSlowNetworkThreshold()) {
-                if (LOGGER.isTraceEnabled()) {
-                    LOGGER.debug("Client request is SLOW because attribute {} is at {} out of {}", attribute,
-                            attributeValue, attributeCapacity);
-                }
-                return ClientSim.RequestResult.SLOW;
+                logger.trace("Client request is SLOW because attribute {} is at {} out of {}", attribute,
+                        attributeValue, attributeCapacity);
+                return Pair.of(ClientSim.RequestResult.SLOW, load);
             }
         }
 
-        return ClientSim.RequestResult.SUCCESS;
+        return Pair.of(ClientSim.RequestResult.SUCCESS, load);
     }
 
     private int requestsCompleted = 0;
     /**
      * The amount of time that it would take a standard sized container to
-     * process the request if it were fully utilitized.
+     * process the request if it were fully utilized.
      */
     private double timeForStandardContainerToProcessRequests = 0;
 
@@ -387,11 +349,12 @@ public class ContainerSim {
      *            the number of standard sized containers used to service the
      *            request
      */
-    private void recordRequestFinishedServer(final long timeToProcess, final double numContainersUsed) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Recording server request finished node: {} container: {} time: {}",
-                    parent.getNode().getNodeIdentifier(), identifier, timeToProcess);
-        }
+    private void recordRequestFinishedServer(final NodeLoadEntry entry) {
+        final long timeToProcess = entry.getDuration();
+        final double numContainersUsed = entry.getRequest().getNumberOfContainers();
+
+        logger.debug("Recording server request finished node: {} container: {} time: {}",
+                parent.getNode().getNodeIdentifier(), identifier, timeToProcess);
 
         ++requestsCompleted;
         timeForStandardContainerToProcessRequests += (timeToProcess / numContainersUsed);
@@ -402,24 +365,23 @@ public class ContainerSim {
      * 
      * @param req
      *            the client request, only networkLoad is used
-     * @param otherNode
-     *            The node on the other end of the link from the node being
-     *            managed by the resource manager
      * @param client
      *            the client causing the load
      * @return status of the request, if the status is
      *         {@link ClientSim.RequestResult#FAIL}, then the link load is not
-     *         modified. The {@link NetworkLoadTracker.LinkLoadEntry} can be
-     *         used to remove the link load with
-     *         {@link #removeLinkLoad(NetworkLoadTracker.LinkLoadEntry)}
-     * @see #removeLinkLoad(ClientRequest, NodeIdentifier)
+     *         modified. The {@link LinkLoadEntry} can be used to remove the
+     *         link load with
+     *         {@link #removeLinkLoad(LinkResourceManager.LinkLoadEntry)}
+     * @see #removeLinkLoad(ClientLoad, NodeIdentifier)
      */
-    public Pair<ClientSim.RequestResult, NetworkLoadTracker.LinkLoadEntry> addLinkLoad(@Nonnull final ClientRequest req,
-            @Nonnull final NodeIdentifier client,
-            @Nonnull final NodeIdentifier otherNode) {
+    public Pair<ClientSim.RequestResult, LinkLoadEntry> addLinkLoad(@Nonnull final ClientLoad req,
+            @Nonnull final NodeIdentifier client) {
         synchronized (lock) {
-            return networkLoadTracker.addLinkLoad(parent.getClock().getCurrentTime(), req, client,
-                    getNeighborNetworkCapacity(), otherNode);
+            // all traffic to containers only sees the host as the neighbor
+            final NodeIdentifier host = parent.getNode().getNodeIdentifier();
+            final ImmutableTriple<ClientSim.RequestResult, LinkLoadEntry, ?> linkManagerResult = networkLoadTracker
+                    .addLinkLoad(parent.getClock().getCurrentTime(), req, client, host);
+            return Pair.of(linkManagerResult.getLeft(), linkManagerResult.getMiddle());
         }
     }
 
@@ -429,13 +391,12 @@ public class ContainerSim {
      *
      * @param entry
      *            the return value from
-     *            {@link #addLinkLoad(ClientRequest, NodeIdentifier)}
-     * @return true if the load was removed
-     * @see #addLinkLoad(ClientRequest, NodeIdentifier)
+     *            {@link #addLinkLoad(ClientLoad, NodeIdentifier)}
+     * @see #addLinkLoad(ClientLoad, NodeIdentifier)
      */
-    public boolean removeLinkLoad(final NetworkLoadTracker.LinkLoadEntry entry) {
+    public void removeLinkLoad(final LinkLoadEntry entry) {
         synchronized (lock) {
-            return networkLoadTracker.removeLinkLoad(entry);
+            networkLoadTracker.removeLinkLoad(entry);
         }
     }
 
@@ -459,169 +420,64 @@ public class ContainerSim {
         }
     }
 
-    private ScheduledThreadPoolExecutor resourceReportTimer = null;
-
-    /**
-     * Start generation of {@link ResourceReport} objects.
-     * 
-     * @throws IllegalStateException
-     *             if the simulation is already started
-     */
-    public void startSimulation() {
-        synchronized (lock) {
-            if (null != resourceReportTimer) {
-                throw new IllegalStateException("Cannot start the simulation when it is already running");
-            }
-            resourceReportTimer = new ScheduledThreadPoolExecutor(1);
-            resourceReportTimer.scheduleAtFixedRate(() -> updateResourceReports(), 0, parent.getPollingInterval(),
-                    TimeUnit.MILLISECONDS);
-        }
-    }
-
-    /**
-     * Stop generation of new {@link ResourceReport} objects.
-     */
-    public void stopSimulation() {
-        synchronized (lock) {
-            if (null != resourceReportTimer) {
-                resourceReportTimer.shutdown();
-                resourceReportTimer = null;
-            }
-        }
-    }
-
     /**
      * Update the current resource reports. Package visibility for testing.
      */
     /* package */ void updateResourceReports() {
-        try (CloseableThreadContext.Instance ctc = CloseableThreadContext.push(getIdentifier().getName())) {
-            synchronized (lock) {
-                final long now = parent.getClock().getCurrentTime();
+        synchronized (lock) {
+            final long now = parent.getClock().getCurrentTime();
+            try (CloseableThreadContext.Instance ctc = CloseableThreadContext.push(getIdentifier().getName())
+                    .push("now: " + now)) {
 
-                if (LOGGER.isTraceEnabled()) {
-                    LOGGER.trace("Updating resource reports time: {} nodeLoad.size: {}", now, nodeLoad.size());
-                }
+                logger.trace("Updating resource reports time: {}", now);
 
-                final Map<NodeIdentifier, Map<NodeAttribute<?>, Double>> computeLoad = new HashMap<>();
+                // expire old entries first
+                loadTracker.removeExpiredEntries(now, entry -> recordRequestFinishedServer(entry));
 
-                final ImmutableMap<NodeAttribute<?>, Double> computeCapacity = getComputeCapacity();
+                final ImmutableMap<NodeAttribute<?>, Double> reportComputeCapacity = getComputeCapacity();
+                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportNetworkCapacity = ImmutableMap
+                        .of(parent.getNode().getNodeIdentifier(), networkLoadTracker.getCapacity());
 
                 // add node load to report
-                final Iterator<NodeLoadEntry> nodeLoadIter = nodeLoad.iterator();
-                while (nodeLoadIter.hasNext()) {
-                    final NodeLoadEntry entry = nodeLoadIter.next();
-                    final NetworkClient client = entry.getClient();
-                    final ClientRequest req = entry.getRequest();
-                    final ServiceIdentifier<?> serviceId = req.getService();
-                    final long requestStart = req.getStartTime();
-                    final long requestEnd = requestStart + entry.getDuration();
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Checking request start: {} duration: {} end: {}", requestStart,
-                                entry.getDuration(), requestEnd);
-                    }
-
-                    if (requestStart <= now && now < requestEnd) {
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.trace("Request is active");
-                        }
-                        if (serviceId.equals(getService())) {
-
-                            final Map<NodeAttribute<?>, Double> regionComputeLoad = computeLoad
-                                    .computeIfAbsent(client.getNodeIdentifier(), k -> new HashMap<>());
-
-                            final ImmutableMap<NodeAttribute<?>, Double> nodeComputeLoad = req.getNodeLoadAsAttribute();
-
-                            nodeComputeLoad.forEach((attr, value) -> {
-                                regionComputeLoad.merge(attr, value, Double::sum);
-                            });
-                        } // if correct service
-                    } else if (requestEnd <= now) {
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.debug("Request is expired");
-                        }
-
-                        // finished request, add to averages and remove from
-                        // nodeLoad
-                        recordRequestFinishedServer(entry.getDuration(), req.getNumberOfContainers());
-
-                        nodeLoadIter.remove();
-                    } else {
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.debug("Request is in the future");
-                        }
-                    }
-                } // foreach node demand
+                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> reportComputeLoad = loadTracker
+                        .getCurrentLoadPerClient();
 
                 // compute average processing time
                 final double serverAverageProcessTime = timeForStandardContainerToProcessRequests / requestsCompleted;
 
-                final ImmutableMap<NodeAttribute<?>, Double> reportServerCapacity = ImmutableMap
-                        .copyOf(computeCapacity);
-                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> reportComputeLoad = ImmutableUtils
-                        .makeImmutableMap2(computeLoad);
+                final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkNetworkLoad = networkLoadTracker
+                        .computeCurrentLinkLoad(now, identifier);
+                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportNetworkLoad = ImmutableMap
+                        .of(parent.getNode().getNodeIdentifier(), linkNetworkLoad);
+                logger.trace("network load: {}", reportNetworkLoad);
 
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportNeighborNetworkCapacity = ImmutableMap
-                        .copyOf(neighborNetworkCapacity);
-
-                final NetworkLoadTracker.NetworkLoadResult loadResult = networkLoadTracker
-                        .computeCurrentNetworkLoad(now);
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportNeighborNetworkLoad = ImmutableUtils
-                        .makeImmutableMap2(loadResult.loadPerNeighbor);
-
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportClientNetworkLoad = ImmutableUtils
-                        .makeImmutableMap2(loadResult.loadPerClient);
-
-                networkLoadTracker.updateClientDemandValues(now, reportClientNetworkLoad);
-                networkLoadTracker.updateNeighborDemandValues(now, reportNeighborNetworkLoad);
+                networkDemandTracker.updateDemandValues(now, reportNetworkLoad);
 
                 updateComputeDemandValues(now, reportComputeLoad);
-
-                // compute network capacity per client
-                final Map<NodeIdentifier, Map<LinkAttribute<?>, Double>> clientNetworkCapacity = new HashMap<>();
-                loadResult.clientToNeighbor.forEach((client, neighbors) -> {
-                    neighbors.forEach(n -> {
-                        final Map<LinkAttribute<?>, Double> neighborCapacity = reportNeighborNetworkCapacity
-                                .getOrDefault(n, ImmutableMap.of());
-                        final Map<LinkAttribute<?>, Double> clientCapacity = clientNetworkCapacity
-                                .computeIfAbsent(client, c -> new HashMap<>());
-                        neighborCapacity.forEach((attr, value) -> clientCapacity.merge(attr, value, Double::sum));
-                    });
-
-                });
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportClientNetworkCapacity = ImmutableUtils
-                        .makeImmutableMap2(clientNetworkCapacity);
 
                 final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> reportLongServerDemand = computeComputeDemand(
                         now, ResourceReport.EstimationWindow.LONG);
 
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportLongNeighborNetworkDemand = networkLoadTracker
-                        .computeNeighborNetworkDemand(now, ResourceReport.EstimationWindow.LONG);
-
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportLongClientNetworkDemand = networkLoadTracker
-                        .computeClientNetworkDemand(now, ResourceReport.EstimationWindow.LONG);
+                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportLongNetworkDemand = networkDemandTracker
+                        .computeNetworkDemand(now, ResourceReport.EstimationWindow.LONG);
 
                 longResourceReport = new ContainerResourceReport(getIdentifier(), now, getService(),
-                        ResourceReport.EstimationWindow.LONG, reportServerCapacity, reportComputeLoad,
-                        reportLongServerDemand, serverAverageProcessTime, reportClientNetworkCapacity,
-                        reportClientNetworkLoad, reportLongClientNetworkDemand, reportNeighborNetworkCapacity,
-                        reportNeighborNetworkLoad, reportLongNeighborNetworkDemand);
+                        ResourceReport.EstimationWindow.LONG, reportComputeCapacity, reportComputeLoad,
+                        reportLongServerDemand, serverAverageProcessTime, reportNetworkCapacity, reportNetworkLoad,
+                        reportLongNetworkDemand);
 
                 final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> reportShortServerDemand = computeComputeDemand(
                         now, ResourceReport.EstimationWindow.SHORT);
 
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportShortNeighborNetworkDemand = networkLoadTracker
-                        .computeNeighborNetworkDemand(now, ResourceReport.EstimationWindow.SHORT);
-
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportShortClientNetworkDemand = networkLoadTracker
-                        .computeClientNetworkDemand(now, ResourceReport.EstimationWindow.SHORT);
+                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportShortNetworkDemand = networkDemandTracker
+                        .computeNetworkDemand(now, ResourceReport.EstimationWindow.SHORT);
 
                 shortResourceReport = new ContainerResourceReport(getIdentifier(), now, getService(),
-                        ResourceReport.EstimationWindow.SHORT, reportServerCapacity, reportComputeLoad,
-                        reportShortServerDemand, serverAverageProcessTime, reportClientNetworkCapacity,
-                        reportClientNetworkLoad, reportShortClientNetworkDemand, reportNeighborNetworkCapacity,
-                        reportNeighborNetworkLoad, reportShortNeighborNetworkDemand);
-            } // end lock
-        } // logging thread context
+                        ResourceReport.EstimationWindow.SHORT, reportComputeCapacity, reportComputeLoad,
+                        reportShortServerDemand, serverAverageProcessTime, reportNetworkCapacity, reportNetworkLoad,
+                        reportShortNetworkDemand);
+            } // logging thread context
+        } // end lock
     }
 
     private ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> computeComputeDemand(final long now,
@@ -641,16 +497,63 @@ public class ContainerSim {
         final long cutoff = now - duration;
         final Map<NodeIdentifier, Map<NodeAttribute<?>, Double>> sums = new HashMap<>();
         final Map<NodeIdentifier, Map<NodeAttribute<?>, Integer>> counts = new HashMap<>();
-        NetworkLoadTracker.twoLevelHistoryMapCountSum(computeLoadHistory, cutoff, sums, counts);
+        historyMapCountSum(computeLoadHistory, cutoff, sums, counts);
 
-        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> reportDemand = NetworkLoadTracker
-                .twoLevelMapAverage(sums, counts);
+        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> reportDemand = historyMapAverage(
+                sums, counts);
 
-        if (LOGGER.isTraceEnabled()) {
-            LOGGER.trace("compute demand over window {} is {}", estimationWindow, reportDemand);
+        if (logger.isTraceEnabled()) {
+            logger.trace("compute demand over window {} is {}", estimationWindow, reportDemand);
         }
 
         return reportDemand;
+    }
+
+    private static <K1, K2> void historyMapCountSum(final Map<Long, ImmutableMap<K1, ImmutableMap<K2, Double>>> history,
+            final long historyCutoff,
+            final Map<K1, Map<K2, Double>> sums,
+            final Map<K1, Map<K2, Integer>> counts) {
+        history.forEach((timestamp, historyValue) -> {
+            if (timestamp >= historyCutoff) {
+
+                historyValue.forEach((k1, v1) -> {
+                    final Map<K2, Double> sum1 = sums.computeIfAbsent(k1, k -> new HashMap<>());
+                    final Map<K2, Integer> count1 = counts.computeIfAbsent(k1, k -> new HashMap<>());
+
+                    v1.forEach((k2, value) -> {
+                        final double newSum = sum1.getOrDefault(k2, 0D) + value;
+                        final int newCount = count1.getOrDefault(k2, 1) + 1;
+
+                        sum1.put(k2, newSum);
+                        count1.put(k2, newCount);
+                    }); // v1.forEach
+
+                }); // historyValue.forEach
+
+            } // inside window
+        }); // history.forEach
+
+    }
+
+    private static <K1, K2> ImmutableMap<K1, ImmutableMap<K2, Double>> historyMapAverage(
+            final Map<K1, Map<K2, Double>> sums,
+            final Map<K1, Map<K2, Integer>> counts) {
+        final ImmutableMap.Builder<K1, ImmutableMap<K2, Double>> result = ImmutableMap.builder();
+
+        sums.forEach((k1, sum1) -> {
+            final Map<K2, Integer> count1 = counts.get(k1);
+            final ImmutableMap.Builder<K2, Double> average1 = ImmutableMap.builder();
+
+            sum1.forEach((k2, value) -> {
+                final int count = count1.get(k2);
+                final double average = value / count;
+                average1.put(k2, average);
+            }); // sum1.forEach
+
+            result.put(k1, average1.build());
+        }); // sums.forEach
+
+        return result.build();
     }
 
     private final Map<Long, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> computeLoadHistory = new HashMap<>();
@@ -670,8 +573,8 @@ public class ContainerSim {
                     .next();
             if (entry.getKey() < historyCutoff) {
 
-                if (LOGGER.isTraceEnabled()) {
-                    LOGGER.trace("Removing compute demand value {} because it's time {} is before {}", entry.getValue(),
+                if (logger.isTraceEnabled()) {
+                    logger.trace("Removing compute demand value {} because it's time {} is before {}", entry.getValue(),
                             entry.getKey(), historyCutoff);
                 }
 
@@ -686,68 +589,88 @@ public class ContainerSim {
     }
 
     /**
-     * Class for storing information in the node load.
+     * Class for recording client requests and other relevant information.
      * 
-     * @author jschewe
+     * @author awald
      *
      */
-    private static final class NodeLoadEntry {
+    public static final class ClientRequestReceivedRecord {
+        private NodeIdentifier client;
+        private ClientLoad request;
+        private long timeReceived;
+        private ClientSim.RequestResult status;
+        private Map<NodeAttribute<?>, Double> load;
+        private ImmutableMap<NodeAttribute<?>, Double> serverCapacity;
+
         /**
          * 
          * @param client
          *            see {@link #getClient()}
          * @param request
          *            see {@link #getRequest()}
+         * @param timeReceived
+         *            see {@link #getTimeReceived()}
+         * @param status
+         *            see {@link #getStatus()}
+         * @param load
+         *            see {@link #getLoad()}
+         * @param serverCapacity
+         *            see {@link #getServerCapacity()}
          */
-        /* package */ NodeLoadEntry(@Nonnull final NetworkClient client,
-                @Nonnull final ClientRequest request,
-                final long duration) {
+        public ClientRequestReceivedRecord(@JsonProperty("client") final NodeIdentifier client,
+                @JsonProperty("request") final ClientLoad request,
+                @JsonProperty("timeReceived") final long timeReceived,
+                @JsonProperty("status") final ClientSim.RequestResult status,
+                @JsonProperty("load") Map<NodeAttribute<?>, Double> load,
+                @JsonProperty("serverCapacity") ImmutableMap<NodeAttribute<?>, Double> serverCapacity) {
             this.client = client;
             this.request = request;
-            this.duration = duration;
+            this.timeReceived = timeReceived;
+            this.status = status;
+            this.load = load;
+            this.serverCapacity = serverCapacity;
         }
-
-        private final NetworkClient client;
 
         /**
          * @return the client that is causing the load.
          */
-        @Nonnull
-        public NetworkClient getClient() {
+        public NodeIdentifier getClient() {
             return client;
         }
 
-        private final ClientRequest request;
-
         /**
-         * 
          * @return the request that is creating the load
          */
-        @Nonnull
-        public ClientRequest getRequest() {
+        public ClientLoad getRequest() {
             return request;
         }
 
-        private final long duration;
-
         /**
-         * @return The duration that the load takes, this is based on the load
-         *         of the system at the time that the client requested the
-         *         service
+         * @return the time that the request was received
          */
-        public long getDuration() {
-            return duration;
+        public long getTimeReceived() {
+            return timeReceived;
         }
 
         /**
-         * @return the number of standard sized containers that the request is
-         *         using
+         * @return the result of processing the request
          */
-        @JsonIgnore
-        public double getNumberOfContainers() {
-            return getRequest().getNumberOfContainers();
+        public ClientSim.RequestResult getStatus() {
+            return status;
         }
 
+        /**
+         * @return the new load after the request was received
+         */
+        public Map<NodeAttribute<?>, Double> getLoad() {
+            return load;
+        }
+
+        /**
+         * @return the compute capacity of the server
+         */
+        public ImmutableMap<NodeAttribute<?>, Double> getServerCapacity() {
+            return serverCapacity;
+        }
     }
-
 }

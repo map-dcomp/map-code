@@ -1,5 +1,5 @@
-/* Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
- * To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+/* Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+ * To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
  * the exception of the dcop implementation identified below (see notes).
  *
  * Dispersed Computing (DCOMP)
@@ -30,4 +30,4 @@
  */
 
 
-The DCOP algorithm located within the directory 2018-04-19/src/MAP-Agent/src/main/java/com/bbn/map/dcop was co-developed with inputs from Soura Dasgupta of UIowa, Jake Beal of BBN, and the WashU team, including William Yeoh, Khoi Hoang, and Christable Wayllace.
+The DCOP algorithm located within the directory 2019-03-14/src/MAP-Agent/src/main/java/com/bbn/map/dcop was co-developed with inputs from Soura Dasgupta of UIowa, Jake Beal and Jon Schewe of BBN, and the WashU team, including William Yeoh, Khoi Hoang, and Christable Wayllace.

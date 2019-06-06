@@ -1,0 +1,20 @@
+[
+  {
+    "startTime": 0,
+    "serverDuration": 500000,
+    "networkDuration": 500000,
+    "numClients": 3,
+    "service": {
+      "group": "test2",
+      "artifact": "test-service2",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 500
+    },
+    "networkLoad": {
+      "DATARATE_TX": 7.0,
+      "DATARATE_RX": 7.0
+    }
+  }
+]

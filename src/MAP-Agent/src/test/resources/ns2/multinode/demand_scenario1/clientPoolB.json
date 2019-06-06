@@ -13,7 +13,8 @@
       "TASK_CONTAINERS": 0.2
     },
     "networkLoad": {
-      "DATARATE": 1.0
+      "DATARATE_TX": 1.0,
+      "DATARATE_RX": 1.0
     }
   },
   {
@@ -30,7 +31,8 @@
       "TASK_CONTAINERS": 0.2
     },
     "networkLoad": {
-      "DATARATE": 1.0
+      "DATARATE_TX": 1.0,
+      "DATARATE_RX": 1.0
     }
   }
 ]

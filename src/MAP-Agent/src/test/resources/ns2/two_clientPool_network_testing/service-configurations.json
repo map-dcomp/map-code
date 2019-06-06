@@ -1,0 +1,38 @@
+[
+  {
+    "service": {
+      "group": "test1",
+      "artifact": "test-service1",
+      "version": "1"
+    },
+    "hostname": "test-serviceX",
+    "defaultNode": "serverX",
+    "defaultNodeRegion": "X",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "125000"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "test2",
+      "artifact": "test-service2",
+      "version": "1"
+    },
+    "hostname": "test-serviceX",
+    "defaultNode": "serverX",
+    "defaultNodeRegion": "X",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "125000"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  }
+]

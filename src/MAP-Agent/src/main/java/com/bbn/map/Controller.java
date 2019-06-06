@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -37,12 +37,21 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
 
 import javax.annotation.Nonnull;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.CloseableThreadContext;
 import org.protelis.lang.datatype.DeviceUID;
 import org.protelis.lang.datatype.Tuple;
@@ -52,18 +61,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AbstractService.Status;
-import com.bbn.map.ap.ApplicationManagerUtils;
 import com.bbn.map.appmgr.util.AppMgrUtils;
+import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.dcop.DCOPService;
 import com.bbn.map.dcop.DcopInfoProvider;
 import com.bbn.map.dcop.DcopSharedInformation;
 import com.bbn.map.dns.DnsRecord;
+import com.bbn.map.dns.NameRecord;
 import com.bbn.map.dns.PlanTranslator;
 import com.bbn.map.rlg.RLGService;
 import com.bbn.map.rlg.RlgInfoProvider;
 import com.bbn.map.rlg.RlgSharedInformation;
-import com.bbn.protelis.networkresourcemanagement.ContainerIdentifier;
+import com.bbn.map.simulator.Simulation;
+import com.bbn.map.simulator.SimulationRunner;
+import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
+import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.ContainerInfo;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeLookupService;
@@ -79,19 +92,15 @@ import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindo
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceReport;
-import com.bbn.protelis.networkresourcemanagement.ServiceState;
 import com.bbn.protelis.utils.VirtualClock;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-import java8.util.Objects;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * The controller for a MAP Agent. This object starts the appropriate services
@@ -99,47 +108,38 @@ import java8.util.Objects;
  */
 public class Controller extends NetworkServer implements DcopInfoProvider, RlgInfoProvider {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Controller.class);
+    /**
+     * Event types that can show up in the event log.
+     * 
+     * @author jschewe
+     *
+     */
+    public enum EventTypes {
+    /**
+     * A new DCOP plan has been published.
+     */
+    DCOP_PLAN_PLUBLIED,
+    /**
+     * A new RLG plan has been published.
+     */
+    RLG_PLAN_PUBLISHED,
+    /**
+     * The DNS has been updated successfully.
+     */
+    DNS_UPDATE_SUCCEEDED,
+    /**
+     * The DNS update failed.
+     */
+    DNS_UPDATE_FAILED;
+    }
+
+    private final Logger logger;
+    private final Logger apLogger;
 
     private final NetworkServices networkServices;
     private final boolean allowDnsChanges;
     private final boolean enableDcop;
     private final boolean enableRlg;
-
-    /**
-     * Standard constructor for a controller. Sets <code>allowDnsChanges</code>
-     * to true as well as <code>enableDcop</code> and <code>enableRlg</code>.
-     * 
-     * @param nodeLookupService
-     *            passed to parent
-     * @param regionLookupService
-     *            passed to parent
-     * @param program
-     *            passed to parent
-     * @param name
-     *            passed to parent
-     * @param networkServices
-     *            Used to access network services such as DNS updating * @param
-     *            managerFactory passed to parent
-     * @param extraData
-     *            passed to parent
-     * @param managerFactory
-     *            passed to parent
-     * 
-     * @see Controller#Controller(NodeLookupService, RegionLookupService,
-     *      ProtelisProgram, NodeIdentifier, ResourceManagerFactory, Map,
-     *      NetworkServices, boolean, boolean, boolean)
-     */
-    public Controller(@Nonnull final NodeLookupService nodeLookupService,
-            @Nonnull final RegionLookupService regionLookupService,
-            @Nonnull final ProtelisProgram program,
-            @Nonnull final NodeIdentifier name,
-            @Nonnull final ResourceManagerFactory<NetworkServer> managerFactory,
-            @Nonnull final Map<String, Object> extraData,
-            @Nonnull final NetworkServices networkServices) {
-        this(nodeLookupService, regionLookupService, program, name, managerFactory, extraData, networkServices, true,
-                true, true);
-    }
 
     /**
      * Full constructor a controller.
@@ -161,32 +161,36 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      *            false if testing where DCOP should be disabled
      * @param enableRlg
      *            false if testing where RLG should be disabled
-     * @param managerFactory
+     * @param manager
      *            passed to parent
      * @param extraData
      *            passed to parent
      * @see NetworkServer#NetworkServer(NodeLookupService, RegionLookupService,
      *      ProtelisProgram, NodeIdentifier, ResourceManagerFactory, Map)
      */
+    @SuppressFBWarnings(value = "SC_START_IN_CTOR", justification = "starting dumper thread in the constructor is intentional")
     public Controller(@Nonnull final NodeLookupService nodeLookupService,
             @Nonnull final RegionLookupService regionLookupService,
             @Nonnull final ProtelisProgram program,
             @Nonnull final NodeIdentifier name,
-            @Nonnull final ResourceManagerFactory<NetworkServer> managerFactory,
+            @Nonnull final ResourceManager<Controller> manager,
             @Nonnull final Map<String, Object> extraData,
             @Nonnull final NetworkServices networkServices,
             final boolean allowDnsChanges,
             final boolean enableDcop,
             final boolean enableRlg) {
-        super(nodeLookupService, regionLookupService, program, name, managerFactory, extraData);
-        this.dcop = new DCOPService(name.getName(), this, this, AppMgrUtils.getApplicationManager());
-        this.rlg = new RLGService(name.getName(), this, this, AppMgrUtils.getApplicationManager(), this, this);
+        super(nodeLookupService, regionLookupService, program, name, manager, extraData);
+        this.logger = LoggerFactory.getLogger(Controller.class.getName() + "." + name);
+        this.apLogger = LoggerFactory.getLogger("com.bbn.map.ap.program." + name);
+
+        this.dcop = new DCOPService(name.getName(), getRegionIdentifier(), this, AppMgrUtils.getApplicationManager());
+        this.rlg = new RLGService(name.getName(), getRegionIdentifier(), this, AppMgrUtils.getApplicationManager());
         this.networkServices = networkServices;
         this.allowDnsChanges = allowDnsChanges;
         this.enableDcop = enableDcop;
         this.enableRlg = enableRlg;
-        this.prevLoadBalancerPlan = null;
-        this.prevRegionServiceState = null;
+        this.dnsPrevLoadBalancerPlan = null;
+        this.dnsPrevRegionServiceState = null;
 
         setRunDCOP(ControllerProperties.isRunningDcop(extraData));
         setRunRLG(ControllerProperties.isRunningRlg(extraData));
@@ -198,10 +202,43 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         dumperThread.setDaemon(true);
         dumperThread.start();
 
+        logger.info("Running git version {}", SimulationRunner.getGitVersionInformation());
     }
 
-    private LoadBalancerPlan prevLoadBalancerPlan;
-    private RegionServiceState prevRegionServiceState;
+    private boolean globalLeader = false;
+
+    /**
+     * 
+     * @return is this node the global leader
+     */
+    public boolean isGlobalLeader() {
+        synchronized (this) {
+            return globalLeader;
+        }
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #isGlobalLeader()}
+     */
+    public void setGlobalLeader(final boolean v) {
+        synchronized (this) {
+            globalLeader = v;
+        }
+    }
+
+    /**
+     * This is here for access from protelis.
+     * 
+     * @return {@link AgentConfiguration#isUseLeaderElection()}
+     */
+    public boolean isUseLeaderElection() {
+        return AgentConfiguration.getInstance().isUseLeaderElection();
+    }
+
+    private LoadBalancerPlan dnsPrevLoadBalancerPlan;
+    private RegionServiceState dnsPrevRegionServiceState;
 
     @Override
     protected void postRunCycle() {
@@ -223,39 +260,141 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         }
 
         if (allowDnsChanges && isHandleDnsChanges()) {
-            LOGGER.trace("Checking for DNS changes in node: {}", getNodeIdentifier());
-
-            final LoadBalancerPlan newLoadBalancerPlan = getNetworkState().getLoadBalancerPlan();
-            final RegionServiceState newRegionServiceState = getRegionServiceState();
-
-            // update the DNS if something has changed
-            if (!newLoadBalancerPlan.equals(prevLoadBalancerPlan)
-                    || !newRegionServiceState.equals(prevRegionServiceState)) {
-
-                final ImmutableCollection<DnsRecord> newDnsEntries = networkServices.getPlanTranslator()
-                        .convertToDns(newLoadBalancerPlan, newRegionServiceState);
-
-                LOGGER.info("Found DNS changes in region {}. Replacing records with: {}", getRegionIdentifier(),
-                        newDnsEntries);
-
-                networkServices.getDnsUpdateService(getRegionIdentifier()).replaceAllRecords(newDnsEntries);
-                prevLoadBalancerPlan = newLoadBalancerPlan;
-                prevRegionServiceState = newRegionServiceState;
-
-                LOGGER.trace("Storing LBPlan: {} services: {}", prevLoadBalancerPlan, prevRegionServiceState);
-            } else {
-                LOGGER.trace("No DNS update needed prevLBPlan: {} newLBPlan: {} prevServices: {} newServices: {}",
-                        prevLoadBalancerPlan, newLoadBalancerPlan, prevRegionServiceState, newRegionServiceState);
-            }
+            updateDnsInformation();
         }
 
-        if (LOGGER.isTraceEnabled()) {
-            LOGGER.trace("{} resource summary compute load: {}", getNodeIdentifier().getName(),
+        if (logger.isTraceEnabled()) {
+            logger.trace("{} resource summary compute load: {}", getNodeIdentifier().getName(),
                     getNetworkState().getRegionSummary(EstimationWindow.SHORT).getServerLoad());
         }
 
         manageContainers();
     }
+
+    private void updateDnsInformation() {
+        logger.trace("Checking for DNS changes in node: {}", getNodeIdentifier());
+
+        final LoadBalancerPlan newLoadBalancerPlan = getNetworkState().getLoadBalancerPlan();
+        final RegionServiceState newRegionServiceState = getRegionServiceState();
+
+        // update the DNS if something has changed
+        if (!newLoadBalancerPlan.equals(dnsPrevLoadBalancerPlan)
+                || !newRegionServiceState.equals(dnsPrevRegionServiceState)) {
+
+            logger.trace("Differences prevLoad: {} newLoad: {} prevService: {} newService: {}", dnsPrevLoadBalancerPlan,
+                    newLoadBalancerPlan, dnsPrevRegionServiceState, newRegionServiceState);
+
+            final ImmutableCollection<Pair<DnsRecord, Double>> newDnsEntries = networkServices.getPlanTranslator()
+                    .convertToDns(newLoadBalancerPlan, newRegionServiceState);
+            if (null != newDnsEntries) {
+
+                logger.info("Execution {}, found DNS changes in region {}. Replacing records with: {}",
+                        getExecutionCount(), getRegionIdentifier(), newDnsEntries);
+
+                updateLocalNetworkAvailableServices(newDnsEntries);
+
+                final boolean success = networkServices.getDnsUpdateService(getRegionIdentifier())
+                        .replaceAllRecords(newDnsEntries);
+
+                if (success) {
+                    dnsPrevLoadBalancerPlan = newLoadBalancerPlan;
+                    dnsPrevRegionServiceState = newRegionServiceState;
+
+                    logger.trace("Storing LBPlan: {} services: {}", dnsPrevLoadBalancerPlan, dnsPrevRegionServiceState);
+                } else {
+                    logger.warn("Unable to update DNS, load balancer plan not instantiated.");
+                }
+
+                final String message = String.format("%s",
+                        success ? EventTypes.DNS_UPDATE_SUCCEEDED : EventTypes.DNS_UPDATE_FAILED);
+                writeEventLog(message);
+            }
+
+        } else {
+            logger.trace("No DNS update needed prevLBPlan: {} newLBPlan: {} prevServices: {} newServices: {}",
+                    dnsPrevLoadBalancerPlan, newLoadBalancerPlan, dnsPrevRegionServiceState, newRegionServiceState);
+        }
+    }
+
+    /**
+     * Protects regionAvailableServices and dnsEntries.
+     */
+    private final Object availableServicesLock = new Object();
+
+    private RegionAvailableServices regionAvailableServices = new MutableRegionAvailableServices(getRegionIdentifier());
+    /**
+     * The most recently used dns entries.
+     */
+    private ImmutableCollection<Pair<DnsRecord, Double>> dnsEntries = ImmutableList.of();
+
+    private void updateLocalNetworkAvailableServices(final ImmutableCollection<Pair<DnsRecord, Double>> newDnsEntries) {
+        synchronized (availableServicesLock) {
+            final MutableRegionAvailableServices serviceInfo = new MutableRegionAvailableServices(
+                    getRegionIdentifier());
+
+            newDnsEntries.stream().filter(r -> r.getLeft() instanceof NameRecord)
+                    .forEach(r -> serviceInfo.addService((NameRecord) r.getLeft()));
+
+            logger.trace("Created available services {} from {}", serviceInfo, newDnsEntries);
+
+            regionAvailableServices = serviceInfo;
+            dnsEntries = newDnsEntries;
+        }
+    }
+
+    /**
+     * 
+     * @return the information that this node has about available services in
+     *         the region
+     */
+    @Nonnull
+    public NetworkAvailableServices getLocalNetworkAvailableServices() {
+        synchronized (availableServicesLock) {
+            final NetworkAvailableServices ret = NetworkAvailableServices
+                    .convertToNetworkAvailableServices(regionAvailableServices);
+            logger.trace("Getting local network available services - Created {} from {}", ret, regionAvailableServices);
+            return ret;
+        }
+    }
+
+    private NetworkAvailableServices allNetworkAvailableServices = new NetworkAvailableServices();
+
+    /* package for testing */ NetworkAvailableServices getAllNetworkAvailableServices() {
+        synchronized (availableServicesLock) {
+            return allNetworkAvailableServices;
+        }
+    }
+
+    /**
+     * 
+     * @param newData
+     *            the information about what services are running in the network
+     */
+    public void setAllNetworkAvailableServices(@Nonnull final NetworkAvailableServices newData) {
+        logger.trace("Received new network available services data: {}", newData);
+        synchronized (availableServicesLock) {
+            allNetworkAvailableServices = newData;
+        }
+    }
+
+    /**
+     * 
+     * @param node
+     *            the node to find the service running
+     * @return the service or null if not known
+     * @see NetworkAvailableServices#getServiceForNode(NodeIdentifier)
+     */
+    public ServiceIdentifier<?> getServiceForNode(final NodeIdentifier node) {
+        synchronized (availableServicesLock) {
+            return allNetworkAvailableServices.getServiceForNode(node);
+        }
+    }
+
+    /**
+     * The most recent RLG plan that was executed by manageContainers. Only the
+     * portion for this node is stored.
+     */
+    private ImmutableCollection<ContainerInfo> prevContainerPlan = null;
 
     /**
      * Start and stop containers as necessary.
@@ -263,72 +402,93 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     private void manageContainers() {
         try (CloseableThreadContext.Instance ctc = CloseableThreadContext.push(getName())) {
 
-            final ResourceManager resMgr = getResourceManager();
+            final ResourceManager<?> resMgr = getResourceManager();
 
-            final LoadBalancerPlan loadBalancerPlan = getNetworkState().getLoadBalancerPlan();
-
-            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, Integer>> servicePlan = loadBalancerPlan
-                    .getServicePlan();
-
-            // stop services that are to stop
-            loadBalancerPlan.getStopContainers().entrySet().stream().filter(e -> e.getKey().equals(getNodeIdentifier()))
-                    .map(Map.Entry::getValue).flatMap(l -> l.stream()).forEach(container -> {
-
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.trace("Stopping container {}", container);
-                        }
-
-                        if (!resMgr.stopService(container)) {
-                            LOGGER.warn("Unable to stop service on container: {}", container);
-                        }
-                    });
-
-            // check if need to start new instances of services
-            final ServiceReport serviceReport = resMgr.getServiceReport();
-
-            if (LOGGER.isTraceEnabled()) {
-                LOGGER.trace("Updating container to match {}", serviceReport);
+            // check if the service plan for this node has changed
+            final LoadBalancerPlan rlgPlan = getNetworkState().getLoadBalancerPlan();
+            final ImmutableCollection<ContainerInfo> nodeServicePlan = rlgPlan.getServicePlan()
+                    .get(getNodeIdentifier());
+            if (Objects.equals(prevContainerPlan, nodeServicePlan)) {
+                logger.trace(
+                        "RLG service plan has not changed for this node, skipping container management. prev: {} new: {} full: {}",
+                        prevContainerPlan, nodeServicePlan, rlgPlan);
+                return;
             }
 
-            // count current number of instances of each service running
-            final Map<ServiceIdentifier<?>, Integer> numInstanceOfService = new HashMap<>();
-            serviceReport.getServiceState().forEach((container, serviceState) -> {
-                final ServiceState.Status status = serviceState.getStatus();
-                if (ServiceState.Status.STARTING == status || ServiceState.Status.RUNNING == status) {
-                    numInstanceOfService.merge(serviceState.getService(), 1, Integer::sum);
-                }
-            });
+            logger.trace("Manging containers RLG service plan for this node: {}", nodeServicePlan);
 
-            // start services when there aren't enough running
-            servicePlan.forEach((service, plan) -> {
-                if (null == service) {
-                    LOGGER.warn(
-                            "Got null service in load balancer plan, this is invalid and this portion of it's plan will be ignored: {}",
-                            plan);
-                } else {
-                    final int requestedInstances = plan.getOrDefault(getNodeIdentifier(), 0);
-                    final int currentInstances = numInstanceOfService.getOrDefault(service, 0);
-                    if (requestedInstances > currentInstances) {
-                        final int numToAdd = requestedInstances - currentInstances;
+            if (null != nodeServicePlan) {
+                final Map<ServiceIdentifier<?>, Collection<LoadBalancerPlan.ContainerInfo>> containersToStart = new HashMap<>();
+                nodeServicePlan.forEach(containerInfo -> {
+                    if (null == containerInfo.getId() && !containerInfo.isStop()) {
+                        containersToStart.computeIfAbsent(containerInfo.getService(), k -> new LinkedList<>())
+                                .add(containerInfo);
+                    }
+                });
 
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.trace("Attempting to add {} instances of {} to {}. Requested: {} current: {}",
-                                    numToAdd, service, getName(), requestedInstances, currentInstances);
+                logger.trace("Containers to start: {}", containersToStart);
+
+                // check if need to start new instances of services
+                final ServiceReport serviceReport = resMgr.getServiceReport();
+                serviceReport.getServiceState().forEach((container, serviceState) -> {
+                    final Optional<LoadBalancerPlan.ContainerInfo> inPlan = nodeServicePlan.stream()
+                            .filter(info -> container.equals(info.getId())).findAny();
+                    if (!inPlan.isPresent()) {
+                        // container is not in the plan, remove from the list of
+                        // containers to start for the same service
+                        final Collection<LoadBalancerPlan.ContainerInfo> toStart = containersToStart
+                                .getOrDefault(serviceState.getService(), Collections.emptySet());
+                        if (!toStart.isEmpty()) {
+                            logger.trace(
+                                    "{} is not in the plan and is running service {}. Removing from containers to start",
+                                    container, serviceState.getService());
+
+                            toStart.remove(toStart.stream().findAny().get());
                         }
-
-                        for (int i = 0; i < numToAdd; ++i) {
-                            final ContainerIdentifier cid = resMgr.startService(service,
-                                    ApplicationManagerUtils.getContainerParameters(service));
-                            if (null == cid) {
-                                LOGGER.warn("Unable to allocate/start container for service {} on node {}", service,
-                                        getNodeIdentifier());
-                            }
+                    } else {
+                        // check that the service matches
+                        if (!Objects.equals(inPlan.get().getService(), serviceState.getService())) {
+                            logger.error(
+                                    "Container {} is currently running service {}, however the RLG plan states that it should be running service {}. The service of a container cannot change.",
+                                    container, serviceState.getService(), inPlan.get().getService());
                         }
                     }
-                } // valid service
-            });
+                });
+                logger.trace("After filtering for running containers: {}", containersToStart);
 
-        } // logger context
+                // start the needed containers
+                containersToStart.forEach((service, containerInfos) -> {
+                    containerInfos.forEach(containerInfo -> {
+                        final NodeIdentifier cid = resMgr.startService(containerInfo.getService(),
+                                AppMgrUtils.getContainerParameters(containerInfo.getService()));
+                        if (null == cid) {
+                            logger.warn("Unable to allocate/start container for service {} on node {}",
+                                    containerInfo.getService(), getNodeIdentifier());
+                        } else {
+                            logger.trace("Started container {}", cid, containerInfo.getService());
+                        }
+                    });
+                });
+
+                // stop containers requested to stop
+                nodeServicePlan.forEach(containerInfo -> {
+                    if (containerInfo.isStop()) {
+
+                        if (logger.isTraceEnabled()) {
+                            logger.trace("Stopping container {}", containerInfo.getId());
+                        }
+
+                        if (!resMgr.stopService(containerInfo.getId())) {
+                            logger.warn("Unable to stop service on container: {}", containerInfo.getId());
+                        }
+
+                    }
+                });
+            } // service plan exists for this node
+
+            // record that this plan has been executed
+            prevContainerPlan = nodeServicePlan;
+        } // logger node context
     }
 
     @Override
@@ -341,20 +501,20 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private void startDCOP() {
         if (enableDcop) {
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("Starting DCOP");
+            if (logger.isInfoEnabled()) {
+                logger.info("Starting DCOP");
             }
             dcop.startService();
         } else {
-            if (LOGGER.isTraceEnabled()) {
-                LOGGER.trace("Attempt to start DCOP ignored because DCOP is disabled");
+            if (logger.isTraceEnabled()) {
+                logger.trace("Attempt to start DCOP ignored because DCOP is disabled");
             }
         }
     }
 
     private void stopDCOP() {
-        if (isDCOPRunning() && LOGGER.isInfoEnabled()) {
-            LOGGER.info("Stopping DCOP");
+        if (isDCOPRunning() && logger.isInfoEnabled()) {
+            logger.info("Stopping DCOP");
         }
         dcop.stopService(AgentConfiguration.getInstance().getServiceShutdownWaitTime().toMillis());
     }
@@ -370,21 +530,21 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private void startRLG() {
         if (enableRlg) {
-            if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("Starting RLG");
+            if (logger.isInfoEnabled()) {
+                logger.info("Starting RLG");
             }
 
             rlg.startService();
         } else {
-            if (LOGGER.isTraceEnabled()) {
-                LOGGER.trace("Attempt to start RLG ignored because RLG is disabled");
+            if (logger.isTraceEnabled()) {
+                logger.trace("Attempt to start RLG ignored because RLG is disabled");
             }
         }
     }
 
     private void stopRLG() {
-        if (isRLGRunning() && LOGGER.isInfoEnabled()) {
-            LOGGER.info("Stopping RLG");
+        if (isRLGRunning() && logger.isInfoEnabled()) {
+            logger.info("Stopping RLG");
         }
 
         rlg.stopService(AgentConfiguration.getInstance().getServiceShutdownWaitTime().toMillis());
@@ -441,13 +601,21 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      * @param str
      *            the string to write
      */
-    public void debug(final String str) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(getName() + ": " + str);
-        }
+    public void apDebugMessage(final String str) {
+        apLogger.debug("{} ({}): {}", getName(), getExecutionCount(), str);
     }
 
-    // ---- DCOP shared information
+    /**
+     * Allow AP to write trace messages to the logger.
+     * 
+     * @param str
+     *            the string to write
+     */
+    public void apTraceMessage(final String str) {
+        apLogger.trace("{} ({}): {}", getName(), getExecutionCount(), str);
+    }
+
+    // ---- DcopInfoProvider
     private DcopSharedInformation localDcopSharedInformation = new DcopSharedInformation();
 
     /**
@@ -497,22 +665,127 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 final Tuple valueT = (Tuple) value;
                 if (valueT.isEmpty()) {
                     // ignore
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Got default DCOP shared value, ignoring: " + value);
+                    if (logger.isTraceEnabled()) {
+                        logger.trace("Got default DCOP shared value, ignoring: " + value);
                     }
                 } else {
-                    LOGGER.error("Got unexpected tuple as DCOP shared value, ignoring: " + value);
+                    logger.error("Got unexpected tuple as DCOP shared value, ignoring: " + value);
                 }
             } else {
-                LOGGER.error("Got unexpected value as DCOP shared value, ignoring: " + value);
+                logger.error("Got unexpected value as DCOP shared value, ignoring: " + value);
             }
         }
         allDcopSharedInformation = builder.build();
     }
 
-    // ---- end DCOP shared information
+    private RegionPlan prevDcopPlan = null;
 
-    // ---- RLG shared information
+    @Override
+    public void publishDcopPlan(@Nonnull RegionPlan plan) {
+        getNetworkState().setRegionPlan(plan);
+        notifyDcopPlanListeners(plan);
+        if (!plan.equals(prevDcopPlan)) {
+            validateDcopPlan(plan);
+
+            final String message = String.format("%s", EventTypes.DCOP_PLAN_PLUBLIED);
+            writeEventLog(message);
+
+            logger.debug("Published new DCOP plan at round {}: {}", getExecutionCount(), plan);
+
+            prevDcopPlan = plan;
+        }
+    }
+
+    private static final double WEIGHT_SUM_TOLERANCE = 1E-6;
+
+    // ---- end DcopInfoProvider
+
+    /**
+     * Log warnings if the plan doesn't look sane.
+     */
+    private void validateDcopPlan(@Nonnull final RegionPlan plan) {
+        plan.getPlan().forEach((service, servicePlan) -> {
+            final double serviceWeightSum = servicePlan.entrySet().stream().mapToDouble(e -> e.getValue()).sum();
+            if (Math.abs(1 - serviceWeightSum) > WEIGHT_SUM_TOLERANCE) {
+                logger.warn("DCOP plan for region {} service {} has weight sum of {}, which is not 1",
+                        plan.getRegion().getName(), service.getIdentifier(), serviceWeightSum);
+            }
+            if (ApplicationCoordinates.UNMANAGED.equals(service) || ApplicationCoordinates.AP.equals(service)) {
+                logger.warn("DCOP plan for region {} specifies the service {} which MAP does not control",
+                        plan.getRegion().getName(), service.getIdentifier());
+            }
+        });
+        if (plan.getPlan().isEmpty()) {
+            logger.warn("DCOP plan for region {} is empty", plan.getRegion().getName());
+        }
+    }
+
+    /**
+     * Log warnings if the plan doesn't look sane.
+     */
+    private void validateRlgPlan(@Nonnull final LoadBalancerPlan plan) {
+        // don't validate the overflow plan as that is a DCOP plan that has been
+        // filtered based on available services.
+
+        if (plan.getServicePlan().isEmpty()) {
+            logger.warn("RLG plan for region {} is empty", plan.getRegion().getName());
+        } else {
+            final ImmutableMap<NodeIdentifier, ImmutableCollection<LoadBalancerPlan.ContainerInfo>> servicePlan = plan
+                    .getServicePlan();
+            servicePlan.forEach((node, containerInfos) -> {
+                containerInfos.forEach(info -> {
+                    if (null == info.getService()) {
+                        logger.warn("RLG plan for node {} container {} has null service", node.getName(), info.getId());
+                    } else if (ApplicationCoordinates.UNMANAGED.equals(info.getService())
+                            || ApplicationCoordinates.AP.equals(info.getService())) {
+                        logger.warn(
+                                "RLG plan for node {} container {} specifies the service {} which MAP does not control",
+                                plan.getRegion().getName(), info.getService().getIdentifier());
+                    }
+                }); // foreach info
+            }); // foreach node
+        }
+    }
+
+    private final Object dcopListenerLock = new Object();
+    private final List<Consumer<RegionPlan>> dcopListeners = new LinkedList<>();
+
+    /**
+     * Used to allow tests to know when a plan has been published.
+     * 
+     * @param callback
+     *            executed when a plan is published
+     */
+    public void addDcopPlanListener(final Consumer<RegionPlan> callback) {
+        synchronized (dcopListenerLock) {
+            dcopListeners.add(callback);
+        }
+    }
+
+    /**
+     * @param callback
+     *            the listener to remove
+     */
+    public void removeDcopPlanListener(final Consumer<RegionPlan> callback) {
+        synchronized (dcopListenerLock) {
+            dcopListeners.remove(callback);
+        }
+    }
+
+    private void notifyDcopPlanListeners(final RegionPlan plan) {
+        synchronized (dcopListenerLock) {
+            dcopListeners.forEach(callback -> callback.accept(plan));
+        }
+    }
+
+    // ----- RLGInfoProvider
+
+    @Override
+    public boolean isServiceAvailable(final RegionIdentifier region, final ServiceIdentifier<?> service) {
+        synchronized (availableServicesLock) {
+            return allNetworkAvailableServices.isServiceAvailable(region, service);
+        }
+    }
 
     private RlgSharedInformation localRlgSharedInformation = new RlgSharedInformation();
 
@@ -563,20 +836,124 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 final Tuple valueT = (Tuple) value;
                 if (valueT.isEmpty()) {
                     // ignore
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Got default RLG shared value, ignoring: " + value);
+                    if (logger.isTraceEnabled()) {
+                        logger.trace("Got default RLG shared value, ignoring: " + value);
                     }
                 } else {
-                    LOGGER.error("Got unexpected tuple as RLG shared value, ignoring: " + value);
+                    logger.error("Got unexpected tuple as RLG shared value, ignoring: " + value);
                 }
             } else {
-                LOGGER.error("Got unexpected value as RLG shared value, ignoring: " + value);
+                logger.error("Got unexpected value as RLG shared value, ignoring: " + value);
             }
         }
         allRlgSharedInformation = builder.build();
     }
 
-    // ---- end RLG shared information
+    @Override
+    @Nonnull
+    public ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow) {
+        return getNetworkState().getRegionSummary(estimationWindow);
+    }
+
+    @Override
+    @Nonnull
+    public RegionPlan getDcopPlan() {
+        return getNetworkState().getRegionPlan();
+    }
+
+    @Override
+    @Nonnull
+    public LoadBalancerPlan getRlgPlan() {
+        return getNetworkState().getLoadBalancerPlan();
+    }
+
+    private LoadBalancerPlan prevRlgPlan = null;
+
+    @Override
+    public void publishRlgPlan(@Nonnull LoadBalancerPlan plan) {
+        getNetworkState().setLoadBalancerPlan(plan);
+
+        notifyRlgPlanListeners(plan);
+
+        if (!plan.equals(prevRlgPlan)) {
+            validateRlgPlan(plan);
+
+            final String message = String.format("%s", EventTypes.RLG_PLAN_PUBLISHED);
+
+            writeEventLog(message);
+
+            logger.debug("Published new RLG plan at round {}: {}", getExecutionCount(), plan);
+
+            prevRlgPlan = plan;
+        }
+    }
+
+    // ---- end RLGInfoProvider
+
+    private final Object rlgListenerLock = new Object();
+    private final List<Consumer<LoadBalancerPlan>> rlgListeners = new LinkedList<>();
+
+    /**
+     * Used to allow tests to know when a plan has been published.
+     * 
+     * @param callback
+     *            executed when a plan is published
+     */
+    public void addRlgPlanListener(final Consumer<LoadBalancerPlan> callback) {
+        synchronized (rlgListenerLock) {
+            rlgListeners.add(callback);
+        }
+    }
+
+    /**
+     * @param callback
+     *            the listener to remove
+     */
+    public void removeRlgPlanListener(final Consumer<LoadBalancerPlan> callback) {
+        synchronized (rlgListenerLock) {
+            rlgListeners.remove(callback);
+        }
+    }
+
+    private void notifyRlgPlanListeners(final LoadBalancerPlan plan) {
+        synchronized (rlgListenerLock) {
+            rlgListeners.forEach(callback -> callback.accept(plan));
+        }
+    }
+
+    /**
+     * Write to the event log if output is enabled. The current time and ap
+     * execution round will be prepended to the message.
+     * 
+     * @param message
+     *            the message to output
+     */
+    private void writeEventLog(final String message) {
+        final String line = String.format("%d,%d,%s", getResourceManager().getClock().getCurrentTime(),
+                getExecutionCount(), message);
+
+        final Path nodeOutputDirectory = getNodeOutputDirectory();
+        if (null != nodeOutputDirectory) {
+            if (!Files.exists(nodeOutputDirectory)) {
+                if (!nodeOutputDirectory.toFile().mkdirs()) {
+                    logger.error("Unable to create output directory {}, skipping output", line);
+                    return;
+                }
+            }
+
+            final Path eventLogFile = nodeOutputDirectory.resolve("events.csv");
+
+            try (BufferedWriter writer = Files.newBufferedWriter(eventLogFile, Charset.defaultCharset(),
+                    StandardOpenOption.WRITE, StandardOpenOption.APPEND, StandardOpenOption.CREATE)) {
+                writer.write(line);
+                writer.newLine();
+            } catch (final IOException e) {
+                logger.error("Error writing event '{}': {}", line, e.getMessage(), e);
+            }
+        } else {
+            logger.debug("Not writing to event log. No output directory.");
+        }
+    }
 
     private boolean handleDnsChanges = false;
 
@@ -747,16 +1124,55 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      * @return an object writer that is configured for dumping state as JSON
      */
     public static ObjectWriter createDumpWriter() {
-        final ObjectWriter mapper = new ObjectMapper()//
-                .registerModule(new GuavaModule())//
-                .registerModule(new ParameterNamesModule())//
-                .registerModule(new Jdk8Module()) //
-                .registerModule(new JavaTimeModule())//
+        final ObjectWriter mapper = JsonUtils.getStandardMapObjectMapper()//
                 .writer()//
                 .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)//
                 .withDefaultPrettyPrinter();
 
         return mapper;
+    }
+
+    /**
+     * 
+     * @return the path or null if no output should be generated
+     */
+    public Path getNodeOutputDirectory() {
+        if (isDumpState()) {
+            final Path baseOutput = getBaseOutputDirectory();
+            if (null != baseOutput) {
+                final Path nodeOutputDirectory = baseOutput.resolve(getName());
+
+                return nodeOutputDirectory;
+            } else {
+                logger.error("Base output directory is null, yet dump state is true, skipping output of node state");
+                return null;
+            }
+        } else {
+            return null;
+        }
+
+    }
+
+    private void dumpAgentConfiguration(final ObjectWriter mapper) {
+        final Path nodeOutputDirectory = getNodeOutputDirectory();
+        if (null != nodeOutputDirectory) {
+            if (!Files.exists(nodeOutputDirectory)) {
+                if (!nodeOutputDirectory.toFile().mkdirs()) {
+                    logger.error("Unable to create output directory {}, skipping output of agent configuration",
+                            nodeOutputDirectory);
+                    return;
+                }
+            }
+
+            // write out configuration
+            final Path agentConfigurationFilename = nodeOutputDirectory.resolve("agent-configuration.json");
+            try (BufferedWriter writer = Files.newBufferedWriter(agentConfigurationFilename,
+                    Charset.defaultCharset())) {
+                mapper.writeValue(writer, AgentConfiguration.getInstance());
+            } catch (final IOException e) {
+                logger.error("Error writing agent configuration", e);
+            }
+        }
     }
 
     private void dumperWorker() {
@@ -766,61 +1182,67 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
             final ObjectWriter mapper = createDumpWriter();
 
+            boolean agentConfigWritten = false;
+
             while (!clock.isShutdown()) {
-                final Duration lDumpInterval = getDumpInterval();
+                if (isExecuting()) {
+                    final Duration lDumpInterval = getDumpInterval();
 
-                if (isDumpState()) {
-                    final Path baseOutput = getBaseOutputDirectory();
-                    if (null != baseOutput) {
-                        final Path nodeOutputDirectory = baseOutput.resolve(getName());
-
-                        final long now = clock.getCurrentTime();
-
-                        final String timeDir = String.format("%06d", now);
-                        final Path outputDir = nodeOutputDirectory.resolve(timeDir);
-
-                        // create directory
-                        final File outputDirFile = outputDir.toFile();
-                        if (!outputDirFile.exists()) {
-                            if (!outputDir.toFile().mkdirs()) {
-                                LOGGER.error("Unable to create output directory {}, skipping output", outputDir);
-                                continue;
-                            }
-                        }
-
-                        if (outputDirFile.exists()) {
-                            if (LOGGER.isTraceEnabled()) {
-                                LOGGER.trace("Dumping state to {}", outputDir);
+                    if (isDumpState()) {
+                        final Path nodeOutputDirectory = getNodeOutputDirectory();
+                        if (null != nodeOutputDirectory) {
+                            if (!agentConfigWritten) {
+                                dumpAgentConfiguration(mapper);
+                                agentConfigWritten = true;
                             }
 
-                            try {
-                                dumpCurrentState(outputDir, mapper);
-                            } catch (final IOException e) {
-                                LOGGER.error("Error writing current state, may have partial output", e);
+                            final long now = clock.getCurrentTime();
+
+                            final String timeDir = String.format(Simulation.TIME_DIR_FORMAT, now);
+                            final Path outputDir = nodeOutputDirectory.resolve(timeDir);
+
+                            // create directory
+                            final File outputDirFile = outputDir.toFile();
+                            if (!outputDirFile.exists()) {
+                                if (!outputDir.toFile().mkdirs()) {
+                                    logger.error("Unable to create output directory {}, skipping output", outputDir);
+                                    continue;
+                                }
+                            }
+
+                            if (outputDirFile.exists()) {
+                                if (logger.isTraceEnabled()) {
+                                    logger.trace("Dumping state to {}", outputDir);
+                                }
+
+                                try {
+                                    dumpCurrentState(outputDir, mapper);
+                                } catch (final IOException e) {
+                                    logger.error("Error writing current state, may have partial output", e);
+                                }
+                            } else {
+                                logger.error("'{}' was not created and does not exist. Skipping output.", outputDir);
                             }
                         } else {
-                            LOGGER.error("'{}' was not created and does not exist. Skipping output.", outputDir);
+                            logger.warn("Told to dump state and dump directory is null");
                         }
-                    } else {
-                        LOGGER.error(
-                                "Base output directory is null, yet dump state is true, skipping output of node state");
-                    }
 
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Waiting for {} ms", lDumpInterval.toMillis());
-                    }
-                    clock.waitForDuration(lDumpInterval.toMillis());
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Done waiting");
-                    }
-
-                } // if dumping state
+                        if (logger.isTraceEnabled()) {
+                            logger.trace("Waiting for {} ms", lDumpInterval.toMillis());
+                        }
+                        clock.waitForDuration(lDumpInterval.toMillis());
+                        if (logger.isTraceEnabled()) {
+                            logger.trace("Done waiting");
+                        }
+                    } // isDumpState
+                } // is executing
             } // while running
 
-            if (LOGGER.isTraceEnabled()) {
-                LOGGER.trace("Dumper thread for {} exiting", getName());
+            if (logger.isTraceEnabled()) {
+                logger.trace("Dumper thread for {} exiting", getName());
             }
         } // end logger context
+
     }
 
     private void dumpCurrentState(@Nonnull final Path outputDir, @Nonnull final ObjectWriter mapper)
@@ -833,7 +1255,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             mapper.writeValue(writer, state);
         }
 
-        final ResourceManager manager = getResourceManager();
+        final ResourceManager<?> manager = getResourceManager();
         // resource report
         for (final EstimationWindow window : EstimationWindow.values()) {
             final Path resourceReportFilename = outputDir.resolve(String.format("resourceReport-%s.json", window));
@@ -890,26 +1312,88 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 mapper.writeValue(writer, plan);
             }
         }
+
+        if (isHandleDnsChanges()) {
+            synchronized (availableServicesLock) {
+                final Path filename = outputDir.resolve("dns-records.json");
+                try (BufferedWriter writer = Files.newBufferedWriter(filename, Charset.defaultCharset())) {
+                    mapper.writeValue(writer, dnsEntries);
+                }
+            }
+        }
     }
 
     /**
      * Used to output the basic node state to JSON. This class wraps a
      * {@link Controller} object and exposes only the properties that should be
-     * output.
+     * output. The properties are copied and will not change after an instance
+     * is constructed.
      * 
      * @author jschewe
      *
      */
-    private static final class NodeState {
-        private final Controller controller;
+    public static final class NodeState {
+        private final RegionIdentifier region;
+        private final String name;
+        private final boolean rlg; // if RLG is runnning
+        private final boolean dcop; // if DCOP is running
+        private final boolean handlingDnsChanges;
+        private final String apDebugValue;
+        private final long apExecutionCount;
+        private final boolean globalLeader;
 
         /**
          * 
          * @param controller
-         *            the controller to output data for
+         *            the controller to output data for. Properties are copied
+         *            from the {@link Controller} and stored for later output.
          */
         /* package */ NodeState(final Controller controller) {
-            this.controller = controller;
+            region = controller.getRegionIdentifier();
+            name = controller.getName();
+            rlg = controller.isRLGRunning();
+            dcop = controller.isDCOPRunning();
+            handlingDnsChanges = controller.isHandleDnsChanges();
+            apDebugValue = Objects.toString(controller.getVM().getCurrentValue());
+            apExecutionCount = controller.getExecutionCount();
+            globalLeader = controller.isGlobalLeader();
+        }
+
+        /**
+         * 
+         * @param region
+         *            the region of the node
+         * @param name
+         *            the name of the node
+         * @param rlg
+         *            see {@link Controller#isRLGRunning()}
+         * @param dcop
+         *            see {@link Controller#isDCOPRunning()}
+         * @param handlingDnsChanges
+         *            see {@link Controller#isHandlingDnsChanges()}
+         * @param apDebugValue
+         *            see {@link #getApDebugValue()}
+         * @param apExecutionCount
+         *            see {@link #getApExecutionCount()}
+         * @param globalLeader
+         *            see {@link #isGlobalLeader()}
+         */
+        public NodeState(@JsonProperty("region") final RegionIdentifier region,
+                @JsonProperty("name") final String name,
+                @JsonProperty("rlg") final boolean rlg,
+                @JsonProperty("dcop") final boolean dcop,
+                @JsonProperty("handlingDnsChanges") final boolean handlingDnsChanges,
+                @JsonProperty("apDebugValue") final String apDebugValue,
+                @JsonProperty("apExecutionCount") final long apExecutionCount,
+                @JsonProperty("globalLeader") final boolean globalLeader) {
+            this.region = region;
+            this.name = name;
+            this.rlg = rlg;
+            this.dcop = dcop;
+            this.handlingDnsChanges = handlingDnsChanges;
+            this.apDebugValue = apDebugValue;
+            this.apExecutionCount = apExecutionCount;
+            this.globalLeader = globalLeader;
         }
 
         /**
@@ -917,7 +1401,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
          */
         @SuppressWarnings("unused") // used by JSON output
         public RegionIdentifier getRegion() {
-            return controller.getRegionIdentifier();
+            return region;
         }
 
         /**
@@ -925,7 +1409,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
          */
         @SuppressWarnings("unused") // used by JSON output
         public String getName() {
-            return controller.getName();
+            return name;
         }
 
         /**
@@ -934,7 +1418,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
          */
         @SuppressWarnings("unused") // used by JSON output
         public boolean isRLG() {
-            return controller.isRLGRunning();
+            return rlg;
         }
 
         /**
@@ -943,7 +1427,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
          */
         @SuppressWarnings("unused") // used by JSON output
         public boolean isDCOP() {
-            return controller.isDCOPRunning();
+            return dcop;
         }
 
         /**
@@ -952,7 +1436,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
          */
         @SuppressWarnings("unused") // used by JSON output
         public boolean isHandlingDnsChanges() {
-            return controller.isHandleDnsChanges();
+            return handlingDnsChanges;
         }
 
         /**
@@ -961,7 +1445,24 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
          */
         @SuppressWarnings("unused") // used by JSON output
         public String getApDebugValue() {
-            return Objects.toString(controller.getVM().getCurrentValue());
+            return apDebugValue;
+        }
+
+        /**
+         * 
+         * @return the AP execution count
+         */
+        @SuppressWarnings("unused") // used by JSON output
+        public long getApExecutionCount() {
+            return apExecutionCount;
+        }
+
+        /**
+         * 
+         * @return see {@link Controller#isGlobalLeader()}
+         */
+        public boolean isGlobalLeader() {
+            return globalLeader;
         }
 
     }

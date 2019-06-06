@@ -1,0 +1,44 @@
+[
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "webservice",
+      "version": "1"
+    },
+    "hostname": "webservice",
+    "defaultNode": "serverX",
+    "defaultNodeRegion": "X",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    },
+    "priority": 10,
+    "trafficType": "RX_GREATER"
+  },
+  {
+    "service": {
+      "group": "com.bbn",
+      "artifact": "database",
+      "version": "1"
+    },
+    "hostname": "database",
+    "defaultNode": "serverX",
+    "defaultNodeRegion": "X",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    },
+    "priority": 9,
+    "trafficType": "RX_GREATER"
+  }
+]

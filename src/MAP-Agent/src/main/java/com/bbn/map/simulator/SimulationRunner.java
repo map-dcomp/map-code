@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
+Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -34,14 +34,18 @@ package com.bbn.map.simulator;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 
 import javax.annotation.Nonnull;
 
@@ -56,13 +60,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.DcopAlgorithm;
+import com.bbn.map.AgentConfiguration.RlgAlgorithm;
+import com.bbn.map.AgentConfiguration.RlgStubChooseNcp;
 import com.bbn.map.Controller;
-import com.bbn.map.ap.ApplicationManagerUtils;
-import com.bbn.map.appmgr.ApplicationManagerMain;
+import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.utils.LogExceptionHandler;
+import com.bbn.map.utils.MapLoggingConfigurationFactory;
 import com.bbn.protelis.common.testbed.termination.TerminationCondition;
+import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.utils.SimpleClock;
 import com.bbn.protelis.utils.VirtualClock;
+import com.diffplug.common.base.Errors;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.collect.ImmutableList;
 
@@ -73,6 +83,10 @@ import com.google.common.collect.ImmutableList;
  *
  */
 public class SimulationRunner {
+    // put this first to ensure that the correct logging configuration is used
+    static {
+        System.setProperty("log4j.configurationFactory", MapLoggingConfigurationFactory.class.getName());
+    }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SimulationRunner.class);
 
@@ -97,8 +111,18 @@ public class SimulationRunner {
     private static final String HELP_OPT = "help";
     private static final String SLOW_NETWORK_THRESHOLD_OPT = "slowNetworkThreshold";
     private static final String SLOW_SERVER_THRESHOLD_OPT = "slowServerThreshold";
+
     private static final String DCOP_ITERATION_LIMIT_OPT = "dcopIterationLimit";
     private static final String DCOP_CAPACITY_THRESHOLD_OPT = "dcopCapacityThreshold";
+    private static final String DCOP_ALGORITHM_OPT = "dcopAlgorithm";
+
+    private static final String RLG_NULL_OVERFLOW_PLAN_OPT = "rlgNullOverflowPlan";
+    private static final String RLG_ALGORITHM_OPT = "rlgAlgorithm";
+    private static final String RLG_STUB_CHOOSE_ALGORITHM_OPT = "rlgStubChooseAlgorithm";
+    private static final String RLG_LOAD_THRESHOLD = "rlgLoadThreshold";
+
+    private static final String LEADER_ELECTION_OPT = "enableLeaderElection";
+    private static final String GLOBAL_LEADER_OPT = "globalLeader";
 
     /**
      * Parse the option as a duration. First check if it's a number, if so, then
@@ -149,6 +173,26 @@ public class SimulationRunner {
     }
 
     /**
+     * Get the git version information for the build.
+     * 
+     * @return the version or a string stating what the problem was
+     */
+    public static String getGitVersionInformation() {
+        final URL url = SimulationRunner.class.getResource("git.properties");
+        if (null == url) {
+            return "UNKNOWN";
+        }
+        try (InputStream is = url.openStream()) {
+            final Properties props = new Properties();
+            props.load(is);
+            return props.getProperty("git.commit.id", "MISSING-PROPERTY");
+        } catch (final IOException e) {
+            LOGGER.error("Unable to read git.properties", e);
+            return "ERROR-READING-VERSION";
+        }
+    }
+
+    /**
      * 
      * @param args
      *            run without arguments to see all options
@@ -156,11 +200,13 @@ public class SimulationRunner {
     public static void main(final String[] args) {
         LogExceptionHandler.registerExceptionHandler();
 
+        LOGGER.info("Git version: {}", getGitVersionInformation());
+
         final Options options = new Options();
         options.addRequiredOption("s", SCENARIO_OPT, true, "The directory where the scenario is stored (required)");
         options.addOption("d", DEMAND_OPT, true, "The directory where the demand is stored");
-        options.addRequiredOption("r", RUNTIME_OPT, true,
-                "The amount of time to run for, either a number of seconds or a string compatible with Duration.parse (required)");
+        options.addOption("r", RUNTIME_OPT, true,
+                "The amount of time to run for, either a number of seconds or a string compatible with Duration.parse (Defaults to the end of the last client load)");
         options.addOption("o", OUTPUT_OPT, true,
                 "Directory to write the output to, if not specified no output is written");
         options.addOption(null, DUMP_INTERVAL_OPT, true,
@@ -191,6 +237,32 @@ public class SimulationRunner {
         options.addOption(null, DCOP_CAPACITY_THRESHOLD_OPT, true, "The capacity threshold for DCOP. Default is "
                 + AgentConfiguration.getInstance().getDcopCapacityThreshold());
 
+        options.addOption(null, DCOP_ALGORITHM_OPT, true,
+                "The DCOP algorithm to use. Default is "
+                        + AgentConfiguration.getInstance().getDcopAlgorithm().toString() + " Possible values are: "
+                        + Arrays.asList(AgentConfiguration.DcopAlgorithm.values()));
+
+        options.addOption(null, RLG_NULL_OVERFLOW_PLAN_OPT, false,
+                "If set, then RLG will always output a null overflow plan.");
+
+        options.addOption(null, RLG_ALGORITHM_OPT, true,
+                "The RLG algorithm to use. Default is " + AgentConfiguration.getInstance().getRlgAlgorithm().toString()
+                        + " Possible values are: " + Arrays.asList(AgentConfiguration.RlgAlgorithm.values()));
+
+        options.addOption(null, RLG_STUB_CHOOSE_ALGORITHM_OPT, true,
+                "The algorithm for the RLG stub to use to choose new nodes. Default is "
+                        + AgentConfiguration.getInstance().getRlgStubChooseNcp().toString() + " Possible values are: "
+                        + Arrays.asList(AgentConfiguration.RlgStubChooseNcp.values()));
+
+        options.addOption(null, RLG_LOAD_THRESHOLD, true,
+                "The load threshold for RLG. Default is " + AgentConfiguration.getInstance().getRlgLoadThreshold());
+
+        options.addOption(null, LEADER_ELECTION_OPT, false,
+                "If set the leader election algorithm will be used compute the global leader");
+
+        options.addOption(null, GLOBAL_LEADER_OPT, true,
+                "If using leader election, specify the node to be used as the global leader. If not specified, one will be chosen at random.");
+
         final CommandLineParser parser = new DefaultParser();
         try {
             final CommandLine cmd = parser.parse(options, args);
@@ -198,12 +270,14 @@ public class SimulationRunner {
             final Path scenarioPath = Paths.get(cmd.getOptionValue("s"));
             runner.setScenarioPath(scenarioPath);
 
-            final Duration runtime = parseDuration(options, cmd, RUNTIME_OPT);
-            if (null == runtime) {
-                printUsage(options);
-                System.exit(1);
+            if (cmd.hasOption(RUNTIME_OPT)) {
+                final Duration runtime = parseDuration(options, cmd, RUNTIME_OPT);
+                if (null == runtime) {
+                    printUsage(options);
+                    System.exit(1);
+                }
+                runner.setRuntime(runtime);
             }
-            runner.setRuntime(runtime);
 
             if (cmd.hasOption(HELP_OPT)) {
                 printUsage(options);
@@ -244,6 +318,12 @@ public class SimulationRunner {
                 // we decide we want them different
                 AgentConfiguration.getInstance().setDcopRoundDuration(dur);
                 AgentConfiguration.getInstance().setDcopEstimationWindow(dur);
+            }
+
+            if (cmd.hasOption(DCOP_ALGORITHM_OPT)) {
+                final String str = cmd.getOptionValue(DCOP_ALGORITHM_OPT);
+                final DcopAlgorithm algorithm = DcopAlgorithm.valueOf(str);
+                AgentConfiguration.getInstance().setDcopAlgorithm(algorithm);
             }
 
             if (cmd.hasOption(RLG_INTERVAL_OPT)) {
@@ -333,17 +413,57 @@ public class SimulationRunner {
                 }
             }
 
-            // start the application manager
-            try {
-                ApplicationManagerMain.main(args);
-            } catch (Exception e) {
-                LOGGER.warn("exception starting application manager", e);
+            if (cmd.hasOption(RLG_NULL_OVERFLOW_PLAN_OPT)) {
+                AgentConfiguration.getInstance().setRlgNullOverflowPlan(true);
+            }
+
+            if (cmd.hasOption(RLG_ALGORITHM_OPT)) {
+                final String str = cmd.getOptionValue(RLG_ALGORITHM_OPT);
+                final RlgAlgorithm algorithm = RlgAlgorithm.valueOf(str);
+                AgentConfiguration.getInstance().setRlgAlgorithm(algorithm);
+            }
+
+            if (cmd.hasOption(RLG_STUB_CHOOSE_ALGORITHM_OPT)) {
+                final String str = cmd.getOptionValue(RLG_STUB_CHOOSE_ALGORITHM_OPT);
+                final RlgStubChooseNcp algorithm = RlgStubChooseNcp.valueOf(str);
+                AgentConfiguration.getInstance().setRlgStubChooseNcp(algorithm);
+            }
+
+            if (cmd.hasOption(RLG_LOAD_THRESHOLD)) {
+                final String str = cmd.getOptionValue(RLG_LOAD_THRESHOLD);
+                try {
+                    final double value = Double.parseDouble(str);
+                    AgentConfiguration.getInstance().setRlgLoadThreshold(value);
+                } catch (final NumberFormatException e) {
+                    LOGGER.error("'{}' could not be parsed as a double", str);
+                    printUsage(options);
+                    System.exit(1);
+                } catch (final IllegalArgumentException e) {
+                    LOGGER.error("Illegal value '{}' for RLG loadthreshold", str);
+                    printUsage(options);
+                    System.exit(1);
+                }
+            }
+
+            if (cmd.hasOption(LEADER_ELECTION_OPT)) {
+                AgentConfiguration.getInstance().setUseLeaderElection(true);
+            }
+
+            if (cmd.hasOption(GLOBAL_LEADER_OPT)) {
+                final String str = cmd.getOptionValue(GLOBAL_LEADER_OPT);
+                runner.setGlobalLeaderName(str);
+            }
+
+            if (null == runner.getDemandPath() && null == runner.getRuntime()) {
+                LOGGER.error(
+                        "If the runtime is not specified, then the demand path must be specified to determine when to end the simulation");
+                System.exit(1);
             }
 
             LOGGER.info("Starting the simulation");
             runner.run();
 
-            LOGGER.info("The simulation has finisehd");
+            LOGGER.info("The simulation has finished");
 
             System.exit(0);
 
@@ -436,6 +556,7 @@ public class SimulationRunner {
      *            see {@link #getRuntime()}
      */
     public void setRuntime(@Nonnull final Duration v) {
+        LOGGER.info("setting runtime to {}", v);
         if (v.isNegative()) {
             throw new IllegalArgumentException("Runtime cannot be negative");
         } else if (v.isZero()) {
@@ -516,7 +637,6 @@ public class SimulationRunner {
      */
     public void run() {
         Objects.requireNonNull(getScenarioPath(), "Scenario path must be specified");
-        Objects.requireNonNull(getRuntime(), "Runtime duration must be specified");
 
         if (!createOutputDirectory()) {
             LOGGER.error("Unable to create output directory: {}", getOutputDirectory());
@@ -526,13 +646,35 @@ public class SimulationRunner {
         try {
             final VirtualClock clock = new SimpleClock();
             final Simulation sim = new Simulation(getScenarioPath().toString(), getScenarioPath(), getDemandPath(),
-                    clock, POLLING_INTERVAL_MS, TTL, ApplicationManagerUtils::getContainerParameters);
+                    clock, POLLING_INTERVAL_MS, TTL, AppMgrUtils::getContainerParameters);
 
-            sim.getAllControllers().forEach(controller -> {
-                controller.setBaseOutputDirectory(getOutputDirectory());
-                controller.setDumpInterval(getDumpInterval());
-                controller.setDumpState(true);
-            });
+            // set global leader, this can fail if the node cannot be found
+            if (!AgentConfiguration.getInstance().isUseLeaderElection()) {
+                final String leaderName = getGlobalLeaderName();
+                if (null == leaderName) {
+                    // just pick a node
+                    sim.getAllControllers().stream().findFirst().get().setGlobalLeader(true);
+                } else {
+                    final NodeIdentifier id = new DnsNameIdentifier(leaderName);
+                    final Controller c = sim.getControllerById(id);
+                    if (null == c) {
+                        throw new IllegalArgumentException("The node " + leaderName
+                                + " is not known to the simulation and cannot be set as the global leader");
+                    } else {
+                        c.setGlobalLeader(true);
+                    }
+                }
+            }
+
+            if (null != getOutputDirectory()) {
+                sim.setBaseOutputDirectory(getOutputDirectory());
+
+                sim.getAllControllers().forEach(controller -> {
+                    controller.setBaseOutputDirectory(getOutputDirectory());
+                    controller.setDumpInterval(getDumpInterval());
+                    controller.setDumpState(true);
+                });
+            }
 
             final Thread dumperThread = new Thread(() -> dumperWorker(clock, sim), "Dumper");
 
@@ -545,7 +687,31 @@ public class SimulationRunner {
             }
 
             sim.startSimulation();
-            clock.waitForDuration(getRuntime().toMillis());
+
+            LOGGER.info("Waiting for all nodes to connect to their neighbors for AP");
+            sim.waitForAllNodesToConnectToNeighbors();
+            LOGGER.info("All nodes are connected for AP");
+
+            final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
+            LOGGER.info("Waiting {} AP rounds to ensure that it is stable", numApRoundsToStabilize);
+            SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+
+
+            LOGGER.info("Starting clients");
+            sim.startClients();
+
+            if (null == getRuntime()) {
+                LOGGER.info("Waiting for all client simulators to exit");
+                sim.getClientSimulators().stream().forEach(Errors.rethrow().wrap(client -> {
+                    client.join();
+                }));
+                LOGGER.info("All clients have finished");
+            } else {
+                LOGGER.info("Waiting {} ms for the simulation to finish", getRuntime().toMillis());
+                clock.waitForDuration(getRuntime().toMillis());
+            }
+
+            LOGGER.info("Stopping the simulation");
             stopScenario = true;
             sim.stopSimulation();
         } catch (final IOException e) {
@@ -562,37 +728,49 @@ public class SimulationRunner {
         final Path baseOutput = getOutputDirectory();
         final Path nodeOutputDirectory = baseOutput.resolve("simulation");
 
-        try {
-
-            // write out configuration
-            final Path agentConfigurationFilename = getOutputDirectory().resolve("agent-configuration.json");
-            try (BufferedWriter writer = Files.newBufferedWriter(agentConfigurationFilename,
-                    Charset.defaultCharset())) {
-                mapper.writeValue(writer, AgentConfiguration.getInstance());
+        if (!Files.exists(nodeOutputDirectory)) {
+            if (!nodeOutputDirectory.toFile().mkdirs()) {
+                LOGGER.error("Unable to create output directory {}", nodeOutputDirectory);
             }
-            final Path simulationConfigurationFilename = nodeOutputDirectory.resolve("simulation-configuration.json");
-            try (BufferedWriter writer = Files.newBufferedWriter(simulationConfigurationFilename,
-                    Charset.defaultCharset())) {
-                mapper.writeValue(writer, SimulationConfiguration.getInstance());
-            }
+        }
 
-            // write out all client requests
-            for (final ClientSim client : sim.getClientSimulators()) {
-                final Path clientFilename = nodeOutputDirectory
-                        .resolve(String.format("client-%s-requests.json", client.getClientName()));
-                try (BufferedWriter writer = Files.newBufferedWriter(clientFilename, Charset.defaultCharset())) {
-                    final ImmutableList<ClientRequest> requests = client.getClientRequests();
-                    mapper.writeValue(writer, requests);
+        if (Files.exists(nodeOutputDirectory)) {
+            try {
+
+                // write out configuration
+                final Path agentConfigurationFilename = getOutputDirectory().resolve("agent-configuration.json");
+                try (BufferedWriter writer = Files.newBufferedWriter(agentConfigurationFilename,
+                        Charset.defaultCharset())) {
+                    mapper.writeValue(writer, AgentConfiguration.getInstance());
                 }
+                final Path simulationConfigurationFilename = nodeOutputDirectory
+                        .resolve("simulation-configuration.json");
+                try (BufferedWriter writer = Files.newBufferedWriter(simulationConfigurationFilename,
+                        Charset.defaultCharset())) {
+                    mapper.writeValue(writer, SimulationConfiguration.getInstance());
+                }
+
+                // write out all client requests
+                for (final ClientSim client : sim.getClientSimulators()) {
+                    client.setBaseOutputDirectory(baseOutput);
+                    final Path clientFilename = nodeOutputDirectory
+                            .resolve(String.format("client-%s-requests.json", client.getClientName()));
+                    try (BufferedWriter writer = Files.newBufferedWriter(clientFilename, Charset.defaultCharset())) {
+                        final ImmutableList<ClientLoad> requests = client.getClientRequests();
+                        mapper.writeValue(writer, requests);
+                    }
+                }
+            } catch (final IOException e) {
+                LOGGER.error("Unable to write out client request information", e);
             }
-        } catch (final IOException e) {
-            LOGGER.error("Unable to write out client request information", e);
+        } else {
+            LOGGER.error("'{}' was not created and does not exist. Skipping output.", nodeOutputDirectory);
         }
 
         while (!clock.isShutdown()) {
             final long now = clock.getCurrentTime();
 
-            final String timeDir = String.format("%06d", now);
+            final String timeDir = String.format(Simulation.TIME_DIR_FORMAT, now);
             final Path outputDir = nodeOutputDirectory.resolve(timeDir);
 
             // create directory
@@ -632,7 +810,7 @@ public class SimulationRunner {
                 final Path clientFilename = nodeOutputDirectory
                         .resolve(String.format("client-%s-final-state.json", client.getClientName()));
                 try (BufferedWriter writer = Files.newBufferedWriter(clientFilename, Charset.defaultCharset())) {
-                    mapper.writeValue(writer, client);
+                    mapper.writeValue(writer, client.getSimulationState());
                 }
             }
         } catch (final IOException e) {
@@ -652,5 +830,24 @@ public class SimulationRunner {
             return stopScenario;
         }
     };
+
+    private String globalLeaderName = null;
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getGlobalLeaderName()}
+     */
+    public void setGlobalLeaderName(final String v) {
+        globalLeaderName = v;
+    }
+
+    /**
+     * 
+     * @return the name of the global leader, may be null
+     */
+    public String getGlobalLeaderName() {
+        return globalLeaderName;
+    }
 
 }

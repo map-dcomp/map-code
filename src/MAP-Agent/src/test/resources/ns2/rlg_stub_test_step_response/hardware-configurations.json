@@ -1,0 +1,8 @@
+[
+  {
+    "name": "simple",
+    "capacity": {
+      "TASK_CONTAINERS": 100
+    }
+  }
+]
