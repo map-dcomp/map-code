@@ -115,7 +115,8 @@ public class Server {
     @Override
     public String toString() {
         return "Server name: " + nodeName + ". Total capacity: " +
-            totalCapacity + ". Used capacity: " + usedCapacity;
+            totalCapacity + ". Used capacity: " + usedCapacity +
+            ". Services hosted: " + servicesHosted.size();
     }
 
     /**
@@ -164,6 +165,23 @@ public class Server {
         usedCapacity += service.getFracLoad(this);
 
         System.out.println("Previously created service added to server: " + nodeName);
+    }
+
+    /**
+     * Removes a given {@link Service} from the server.
+     *
+     * @param service
+     *          service to be removed
+     */
+    public void removeService(Service service) {
+        if (servicesHosted.contains(service)) {
+            servicesHosted.remove(service);
+            usedCapacity -= service.getLoad()/service.getDivideFactor();
+            System.out.println("Server.java: Successfully removed service.");
+        }
+        else {
+            System.out.println("Server.java: Service not found on server while requesting removal.");
+        }
     }
 
     /**

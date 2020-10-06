@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -38,6 +38,9 @@ import java.util.Objects;
 
 import javax.annotation.Nonnull;
 
+import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
+
 /**
  * Specification of how load on one service creates load on another service.
  * 
@@ -54,7 +57,7 @@ public class DependencyDemandFunction implements Serializable {
     public DependencyDemandFunction() {
     }
 
-    private final Map<NodeMetricName, Double> nodeAttributeMultipliers = new HashMap<>();
+    private final Map<NodeAttribute, Double> nodeAttributeMultipliers = new HashMap<>();
 
     /**
      * The multipliers for each node attribute. These are used by
@@ -64,7 +67,7 @@ public class DependencyDemandFunction implements Serializable {
      * @return a non-null value
      */
     @Nonnull
-    public Map<NodeMetricName, Double> getNodeAttributeMultiplers() {
+    public Map<NodeAttribute, Double> getNodeAttributeMultiplers() {
         return nodeAttributeMultipliers;
     }
 
@@ -73,7 +76,7 @@ public class DependencyDemandFunction implements Serializable {
      * @param v
      *            see {@link #getNodeAttributeMultiplers()}
      */
-    public void setNodeAttributeMultiplier(final Map<NodeMetricName, Double> v) {
+    public void setNodeAttributeMultiplier(final Map<NodeAttribute, Double> v) {
         nodeAttributeMultipliers.clear();
         if (null != v) {
             nodeAttributeMultipliers.putAll(v);
@@ -91,8 +94,8 @@ public class DependencyDemandFunction implements Serializable {
      *            the load on the service with the dependency
      * @return the load on the dependent service
      */
-    public Map<NodeMetricName, Double> computeDependencyNodeLoad(@Nonnull final Map<NodeMetricName, Double> inputLoad) {
-        final Map<NodeMetricName, Double> outputLoad = new HashMap<>();
+    public Map<NodeAttribute, Double> computeDependencyNodeLoad(@Nonnull final Map<NodeAttribute, Double> inputLoad) {
+        final Map<NodeAttribute, Double> outputLoad = new HashMap<>();
         inputLoad.forEach((attr, inputValue) -> {
             final double outputValue = inputValue * nodeAttributeMultipliers.getOrDefault(attr, 0D);
             outputLoad.put(attr, outputValue);
@@ -100,7 +103,7 @@ public class DependencyDemandFunction implements Serializable {
         return outputLoad;
     }
 
-    private final Map<LinkMetricName, Double> linkAttributeMultipliers = new HashMap<>();
+    private final Map<LinkAttribute, Double> linkAttributeMultipliers = new HashMap<>();
 
     /**
      * The multipliers for each link attribute. These are used by
@@ -110,7 +113,7 @@ public class DependencyDemandFunction implements Serializable {
      * @return a non-null value
      */
     @Nonnull
-    public Map<LinkMetricName, Double> getLinkAttributeMultiplers() {
+    public Map<LinkAttribute, Double> getLinkAttributeMultiplers() {
         return linkAttributeMultipliers;
     }
 
@@ -119,7 +122,7 @@ public class DependencyDemandFunction implements Serializable {
      * @param v
      *            see {@link #getLinkAttributeMultiplers()}
      */
-    public void setLinkAttributeMultiplier(final Map<LinkMetricName, Double> v) {
+    public void setLinkAttributeMultiplier(final Map<LinkAttribute, Double> v) {
         linkAttributeMultipliers.clear();
         if (null != v) {
             linkAttributeMultipliers.putAll(v);
@@ -130,8 +133,8 @@ public class DependencyDemandFunction implements Serializable {
      * Use {@link #getLinkAttributeMultiplers()} to compute the load on the
      * dependent service. Each attribute in inputLoad is multiplied by the value
      * in {@link #getLinkAttributeMultiplers()}, except for
-     * {@link LinkMetricName#DATARATE_TX} and
-     * {@link LinkMetricName#DATARATE_RX}, they are flipped so that traffic
+     * {@link LinkAttribute#DATARATE_TX} and
+     * {@link LinkAttribute#DATARATE_RX}, they are flipped so that traffic
      * received by the first service is used to determine traffic being sent to
      * the dependent service. If there is no corresponding value, the attribute
      * is not present in the output value.
@@ -140,14 +143,14 @@ public class DependencyDemandFunction implements Serializable {
      *            the load on the service with the dependency
      * @return the load on the dependent service
      */
-    public Map<LinkMetricName, Double> computeDependencyLinkLoad(final Map<LinkMetricName, Double> inputLoad) {
-        final Map<LinkMetricName, Double> outputLoad = new HashMap<>();
+    public Map<LinkAttribute, Double> computeDependencyLinkLoad(final Map<LinkAttribute, Double> inputLoad) {
+        final Map<LinkAttribute, Double> outputLoad = new HashMap<>();
         inputLoad.forEach((attr, inputValue) -> {
             final double multiplier;
-            if (LinkMetricName.DATARATE_RX.equals(attr)) {
-                multiplier = linkAttributeMultipliers.getOrDefault(LinkMetricName.DATARATE_TX, 0D);
-            } else if (LinkMetricName.DATARATE_TX.equals(attr)) {
-                multiplier = linkAttributeMultipliers.getOrDefault(LinkMetricName.DATARATE_RX, 0D);
+            if (LinkAttribute.DATARATE_RX.equals(attr)) {
+                multiplier = linkAttributeMultipliers.getOrDefault(LinkAttribute.DATARATE_TX, 0D);
+            } else if (LinkAttribute.DATARATE_TX.equals(attr)) {
+                multiplier = linkAttributeMultipliers.getOrDefault(LinkAttribute.DATARATE_RX, 0D);
             } else {
                 multiplier = linkAttributeMultipliers.getOrDefault(attr, 0D);
             }

@@ -1,0 +1,11 @@
+[
+  {
+    "time": 41000,
+    "nodes": [
+      "nodeA2",
+      "nodeA3"
+    ],
+    "chooseAlgorithm": "MOST_LOADED",
+    "nodeMetric": "TASK_CONTAINERS"
+  }
+]

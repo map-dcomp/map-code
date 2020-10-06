@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -42,20 +42,24 @@ import org.apache.logging.log4j.CloseableThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bbn.map.AgentConfiguration;
 import com.bbn.map.Controller;
-import com.bbn.map.common.value.NodeMetricName;
+import com.bbn.protelis.networkresourcemanagement.BasicResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceState;
+import com.bbn.protelis.networkresourcemanagement.ServiceStatus;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -146,16 +150,21 @@ public class SimResourceManager implements ResourceManager<Controller> {
         simulation.addResourceManagerMapping(node, this);
     }
 
-    @Override
-    @Nonnull
-    public ImmutableMap<NodeAttribute<?>, Double> getComputeCapacity() {
+    private HardwareConfiguration getHardwareConfiguration() {
         final String serverHardware = node.getHardware();
         final HardwareConfiguration hardwareConfig = simulation.getHardwareConfiguration(serverHardware);
+        return hardwareConfig;
+    }
+
+    @Override
+    @Nonnull
+    public ImmutableMap<NodeAttribute, Double> getComputeCapacity() {
+        final HardwareConfiguration hardwareConfig = getHardwareConfiguration();
         if (null == hardwareConfig) {
             return ImmutableMap.of();
         } else {
 
-            final ImmutableMap.Builder<NodeAttribute<?>, Double> builder = ImmutableMap.builder();
+            final ImmutableMap.Builder<NodeAttribute, Double> builder = ImmutableMap.builder();
             hardwareConfig.getCapacity().forEach((k, v) -> builder.put(k, v));
 
             return builder.build();
@@ -168,12 +177,12 @@ public class SimResourceManager implements ResourceManager<Controller> {
      * @return computed based on {@link #getComputeCapacity()}
      */
     private int getContainerCapacity() {
-        final ImmutableMap<NodeAttribute<?>, Double> capacity = getComputeCapacity();
-        final Double value = capacity.get(NodeMetricName.TASK_CONTAINERS);
-        if (null != value) {
-            return value.intValue();
-        } else {
+        final HardwareConfiguration hardwareConfig = getHardwareConfiguration();
+        if (null == hardwareConfig) {
+            logger.warn("No hardware configuration, assuming this means no service containers");
             return 0;
+        } else {
+            return hardwareConfig.getMaximumServiceContainers();
         }
     }
 
@@ -215,7 +224,7 @@ public class SimResourceManager implements ResourceManager<Controller> {
                 runningContainers.forEach((id, sim) -> {
                     sim.updateResourceReports();
 
-                    if (ServiceState.Status.RUNNING.equals(sim.getServiceStatus())) {
+                    if (ServiceStatus.RUNNING.equals(sim.getServiceStatus())) {
                         final ContainerResourceReport longReport = sim
                                 .getContainerResourceReport(ResourceReport.EstimationWindow.LONG);
                         longContainerReports.put(id, longReport);
@@ -237,49 +246,61 @@ public class SimResourceManager implements ResourceManager<Controller> {
                     }
                 });
 
-                final ImmutableMap<NodeAttribute<?>, Double> reportComputeCapacity = ImmutableMap
+                final ImmutableMap<NodeAttribute, Double> reportComputeCapacity = ImmutableMap
                         .copyOf(getComputeCapacity());
 
                 // compute network information
-                final ImmutableMap.Builder<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> networkCapacity = ImmutableMap
+                final ImmutableMap.Builder<InterfaceIdentifier, ImmutableMap<LinkAttribute, Double>> networkCapacity = ImmutableMap
                         .builder();
 
-                // neighbor -> source -> service -> values
-                final ImmutableMap.Builder<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad = ImmutableMap
+                // interface -> flow -> service -> values
+                final ImmutableMap.Builder<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = ImmutableMap
                         .builder();
-                node.getNeighbors().forEach(neighborId -> {
+                node.getConnectedNeighbors().forEach(neighborId -> {
                     final LinkResourceManager lmgr = getLinkResourceManager(neighborId);
 
-                    final ImmutableMap<LinkAttribute<?>, Double> neighborCapacity = lmgr.getCapacity();
-                    networkCapacity.put(neighborId, neighborCapacity);
+                    final ImmutableMap<LinkAttribute, Double> neighborCapacity = lmgr.getCapacity();
+                    networkCapacity.put(BasicResourceManager.createInterfaceIdentifierForNeighbor(neighborId),
+                            neighborCapacity);
 
-                    final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> neighborLoad = lmgr
-                            .computeCurrentLinkLoad(now, node.getNodeIdentifier());
-                    networkLoad.put(neighborId, neighborLoad);
+                    // the neighbor is the "receiving" side to get the network
+                    // direction to match the hi-fi environment
+                    final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborLoad = lmgr
+                            .computeCurrentLinkLoad(now, neighborId);
+                    networkLoad.put(BasicResourceManager.createInterfaceIdentifierForNeighbor(neighborId),
+                            neighborLoad);
                 });
 
                 // create immutable data structures to put into the report
-                final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> reportNetworkCapacity = networkCapacity
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<LinkAttribute, Double>> reportNetworkCapacity = networkCapacity
                         .build();
-                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportNetworkLoad = networkLoad
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportNetworkLoad = networkLoad
                         .build();
                 logger.trace("Computed network load to be {}", reportNetworkLoad);
 
                 networkDemandTracker.updateDemandValues(now, reportNetworkLoad);
 
-                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportShortNetworkDemand = networkDemandTracker
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportShortNetworkDemand = networkDemandTracker
                         .computeNetworkDemand(now, ResourceReport.EstimationWindow.SHORT);
 
-                final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportLongNetworkDemand = networkDemandTracker
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportLongNetworkDemand = networkDemandTracker
                         .computeNetworkDemand(now, ResourceReport.EstimationWindow.LONG);
 
+                final boolean skipNetworkData = AgentConfiguration.getInstance().getSkipNetworkData();
+
                 longResourceReport = new ResourceReport(node.getNodeIdentifier(), now,
-                        ResourceReport.EstimationWindow.LONG, reportComputeCapacity, reportNetworkCapacity,
-                        reportNetworkLoad, reportLongNetworkDemand, longContainerReports.build());
+                        ResourceReport.EstimationWindow.LONG, reportComputeCapacity, //
+                        skipNetworkData ? ImmutableMap.of() : reportNetworkCapacity,
+                        skipNetworkData ? ImmutableMap.of() : reportNetworkLoad,
+                        skipNetworkData ? ImmutableMap.of() : reportLongNetworkDemand, //
+                        longContainerReports.build(), getContainerCapacity(), runningContainers.size());
 
                 shortResourceReport = new ResourceReport(node.getNodeIdentifier(), now,
-                        ResourceReport.EstimationWindow.SHORT, reportComputeCapacity, reportNetworkCapacity,
-                        reportNetworkLoad, reportShortNetworkDemand, shortContainerReports.build());
+                        ResourceReport.EstimationWindow.SHORT, reportComputeCapacity, //
+                        skipNetworkData ? ImmutableMap.of() : reportNetworkCapacity,
+                        skipNetworkData ? ImmutableMap.of() : reportNetworkLoad,
+                        skipNetworkData ? ImmutableMap.of() : reportShortNetworkDemand, //
+                        shortContainerReports.build(), getContainerCapacity(), runningContainers.size());
 
                 if (logger.isTraceEnabled()) {
                     logger.trace("Short report computed load: {}", shortResourceReport.getComputeLoad());
@@ -351,19 +372,6 @@ public class SimResourceManager implements ResourceManager<Controller> {
 
     private final Map<NodeIdentifier, ContainerSim> runningContainers = new HashMap<>();
 
-    /**
-     * Find a container by id.
-     * 
-     * @param containerId
-     *            the container to find
-     * @return the container or null if not found
-     */
-    public ContainerSim getContainerById(@Nonnull final NodeIdentifier containerId) {
-        synchronized (lock) {
-            return runningContainers.get(containerId);
-        }
-    }
-
     @Override
     public NodeIdentifier startService(@Nonnull final ServiceIdentifier<?> service,
             @Nonnull final ContainerParameters parameters) {
@@ -378,7 +386,7 @@ public class SimResourceManager implements ResourceManager<Controller> {
                         getContainerIds().size(), runningContainers);
                 return null;
             } else {
-                final ImmutableMap<LinkAttribute<?>, Double> genericNetworkCapacity = parameters.getNetworkCapacity();
+                final ImmutableMap<LinkAttribute, Double> genericNetworkCapacity = parameters.getNetworkCapacity();
 
                 final ContainerSim container = new ContainerSim(this, service, nextAvailable,
                         parameters.getComputeCapacity(), genericNetworkCapacity);
@@ -439,10 +447,11 @@ public class SimResourceManager implements ResourceManager<Controller> {
     @Override
     @Nonnull
     public ServiceReport getServiceReport() {
-        final ServiceReport report = new ServiceReport(node.getNodeIdentifier(), computeServiceState());
-        
+        final long time = getClock().getCurrentTime();
+        final ServiceReport report = new ServiceReport(node.getNodeIdentifier(), time, computeServiceState());
+
         logger.trace("Service report for node {} is {}", getNode().getNodeIdentifier(), report);
-        
+
         return report;
     }
 
@@ -454,5 +463,21 @@ public class SimResourceManager implements ResourceManager<Controller> {
         final LinkResourceManager lmgr = linkMgrCache.computeIfAbsent(neighborId,
                 k -> simulation.getLinkResourceManager(node.getNodeIdentifier(), neighborId));
         return lmgr;
+    }
+
+    /**
+     * Do nothing in the simulation.
+     */
+    @Override
+    public void fetchImage(ServiceIdentifier<?> service) {
+        // do nothing
+    }
+
+    /**
+     * @return true
+     */
+    @Override
+    public boolean waitForImage(ServiceIdentifier<?> service) {
+        return true;
     }
 }

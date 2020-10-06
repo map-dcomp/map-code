@@ -1,0 +1,6 @@
+{
+  "dcopCapacityThreshold" : 0.55,
+  "dcopAlgorithm" : "DISTRIBUTED_CONSTRAINT_DIFFUSION",
+  "rlgAlgorithm" : "STUB",
+  "rlgStubChooseNcp" : "MOST_AVAILABLE_CONTAINERS"
+}

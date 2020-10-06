@@ -1,0 +1,51 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+set client [$ns node]
+tb-set-node-os $client UBUNTU16-64-MAP
+
+set A [$ns node]
+tb-set-node-os $A UBUNTU16-64-MAP
+tb-set-hardware $A simple
+
+set B [$ns node]
+tb-set-node-os $B UBUNTU16-64-MAP
+tb-set-hardware $B simple
+
+set C [$ns node]
+tb-set-node-os $C UBUNTU16-64-MAP
+tb-set-hardware $C simple
+
+set D [$ns node]
+tb-set-node-os $D UBUNTU16-64-MAP
+tb-set-hardware $D simple
+
+set E [$ns node]
+tb-set-node-os $E UBUNTU16-64-MAP
+tb-set-hardware $E simple
+
+set clientA [$ns duplex-link $client $A 100000.0kb 0.0ms DropTail]
+set AB [$ns duplex-link $A $B 100000.0kb 0.0ms DropTail]
+set BC [$ns duplex-link $B $C 100000.0kb 0.0ms DropTail]
+set CD [$ns duplex-link $C $D 100000.0kb 0.0ms DropTail]
+set DE [$ns duplex-link $D $E 100000.0kb 0.0ms DropTail]
+
+tb-set-ip-link $client $clientA 10.10.0.10
+tb-set-ip-link $A $clientA 10.10.0.1
+
+tb-set-ip-link $A $AB 10.0.0.1
+tb-set-ip-link $B $AB 10.0.0.2
+
+tb-set-ip-link $B $BC 10.1.0.2
+tb-set-ip-link $C $BC 10.1.0.3
+
+tb-set-ip-link $C $CD 10.2.0.3
+tb-set-ip-link $D $CD 10.2.0.4
+
+tb-set-ip-link $D $DE 10.3.0.4
+tb-set-ip-link $E $DE 10.3.0.5
+
+
+$ns rtproto Static
+
+$ns run

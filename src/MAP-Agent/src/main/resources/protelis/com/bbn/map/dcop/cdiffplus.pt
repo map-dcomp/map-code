@@ -1,0 +1,80 @@
+module protelis:com:bbn:map:cdiffplus
+
+import protelis:coord:sparsechoice
+import protelis:coord:accumulation
+import protelis:coord:spreading
+import protelis:coord:meta
+import protelis:lang:utils
+import protelis:coord:nonselfstabilizing:accumulation
+import protelis:state:nonselfstabilizing:time
+import protelis:state:time
+
+
+import protelis:com:bbn:map:common
+
+
+
+
+public def mergeCmessages(a,b){
+    let result = self.mergeC(a,b);
+    result 
+}
+
+
+
+
+
+
+def cdiff(){
+let summary = self.getRegionSummary();
+let capacity = self.getRegionCapacity(summary);
+let incoming_load = self.getRegionIncomingLoad(summary, self.getRegion()); // incoming_load here is actually the sum of local load and the newly incoming load of the region
+let RegionId = self.getRegion();
+let hashValue = self.hashValue(RegionId);        // this variable has not been used at this moment, but may be required 
+let iniPlan = self.defaultPlan(self.emptySet()); // default plan
+rep(state <- [ iniPlan, 0, [] ])
+{   
+    let plan = state.get(0);
+    let totalAvaiLoad = state.get(1);
+    let excessiveLoad = max(0, incoming_load - capacity);
+    let source = mux(incoming_load > capacity){true}else{false};  // a region is a source if the sum of its current load and incoming load exceeds its capacity
+    let neighborSet = unionHood(nbr(RegionId));  
+    let id_set = self.convertToSet(neighborSet);
+    
+// use G block in Protelis to broadcast G message
+    let distance = hopDistanceTo(source);                                     // distance estimate
+    let	value = hopBroadcast(source,[RegionId,source,excessiveLoad, plan]);   // G messages from the source
+    let gStatus = value.get(1);                                               // true: the region is a source or has already received the G message from the source
+    let excessiveLoadRecived = value.get(2);                                  // excessive load a source needs to clear
+    let receivedRegionId = value.get(0);
+    let receivedPlan = value.get(3);
+    
+// use C block in Protelis to collect	
+    let availableLoad = max(0, capacity - incoming_load);
+    let cMessage = [[distance, availableLoad, RegionId, hashValue, totalAvaiLoad, excessiveLoadRecived]];
+    let defaultCmessage = [];
+    let rawCMessageValid = self.updateOwnCmessage(state.get(2), RegionId, cMessage, defaultCmessage);
+    let cResult = C( distance, mergeCmessages, rawCMessageValid, defaultCmessage );
+    let newrawCMessageValid = self.filterCmessage( self.removeDuplicateCmeesages( self.updateCmessages( cMessage, state.get(2), cResult ), defaultCmessage ) );
+     
+  
+   let totalAvaiLoadComputed = self.accumulatedLoad(newrawCMessageValid); // summation of the available load of a sink and all the sinks attaching to it 
+   
+// clear block    
+   let newPlan = mux(source){
+     self.cdiffPlanSource(summary, newrawCMessageValid, id_set, excessiveLoad)  // cdiff plan for sources 
+    }
+    else
+    {
+     self.nonSourcePlan(receivedPlan, RegionId, id_set) // cdiff plans for non-source nodes
+    };
+    
+    
+    self.getLogger().apInfoMessage(" the region id is " + RegionId + " capacity is " + capacity + " the incoming load is " + incoming_load + " received plan is " + receivedPlan + " set of neighbors is " + id_set + " distance is " + distance+ " G status is " + gStatus + " C message is " 
+        + newrawCMessageValid + " total available load is " + totalAvaiLoad + " plan is " +  newPlan + " received region ID is " + receivedRegionId);
+   // update state 
+   [newPlan,totalAvaiLoadComputed, newrawCMessageValid]
+}.get(0)
+}
+let cdiff_plan = cdiff();
+cdiff_plan

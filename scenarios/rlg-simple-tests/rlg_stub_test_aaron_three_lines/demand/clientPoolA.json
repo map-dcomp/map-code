@@ -1,0 +1,409 @@
+[ {
+  "startTime" : 60504,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03333333333333333
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 75501,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.0612610247012902
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 90497,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.08918871606924705
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 105494,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.1171164074372039
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 120490,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.14504409880516075
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 135487,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.17297179017311762
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 150483,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 165480,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 180476,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 195473,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 210469,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 225466,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 240462,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.19943763243254098
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 255459,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.17433779545218703
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 270455,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.1492379584718331
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 285452,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.12413812149147911
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 300448,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.09903828451112516
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 315445,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.07393844753077121
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 330441,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.04883861055041727
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 345438,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03806809969233311
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 360434,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.05045447975386649
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 375431,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.06284085981539986
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 390427,
+  "serverDuration" : 14997,
+  "networkDuration" : 14997,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.07522723987693324
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 405424,
+  "serverDuration" : 14996,
+  "networkDuration" : 14996,
+  "numClients" : 150,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "A-image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.08761361993846663
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+} ]

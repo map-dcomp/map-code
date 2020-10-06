@@ -1,0 +1,1262 @@
+[
+  {
+    "startTime": 1020020,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1044020,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1068021,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1092021,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1116022,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1140022,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1164023,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1188023,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1212024,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 1236024,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2460049,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2484049,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2508050,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2532050,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2556051,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2580051,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2604052,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2628052,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2652053,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 2676053,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 3900078,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 3924078,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 3948078,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 3972079,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 3996079,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 4020080,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 4044080,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 4068081,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 4092081,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 4116082,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5340106,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5364107,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5388107,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5412108,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5436108,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5460109,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5484109,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5508110,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5532110,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 5556111,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6780135,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6804136,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6828136,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6852137,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6876137,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6900138,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6924138,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6948138,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6972139,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 6996139,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8220164,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8244164,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8268165,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8292165,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8316166,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8340166,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8364167,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8388167,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8412168,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 8436168,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9660193,
+    "serverDuration": 1140022,
+    "networkDuration": 1140022,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9684193,
+    "serverDuration": 1092021,
+    "networkDuration": 1092021,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9708194,
+    "serverDuration": 1044020,
+    "networkDuration": 1044020,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9732194,
+    "serverDuration": 996019,
+    "networkDuration": 996019,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9756195,
+    "serverDuration": 948018,
+    "networkDuration": 948018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9780195,
+    "serverDuration": 900018,
+    "networkDuration": 900018,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9804196,
+    "serverDuration": 852017,
+    "networkDuration": 852017,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9828196,
+    "serverDuration": 804016,
+    "networkDuration": 804016,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9852197,
+    "serverDuration": 756015,
+    "networkDuration": 756015,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  },
+  {
+    "startTime": 9876197,
+    "serverDuration": 708014,
+    "networkDuration": 708014,
+    "numClients": 1,
+    "service": {
+      "group": "com.bbn",
+      "artifact": "simple-webserver_small-response",
+      "version": "1"
+    },
+    "nodeLoad": {
+      "TASK_CONTAINERS": 0.3
+    },
+    "networkLoad": {
+      "DATARATE_TX": 0.2,
+      "DATARATE_RX": 0.01
+    }
+  }
+]

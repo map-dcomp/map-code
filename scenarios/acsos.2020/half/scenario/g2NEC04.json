@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "pc3000",
+    "name": "g2NEC04",
+    "region": "region",
+    "underlay": false
+}

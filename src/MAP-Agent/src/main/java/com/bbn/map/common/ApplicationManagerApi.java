@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -50,7 +50,8 @@ public interface ApplicationManagerApi {
      * @return one application specification based on its unique coordinates.
      * 
      * @param coordinates
-     *            The coordinates of the application to be obtained
+     *            The coordinates of the application to be obtained. Null if
+     *            unknown.
      * 
      */
     ApplicationSpecification getApplicationSpecification(ApplicationCoordinates coordinates);
@@ -60,7 +61,7 @@ public interface ApplicationManagerApi {
      *         application is registered.
      * 
      * @param coordinates
-     *            An application coordinates object
+     *            An application coordinates object. Null if unknown.
      * 
      */
     ApplicationCoordinates getApplicationCoordinates(ApplicationCoordinates coordinates);

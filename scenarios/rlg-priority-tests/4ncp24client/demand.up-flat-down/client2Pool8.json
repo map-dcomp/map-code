@@ -1,0 +1,494 @@
+[ {
+  "startTime" : 0,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.0
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 47949,
+  "serverDuration" : 47948,
+  "networkDuration" : 47948,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.015973925401189144
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 95897,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03194785080237829
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 143846,
+  "serverDuration" : 47948,
+  "networkDuration" : 47948,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.04792177620356743
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 191794,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.06389570160475658
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 239743,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.07986962700594571
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 287692,
+  "serverDuration" : 47948,
+  "networkDuration" : 47948,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.09584355240713487
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 335640,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.111817477808324
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 383589,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.12779140320951315
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 431538,
+  "serverDuration" : 47948,
+  "networkDuration" : 47948,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.1437653286107023
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 479486,
+  "serverDuration" : 47949,
+  "networkDuration" : 47949,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.15973925401189146
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 527435,
+  "serverDuration" : 47948,
+  "networkDuration" : 47948,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.17571317941308062
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 575383,
+  "serverDuration" : 97636,
+  "networkDuration" : 97636,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.1916871048142698
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 673019,
+  "serverDuration" : 151550,
+  "networkDuration" : 151550,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 824569,
+  "serverDuration" : 151551,
+  "networkDuration" : 151551,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 976120,
+  "serverDuration" : 151550,
+  "networkDuration" : 151550,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1127670,
+  "serverDuration" : 97816,
+  "networkDuration" : 97816,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.2
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1225486,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.19171930373571147
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1273362,
+  "serverDuration" : 47877,
+  "networkDuration" : 47877,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.17574269509106882
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1321239,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.15976608644642623
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1369115,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.14378947780178358
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1416991,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.12781286915714096
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1464867,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.11183626051249833
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1512743,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.0958596518678557
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1560619,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.07988304322321307
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1608495,
+  "serverDuration" : 47877,
+  "networkDuration" : 47877,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.06390643457857041
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1656372,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.047929825933927785
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1704248,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.03195321728928515
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+}, {
+  "startTime" : 1752124,
+  "serverDuration" : 47876,
+  "networkDuration" : 47876,
+  "numClients" : 10,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app1",
+    "version" : "1"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01597660864464252
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  }
+} ]

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -59,6 +59,7 @@ import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.simulator.SimUtils;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
+import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
@@ -84,7 +85,7 @@ public class RegionalOverloadTest {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
+    public RuleChain chain = TestUtils.getStandardRuleChain()
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     /**
@@ -96,6 +97,7 @@ public class RegionalOverloadTest {
     @After
     public void resetAgentConfiguration() {
         AgentConfiguration.resetToDefaults();
+        GlobalNetworkConfiguration.resetToDefaults();
     }
 
     // CHECKSTYLE:OFF test data class
@@ -112,7 +114,10 @@ public class RegionalOverloadTest {
     public static List<Parameters> algorithms() {
         final List<Parameters> params = new LinkedList<>();
         for (final RlgAlgorithm algorithm : RlgAlgorithm.values()) {
-            if (RlgAlgorithm.STUB.equals(algorithm)) {
+            if (RlgAlgorithm.NO_MAP.equals(algorithm)) {
+                LOGGER.trace("Skipping no map algorithm");
+                continue;
+            } else if (RlgAlgorithm.STUB.equals(algorithm)) {
                 for (final RlgStubChooseNcp choose : RlgStubChooseNcp.values()) {
                     final Parameters p = new Parameters();
                     p.algorithm = algorithm;
@@ -170,7 +175,7 @@ public class RegionalOverloadTest {
             clock.stopClock();
 
             // check the resource utilization
-            sim.getScenario().getServers().forEach((deviceUid, controller) -> {
+            sim.getAllControllers().forEach(controller -> {
                 final ResourceManager<?> manager = sim.getResourceManager(controller);
 
                 // we're just checking load, so the estimation window doesn't

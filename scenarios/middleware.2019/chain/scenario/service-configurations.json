@@ -1,0 +1,72 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "simple-webserver_large-response",
+	    "version": "1"
+	},
+	"hostname": "webserver-large-response.map.dcomp",
+	"defaultNodes": {
+	    "serverX1": 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"imageName": "/v2/simple_webserver_large-response",
+	"serverPort": 8080,
+	"priority": 5
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "simple-webserver_small-response",
+	    "version": "1"
+	},
+	"hostname": "webserver-small-response.map.dcomp",
+	"defaultNodes": {
+	    "serverX2": 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"imageName": "/v2/simple_webserver_small-response",
+	"serverPort": 8080,
+	"priority": 10
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "database-query",
+	    "version": "1"
+	},
+	"hostname": "database-query.map.dcomp",
+	"defaultNodes": {
+	    "serverX3": 1
+	},
+	"defaultNodeRegion": "X",
+	"initialInstances": "1",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"imageName": "/v2/networked_file_store_server",
+	"serverPort": 59112,
+	"priority": 3
+    }
+]

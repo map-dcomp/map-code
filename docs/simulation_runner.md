@@ -15,6 +15,14 @@ You can find documentation on how the duration parameters are formatted
 here:
 https://docs.oracle.com/javase/8/docs/api/java/time/Duration.html#parse-java.lang.CharSequence-
 
+The agent configuration is specified as a JSON configuration file. The
+command line parameter "--agentConfiguration" is used to specify the path
+to this file.  The best way to see what options are allowed are to run a
+quick simulation and then look at the file agent-configuration.json in the
+output directory.  You only need to specify the properties that you want to
+change, all others will be set to their defaults.
+
+
 Client Requests
 ===========
 
@@ -40,7 +48,18 @@ server is incremented.
 A client request is attempted up to max client connection attempts
  (configurable).  The number of connection attempts is always greater than
  or equal to the number of request attempts.
- 
+
+
+Dependendent/Induced demand
+----------------------------
+
+If there are application dependencies that specify demand should occur on another service based on demand on the first service, then additional client requests will be created internally.
+These requests have the container running the first service as the source of the demand with the time based on the specification of the dependency. See `simulator_files.md` for information about the structure of the files.
+
+Note that when it comes time to process the demand on the dependent service, if the source container has been shutdown, the dependendent demand is not created because there is no source for the request.
+
+Also note that if the source container is shutdown after the demand has been applied, but before the demand should end, the demand is still applied to the network and the server. 
+This is because once the demand is applied to the network and the server it is only removed based upon time.
 
 Outputs
 ======

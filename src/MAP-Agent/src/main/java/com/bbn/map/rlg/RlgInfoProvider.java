@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -33,15 +33,16 @@ package com.bbn.map.rlg;
 
 import javax.annotation.Nonnull;
 
+import com.bbn.map.ta2.OverlayTopology;
+import com.bbn.map.ta2.TA2Interface;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionNodeState;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 /**
  * Interface used by RLG to interact with the MAP system.
@@ -99,14 +100,14 @@ public interface RlgInfoProvider {
      * @return the current node state
      */
     @Nonnull
-    RegionNodeState getRegionNodeState();
+    ImmutableSet<ResourceReport> getNodeResourceReports();
 
     /**
      * 
-     * @return the current service state
+     * @return the region that this RLG is in
      */
     @Nonnull
-    RegionServiceState getRegionServiceState();
+    RegionIdentifier getRegion();
 
     /**
      * 
@@ -117,5 +118,14 @@ public interface RlgInfoProvider {
      * @return check if a service is availahble in a region
      */
     boolean isServiceAvailable(RegionIdentifier region, ServiceIdentifier<?> service);
+
+    /**
+     * Get the overlay for the current region.
+     * 
+     * @return the topology of the region
+     * @see TA2Interface#getOverlay(RegionIdentifier)
+     */
+    @Nonnull
+    OverlayTopology getCurrentRegionTopology();
 
 }

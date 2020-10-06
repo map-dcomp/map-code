@@ -1,0 +1,6 @@
+{
+	"region": "Server",
+	"dns": true,
+	"DCOP": true,
+	"RLG": true
+}

@@ -1,0 +1,39 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "simple-webserver_large-response",
+	    "version": "1"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.RandomStringWebClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "simple-webserver_small-response",
+	    "version": "1"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.SmallResponseWebClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "database-query",
+	    "version": "1"
+	},
+	"preStartType": "EXTERNAL_PROCESS",
+	"preStartArguments": [
+	    "/var/lib/map/client/load_database_query.sh"
+	],
+	"startType": "EXTERNAL_PROCESS",
+	"startArguments": [ "/var/lib/map/client/start_database_query.sh" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    }
+]

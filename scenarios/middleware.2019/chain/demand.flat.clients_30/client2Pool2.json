@@ -1,0 +1,20 @@
+[
+    {
+        "startTime": 120000,
+        "serverDuration": 3600000,
+        "networkDuration": 3600000,
+        "numClients": 30,
+        "service": {
+            "group": "com.bbn",
+            "artifact": "simple-webserver_large-response",
+            "version": "1"
+        },
+        "nodeLoad": {
+            "TASK_CONTAINERS": 0.3
+        },
+        "networkLoad": {
+            "DATARATE_TX": 0.2,
+            "DATARATE_RX": 0.01
+        }
+    }
+]

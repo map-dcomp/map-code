@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,34 +31,45 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
+import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.collection.IsMapContaining.hasKey;
+import static org.hamcrest.collection.IsMapWithSize.aMapWithSize;
+import static org.hamcrest.core.IsNull.notNullValue;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
-import org.apache.commons.lang3.tuple.ImmutableTriple;
-import org.hamcrest.CoreMatchers;
-import org.hamcrest.core.IsEqual;
-import org.hamcrest.core.IsNull;
-import org.hamcrest.number.IsCloseTo;
-import org.hamcrest.number.OrderingComparison;
-import org.junit.Assert;
+import org.hamcrest.core.IsInstanceOf;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.bbn.map.Controller;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.simulator.ClientSim.RequestResult;
+import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NetworkClient;
+import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
 import com.bbn.protelis.utils.SimpleClock;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableMap;
@@ -73,124 +84,211 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  */
 public class LinkUtilizationTest {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(LinkUtilizationTest.class);
+
     /**
      * Add test name to logging and use the application manager.
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext());
+    public RuleChain chain = TestUtils.getStandardRuleChain();
 
     /**
-     * Add information to one side of the link and make sure that both sides see
-     * it.
+     * Make sure that the lo-fi simulation produces reports that are consistent
+     * with what we will get from the hi-fi testbed.
      * 
      * @throws URISyntaxException
-     *             on an internal test error
+     *             test error
      * @throws IOException
-     *             if the test data cannot be loaded
+     *             test error
      */
     @Test
-    public void bothSidesUpdated() throws URISyntaxException, IOException {
-        // how much error we are allowing on our double comparisons
-        final double error = 1E-6;
-        final String srcControllerName = "nodeA0";
-        final String destControllerName = "nodeA1";
+    public void testHifiSimulation() throws URISyntaxException, IOException {
+        final URL baseu = LinkUtilizationTest.class.getResource("hifi-test");
 
-        final long requestStart = 0;
-        final long requestDuration = 10;
-        final int requestNumClients = 1;
-        final String serviceName = "test";
-        final ApplicationCoordinates service = new ApplicationCoordinates(serviceName, serviceName, serviceName);
-        final double nodeLoad = 1;
+        final ApplicationCoordinates service1 = new ApplicationCoordinates("test", "service1", "1");
+        final NodeIdentifier clientId = new DnsNameIdentifier("client");
+        final NodeIdentifier nodeIdA = new DnsNameIdentifier("A");
+        final NodeIdentifier nodeIdB = new DnsNameIdentifier("B");
+        final NodeIdentifier nodeIdC = new DnsNameIdentifier("C");
+        final NodeIdentifier nodeIdD = new DnsNameIdentifier("D");
+        final NodeIdentifier nodeIdE = new DnsNameIdentifier("E");
+        final RegionIdentifier expectedSourceRegion = new StringRegionIdentifier("A");
+        final double tolerance = 8E-4;
 
-        final ClientLoad req = new ClientLoad(requestStart, requestDuration, requestDuration, requestNumClients,
-                service, ImmutableMap.of(), ImmutableMap.of(LinkMetricName.DATARATE_TX, nodeLoad));
+        // network load from the server's perspective
+        final double rx = 65;
+        final double tx = 1.5;
+        final double rxFlipped = tx;
+        final double txFlipped = rx;
+        final ImmutableMap<LinkAttribute, Double> networkLoad = ImmutableMap.of(LinkAttribute.DATARATE_RX, rx,
+                LinkAttribute.DATARATE_TX, tx);
 
-        final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
+        // create the client load request
+        final ClientLoad req = new ClientLoad(0, 1000, 1000, 1, service1, ImmutableMap.of(), networkLoad);
+
         final Path baseDirectory = Paths.get(baseu.toURI());
 
-        final Path demandPath = null;
+        final Path scenarioPath = baseDirectory.resolve("scenario");
 
         final VirtualClock clock = new SimpleClock();
-        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
-                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
+        try (Simulation sim = new Simulation("testHifiSimulation", scenarioPath, null, clock,
+                TestUtils.POLLING_INTERVAL_MS, TestUtils.DNS_TTL, false, false, false,
+                AppMgrUtils::getContainerParameters)) {
 
-            final Controller srcController = sim.getControllerById(new DnsNameIdentifier(srcControllerName));
-            final Controller destController = sim.getControllerById(new DnsNameIdentifier(destControllerName));
+            // need to have AP connected so that the network maps have data in
+            // them
+            sim.startSimulation();
+            sim.waitForAllNodesToConnectToNeighbors();
+            LOGGER.info("All nodes are connected to AP");
 
-            final SimResourceManager destManager = sim.getResourceManager(destController);
-            Assert.assertThat(destManager, CoreMatchers.is(IsNull.notNullValue()));
+            final NetworkClient client = sim.getClientById(clientId);
+            final Controller serverE = sim.getControllerById(nodeIdE);
+            assertThat(serverE, notNullValue());
 
-            // apply some load
-            final NodeIdentifier clientId = destController.getNodeIdentifier();
-            final LinkResourceManager lmgr = sim.getLinkResourceManager(srcController.getNodeIdentifier(),
-                    destController.getNodeIdentifier());
+            final NodeIdentifier nodeIdRunningService1 = sim.getRegionalDNS(expectedSourceRegion)
+                    .resolveService(clientId.getName(), service1);
+            assertThat("Expecting a container,  but was: " + nodeIdRunningService1, nodeIdRunningService1,
+                    IsInstanceOf.instanceOf(NodeIdentifier.class));
 
-            final ImmutableTriple<ClientSim.RequestResult, LinkLoadEntry, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkResult = lmgr
-                    .addLinkLoad(clock.getCurrentTime(), req, clientId, clientId);
+            final NodeIdentifier containerIdRunningService1 = (NodeIdentifier) nodeIdRunningService1;
+            LOGGER.info("Service 1 is running in container {}", containerIdRunningService1);
 
-            final ClientSim.RequestResult requestResult = linkResult.getLeft();
+            final ContainerSim serverEContainer = sim.getContainerById(containerIdRunningService1);
 
-            Assert.assertThat("Link load should be added without a problem", requestResult,
-                    IsEqual.equalTo(RequestResult.SUCCESS));
+            // apply client request
+            final NodeNetworkFlow flowToApply = ClientSim.createNetworkFlow(clientId, serverEContainer.getIdentifier());
+            final List<NetworkLink> networkPath = sim.getPath(client, serverE);
+            AbstractClientSimulator.applyNetworkDemand(sim, clientId, clientId, 0, req, serverEContainer, flowToApply,
+                    networkPath);
 
-            // get the reports and check that they match
-            destManager.updateResourceReports();
-            final ResourceReport destReport = destManager.getCurrentResourceReport(EstimationWindow.SHORT);
-            Assert.assertThat(destReport, CoreMatchers.is(IsNull.notNullValue()));
+            final NodeNetworkFlow expectedFlow = new NodeNetworkFlow(containerIdRunningService1, clientId,
+                    containerIdRunningService1);
+            final NodeNetworkFlow expectedFlowFlipped = new NodeNetworkFlow(expectedFlow.getDestination(),
+                    expectedFlow.getSource(), expectedFlow.getServer());
 
-            final SimResourceManager srcManager = sim.getResourceManager(srcController);
-            Assert.assertThat(srcManager, CoreMatchers.is(IsNull.notNullValue()));
+            // check all NCPs starting at the client
+            // the client won't show up in the network map because it doesn't
+            // participate in AP
+            checkNcp(sim, service1, nodeIdA, null, nodeIdB, tolerance, expectedFlow, rx, tx, expectedFlowFlipped,
+                    rxFlipped, txFlipped);
+            checkNcp(sim, service1, nodeIdB, nodeIdA, nodeIdC, tolerance, expectedFlow, rx, tx, expectedFlowFlipped,
+                    rxFlipped, txFlipped);
+            checkNcp(sim, service1, nodeIdC, nodeIdB, nodeIdD, tolerance, expectedFlow, rx, tx, expectedFlowFlipped,
+                    rxFlipped, txFlipped);
+            checkNcp(sim, service1, nodeIdD, nodeIdC, nodeIdE, tolerance, expectedFlow, rx, tx, expectedFlowFlipped,
+                    rxFlipped, txFlipped);
 
-            srcManager.updateResourceReports();
-            final ResourceReport srcReport = srcManager.getCurrentResourceReport(EstimationWindow.SHORT);
-            Assert.assertThat(srcReport, CoreMatchers.is(IsNull.notNullValue()));
+            // E is the server, so there is no neighbor to check on the server
+            // side
+            checkNcp(sim, service1, nodeIdE, nodeIdD, null, tolerance, expectedFlow, rx, tx, expectedFlowFlipped,
+                    rxFlipped, txFlipped);
 
-            // test neighbor traffic as that should show this
-            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> srcNetLoad = srcReport
+            // TODO: verify this in hi-fi once ticket:232 is fixed
+
+            // check container load
+            serverEContainer.updateResourceReports();
+            final ContainerResourceReport containerResourceReport = serverEContainer
+                    .getContainerResourceReport(EstimationWindow.SHORT);
+            assertThat("Container Service resource report", containerResourceReport, notNullValue());
+
+            // the neighbor of a container is the NCP, in this case the server
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> actualNetworkLoad = containerResourceReport
                     .getNetworkLoad();
-            Assert.assertThat(srcNetLoad, CoreMatchers.is(IsNull.notNullValue()));
+            assertThat(actualNetworkLoad, aMapWithSize(1));
+            final Optional<InterfaceIdentifier> ii = actualNetworkLoad.entrySet().stream().map(Map.Entry::getKey)
+                    .filter(i -> i.getNeighbors().contains(nodeIdE)).findAny();
+            assertTrue(ii.isPresent());
 
-            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> srcNetNeighborLoad = srcNetLoad
-                    .get(destController.getNodeIdentifier());
-            Assert.assertThat(srcNetNeighborLoad, CoreMatchers.is(IsNull.notNullValue()));
+            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> actualNeighborNetworkLoad = actualNetworkLoad
+                    .get(ii.get());
+            checkNeighborLoad(service1, tolerance, rxFlipped, txFlipped, expectedFlowFlipped,
+                    actualNeighborNetworkLoad);
 
-            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> srcNetSourceLoad = srcNetNeighborLoad
-                    .get(clientId);
-            Assert.assertThat(srcNetSourceLoad, CoreMatchers.is(IsNull.notNullValue()));
-
-            final ImmutableMap<LinkAttribute<?>, Double> srcNetServiceLoad = srcNetSourceLoad.get(service);
-            Assert.assertThat(srcNetServiceLoad, CoreMatchers.is(IsNull.notNullValue()));
-
-            final Double srcNetNeighborLoadValue = srcNetServiceLoad.get(LinkMetricName.DATARATE_TX);
-            Assert.assertThat(srcNetNeighborLoadValue, CoreMatchers.is(IsNull.notNullValue()));
-
-            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> destNetLoad = destReport
-                    .getNetworkLoad();
-            Assert.assertThat(destNetLoad, CoreMatchers.is(IsNull.notNullValue()));
-
-            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> destNetNeighborLoad = destNetLoad
-                    .get(srcController.getNodeIdentifier());
-            Assert.assertThat(destNetNeighborLoad, CoreMatchers.is(IsNull.notNullValue()));
-
-            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> destNetSourceLoad = destNetNeighborLoad
-                    .get(clientId);
-            Assert.assertThat(destNetSourceLoad, CoreMatchers.is(IsNull.notNullValue()));
-
-            final ImmutableMap<LinkAttribute<?>, Double> destNetServiceLoad = destNetSourceLoad.get(service);
-            Assert.assertThat(destNetServiceLoad, CoreMatchers.is(IsNull.notNullValue()));
-
-            // other side of the link will be RX
-            final Double destNetNeighborLoadValue = destNetServiceLoad.get(LinkMetricName.DATARATE_RX);
-            Assert.assertThat(destNetNeighborLoadValue, CoreMatchers.is(IsNull.notNullValue()));
-
-            Assert.assertThat("Must have load greater than 0", srcNetNeighborLoadValue,
-                    OrderingComparison.greaterThan(0D));
-
-            Assert.assertThat("Both sides of the link should return the same load value", destNetNeighborLoadValue,
-                    IsCloseTo.closeTo(srcNetNeighborLoadValue, error));
-
-        } // sim allocation
-
+        }
     }
+
+    private void checkNcp(final Simulation sim,
+            final ApplicationCoordinates service,
+            final NodeIdentifier ncpId,
+            final NodeIdentifier clientNeighbor,
+            final NodeIdentifier serverNeighbor,
+            final double tolerance,
+            final NodeNetworkFlow expectedFlow,
+            final double rx,
+            final double tx,
+            final NodeNetworkFlow expectedFlowFlipped,
+            final double rxFlipped,
+            final double txFlipped) {
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> serverANetLoad = getNetworkLoad(
+                sim, ncpId);
+        int expectedMapSize = 0;
+        if (null != clientNeighbor) {
+            ++expectedMapSize;
+        }
+        if (null != serverNeighbor) {
+            ++expectedMapSize;
+        }
+        assertThat(serverANetLoad, aMapWithSize(expectedMapSize));
+        if (null != clientNeighbor) {
+            final Optional<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> load = serverANetLoad
+                    .entrySet().stream().filter(entry -> entry.getKey().getNeighbors().contains(clientNeighbor))
+                    .map(Map.Entry::getValue).findFirst();
+            assertTrue(load.isPresent());
+            checkNeighborLoad(service, tolerance, rx, tx, expectedFlow, load.get());
+        }
+        if (null != serverNeighbor) {
+            final Optional<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> load = serverANetLoad
+                    .entrySet().stream().filter(entry -> entry.getKey().getNeighbors().contains(serverNeighbor))
+                    .map(Map.Entry::getValue).findFirst();
+            assertTrue(load.isPresent());
+
+            checkNeighborLoad(service, tolerance, rxFlipped, txFlipped, expectedFlowFlipped, load.get());
+        }
+    }
+
+    private ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> getNetworkLoad(
+            final Simulation sim,
+            final NodeIdentifier id) {
+        final Controller ncp = sim.getControllerById(id);
+        assertThat(ncp, notNullValue());
+
+        final SimResourceManager manager = sim.getResourceManager(ncp);
+        assertThat(manager, notNullValue());
+
+        manager.updateResourceReports();
+        final ResourceReport report = manager.getCurrentResourceReport(EstimationWindow.SHORT);
+        assertThat(report, notNullValue());
+
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> netLoad = report
+                .getNetworkLoad();
+        return netLoad;
+    }
+
+    private void checkNeighborLoad(final ApplicationCoordinates service1,
+            final double tolerance,
+            final double expectedRx,
+            final double expectedTx,
+            final NodeNetworkFlow expectedFlow,
+            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborNetworkLoad) {
+        assertThat(neighborNetworkLoad, aMapWithSize(1));
+        assertThat(neighborNetworkLoad, hasKey(expectedFlow));
+
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> ncpServiceNetworkLoad = neighborNetworkLoad
+                .get(expectedFlow);
+        assertThat(ncpServiceNetworkLoad, aMapWithSize(1));
+        assertThat(ncpServiceNetworkLoad, hasKey(service1));
+
+        final ImmutableMap<LinkAttribute, Double> ncpLinkNetworkLoad = ncpServiceNetworkLoad.get(service1);
+        assertThat(ncpLinkNetworkLoad, aMapWithSize(2));
+        assertThat(ncpLinkNetworkLoad, hasKey(LinkAttribute.DATARATE_RX));
+        assertThat(ncpLinkNetworkLoad, hasKey(LinkAttribute.DATARATE_TX));
+
+        final double ncpRx = ncpLinkNetworkLoad.get(LinkAttribute.DATARATE_RX);
+        assertThat(ncpRx, closeTo(expectedRx, tolerance));
+
+        final double ncpTx = ncpLinkNetworkLoad.get(LinkAttribute.DATARATE_TX);
+        assertThat(ncpTx, closeTo(expectedTx, tolerance));
+    }
+
 }

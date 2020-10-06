@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,20 +31,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
+import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.RuleChain;
 
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Test cases for {@link LinkResourceManager}.
@@ -53,6 +59,13 @@ import com.google.common.collect.ImmutableMap;
  *
  */
 public class LinkResourceManagerTest {
+
+    /**
+     * Unit test rule chain.
+     */
+    @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
+    @Rule
+    public RuleChain chain = TestUtils.getStandardRuleChain();
 
     /**
      * Test that the computed load is properly returned when the datarate should
@@ -67,33 +80,36 @@ public class LinkResourceManagerTest {
         final long currentTime = 10;
         final NodeIdentifier client = new DnsNameIdentifier("client");
         final double tolerance = 1E-5;
+        final NodeIdentifier server1 = new DnsNameIdentifier("one");
+        final NodeIdentifier server2 = new DnsNameIdentifier("two");
 
-        final ImmutableMap<LinkAttribute<?>, Double> capacity = ImmutableMap.of(LinkMetricName.DATARATE_RX,
-                datarateCapacity, LinkMetricName.DATARATE_TX, datarateCapacity);
+        final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX,
+                datarateCapacity, LinkAttribute.DATARATE_TX, datarateCapacity);
 
-        final LinkResourceManager manager = new LinkResourceManager(new DnsNameIdentifier("one"),
-                new DnsNameIdentifier("two"), capacity);
+        final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity);
 
-        final ImmutableMap<LinkMetricName, Double> networkLoad = ImmutableMap.of(LinkMetricName.DATARATE_RX, rxLoad,
-                LinkMetricName.DATARATE_TX, txLoad);
+        final ImmutableMap<LinkAttribute, Double> networkLoad = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxLoad,
+                LinkAttribute.DATARATE_TX, txLoad);
+
+        final NodeNetworkFlow flow = new NodeNetworkFlow(client, server1, NodeIdentifier.UNKNOWN);
 
         final ClientLoad req = new ClientLoad(0, Long.MAX_VALUE, Long.MAX_VALUE, 1, service, ImmutableMap.of(),
                 networkLoad);
-        manager.addLinkLoad(currentTime, req, client, manager.getTransmitter());
+        manager.addLinkLoad(req.getStartTime(), req, flow, manager.getTransmitter());
 
-        final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> computedLoad = manager
+        final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
                 .computeCurrentLinkLoad(currentTime, manager.getReceiver());
         assertThat("Computed load size should be 1", computedLoad.size(), is(1));
 
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> clientLoad = computedLoad
-                .get(client);
-        assertThat("Can't find load for test client", clientLoad, is(notNullValue()));
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> clientLoad = computedLoad
+                .get(flow);
+        assertThat("Can't find load for expected network flow", clientLoad, is(notNullValue()));
 
-        final ImmutableMap<LinkAttribute<?>, Double> serviceLoad = clientLoad.get(service);
+        final ImmutableMap<LinkAttribute, Double> serviceLoad = clientLoad.get(service);
         assertThat("Can't find load for test service", serviceLoad, is(notNullValue()));
 
-        assertThat(serviceLoad.get(LinkMetricName.DATARATE_RX), closeTo(rxLoad, tolerance));
-        assertThat(serviceLoad.get(LinkMetricName.DATARATE_TX), closeTo(txLoad, tolerance));
+        assertThat(serviceLoad.get(LinkAttribute.DATARATE_RX), closeTo(rxLoad, tolerance));
+        assertThat(serviceLoad.get(LinkAttribute.DATARATE_TX), closeTo(txLoad, tolerance));
     }
 
     /**
@@ -109,34 +125,41 @@ public class LinkResourceManagerTest {
         final long currentTime = 10;
         final NodeIdentifier client = new DnsNameIdentifier("client");
         final double tolerance = 1E-5;
+        final NodeIdentifier server1 = new DnsNameIdentifier("one");
+        final NodeIdentifier server2 = new DnsNameIdentifier("two");
 
-        final ImmutableMap<LinkAttribute<?>, Double> capacity = ImmutableMap.of(LinkMetricName.DATARATE_RX,
-                datarateCapacity, LinkMetricName.DATARATE_TX, datarateCapacity);
+        final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX,
+                datarateCapacity, LinkAttribute.DATARATE_TX, datarateCapacity);
 
-        final LinkResourceManager manager = new LinkResourceManager(new DnsNameIdentifier("one"),
-                new DnsNameIdentifier("two"), capacity);
+        final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity);
 
-        final ImmutableMap<LinkMetricName, Double> networkLoad = ImmutableMap.of(LinkMetricName.DATARATE_RX, rxLoad,
-                LinkMetricName.DATARATE_TX, txLoad);
+        final NodeNetworkFlow flow = new NodeNetworkFlow(client, server1, NodeIdentifier.UNKNOWN);
+
+        final ImmutableMap<LinkAttribute, Double> networkLoad = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxLoad,
+                LinkAttribute.DATARATE_TX, txLoad);
 
         final ClientLoad req = new ClientLoad(0, Long.MAX_VALUE, Long.MAX_VALUE, 1, service, ImmutableMap.of(),
                 networkLoad);
-        manager.addLinkLoad(currentTime, req, client, manager.getTransmitter());
+        manager.addLinkLoad(req.getStartTime(), req, flow, manager.getTransmitter());
 
-        final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> computedLoad = manager
+        final NodeNetworkFlow flowFlipped = new NodeNetworkFlow(flow.getDestination(), flow.getSource(),
+                flow.getServer());
+
+        final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
                 .computeCurrentLinkLoad(currentTime, manager.getTransmitter());
-        assertThat("Computed load size should be 1", computedLoad.size(), is(1));
+        assertThat("Computed load size should be 1", computedLoad, aMapWithSize(1));
+        assertThat("Can't find load for expected network flow", computedLoad, hasKey(flowFlipped));
 
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> clientLoad = computedLoad
-                .get(client);
-        assertThat("Can't find load for test client", clientLoad, is(notNullValue()));
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> clientLoad = computedLoad
+                .get(flowFlipped);
+        assertThat(clientLoad, aMapWithSize(1));
+        assertThat("Can't find load for test service", clientLoad, hasKey(service));
 
-        final ImmutableMap<LinkAttribute<?>, Double> serviceLoad = clientLoad.get(service);
-        assertThat("Can't find load for test service", serviceLoad, is(notNullValue()));
+        final ImmutableMap<LinkAttribute, Double> serviceLoad = clientLoad.get(service);
 
         // checking TX against rxLoad since the values should be flipped
-        assertThat(serviceLoad.get(LinkMetricName.DATARATE_TX), closeTo(rxLoad, tolerance));
-        assertThat(serviceLoad.get(LinkMetricName.DATARATE_RX), closeTo(txLoad, tolerance));
+        assertThat(serviceLoad.get(LinkAttribute.DATARATE_TX), closeTo(rxLoad, tolerance));
+        assertThat(serviceLoad.get(LinkAttribute.DATARATE_RX), closeTo(txLoad, tolerance));
     }
 
     /**
@@ -147,8 +170,8 @@ public class LinkResourceManagerTest {
         final double rxCapacity = 10;
         final double txCapacity = 100;
 
-        final ImmutableMap<LinkAttribute<?>, Double> capacity = ImmutableMap.of(LinkMetricName.DATARATE_RX, rxCapacity,
-                LinkMetricName.DATARATE_TX, txCapacity);
+        final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxCapacity,
+                LinkAttribute.DATARATE_TX, txCapacity);
 
         new LinkResourceManager(new DnsNameIdentifier("one"), new DnsNameIdentifier("two"), capacity);
     }

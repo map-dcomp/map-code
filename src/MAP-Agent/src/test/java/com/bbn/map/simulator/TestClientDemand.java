@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -49,21 +49,20 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
-import org.protelis.lang.datatype.DeviceUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.Controller;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
@@ -87,8 +86,8 @@ public class TestClientDemand {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
+    public RuleChain chain = TestUtils.getStandardRuleChain();// .around(new
+                                                              // TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     /**
      * Run ns2/simple with demand from ns2/simple/simple_demand. Check that the
@@ -109,8 +108,6 @@ public class TestClientDemand {
         final double expectedLinkLoad = 50;
         final String expectedSourceRegionName = "A";
         final RegionIdentifier expectedSourceRegion = new StringRegionIdentifier(expectedSourceRegionName);
-        final String expectedSourceNodeName = "clientPoolA";
-        final NodeIdentifier expectedSourceNode = new DnsNameIdentifier(expectedSourceNodeName);
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
         final Path baseDirectory = Paths.get(baseu.toURI());
@@ -151,28 +148,26 @@ public class TestClientDemand {
                     Assert.assertNotNull("Service resource report", serviceResourceReport);
 
                     // check node load
-                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> serviceNodeLoadByNode = serviceResourceReport
+                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> serviceNodeLoadByNode = serviceResourceReport
                             .getComputeLoad();
                     Assert.assertThat("service node load by node", serviceNodeLoadByNode, is(notNullValue()));
                     Assert.assertThat("number of regions with load", serviceNodeLoadByNode.size(), is(1));
 
-                    final ImmutableMap<NodeAttribute<?>, Double> serviceLoad = serviceNodeLoadByNode
-                            .get(expectedSourceNode);
+                    final ImmutableMap<NodeAttribute, Double> serviceLoad = serviceNodeLoadByNode
+                            .get(NodeIdentifier.UNKNOWN);
                     Assert.assertThat("no service load for the expected source node", serviceLoad, is(notNullValue()));
 
                     // since the load is still executing the average
                     // processing time
                     // hasn't been computed yet
-                    Assert.assertThat("Size of service load", serviceLoad.size(), is(1));
-                    final Double cpuLoad = serviceLoad.get(NodeMetricName.TASK_CONTAINERS);
+                    final Double cpuLoad = serviceLoad.get(NodeAttribute.TASK_CONTAINERS);
                     Assert.assertThat("Containers load", cpuLoad, is(notNullValue()));
                     Assert.assertThat("Containers load", cpuLoad, closeTo(expectedCpuLoad, loadTolerance));
 
                     // check link demand
                     // because of the topology all links will have the same
                     // value
-                    for (final Map.Entry<DeviceUID, Controller> entry : sim.getScenario().getServers().entrySet()) {
-                        final Controller controller = entry.getValue();
+                    for (final Controller controller : sim.getAllControllers()) {
                         Assert.assertNotNull("Controller is null?", controller);
 
                         final SimResourceManager resourceManager = sim.getResourceManager(controller);
@@ -184,12 +179,12 @@ public class TestClientDemand {
                         final ResourceReport report = resourceManager.getCurrentResourceReport(estimationWindow);
                         Assert.assertNotNull("Resource report", report);
 
-                        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad = report
+                        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = report
                                 .getContainerNetworkLoad();
-                        networkLoad.forEach((neighbor, neighborLoad) -> {
-                            neighborLoad.forEach((source, sourceLoad) -> {
+                        networkLoad.forEach((ifce, neighborLoad) -> {
+                            neighborLoad.forEach((flow, sourceLoad) -> {
                                 sourceLoad.forEach((svc, svcLoad) -> {
-                                    final Double value = svcLoad.get(LinkMetricName.DATARATE_TX);
+                                    final Double value = svcLoad.get(LinkAttribute.DATARATE_TX);
                                     Assert.assertThat(svc + " is missing datarate on network load", value,
                                             is(notNullValue()));
 
@@ -222,8 +217,6 @@ public class TestClientDemand {
     @Test
     public void testSummaries() throws URISyntaxException, IOException {
         final double demandTolerance = 1E-6;
-        final String regionName = "A";
-        final RegionIdentifier region = new StringRegionIdentifier(regionName);
 
         final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/simple");
         final Path baseDirectory = Paths.get(baseu.toURI());
@@ -246,11 +239,12 @@ public class TestClientDemand {
                         .push(estimationWindow.toString())) {
                     LOGGER.info("Checking estimation window: " + estimationWindow);
 
-                    final double regionTaskContainerLoad = sumTaskContainerLoad(sim, region, estimationWindow);
+                    // region is unknown because the compute stats don't know
+                    // the source
+                    final double regionTaskContainerLoad = sumTaskContainerLoad(sim, estimationWindow);
 
                     boolean foundDcop = false;
-                    for (final Map.Entry<DeviceUID, Controller> entry : sim.getScenario().getServers().entrySet()) {
-                        final Controller server = entry.getValue();
+                    for (final Controller server : sim.getAllControllers()) {
                         if (server.isRunDCOP()) {
                             LOGGER.info("DCOP is running on node: " + server.getName());
                             foundDcop = true;
@@ -259,19 +253,19 @@ public class TestClientDemand {
                             // summary
 
                             final ResourceSummary summary = server.getNetworkState().getRegionSummary(estimationWindow);
-                            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> summaryServerLoad = summary
+                            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> summaryServerLoad = summary
                                     .getServerLoad();
 
                             LOGGER.info("summary serverLoad: {} on {}", summaryServerLoad, server.getName());
 
-                            double summaryTaskContainerLoad = 0;
-                            for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> serverLoadEntry : summaryServerLoad
+                            double summaryFromReports = 0;
+                            for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> serverLoadEntry : summaryServerLoad
                                     .entrySet()) {
-                                for (final Map.Entry<RegionIdentifier, ImmutableMap<NodeAttribute<?>, Double>> regionEntry : serverLoadEntry
+                                for (final Map.Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> regionEntry : serverLoadEntry
                                         .getValue().entrySet()) {
-                                    final Double v = regionEntry.getValue().get(NodeMetricName.TASK_CONTAINERS);
+                                    final Double v = regionEntry.getValue().get(NodeAttribute.TASK_CONTAINERS);
                                     if (null != v) {
-                                        summaryTaskContainerLoad += v.doubleValue();
+                                        summaryFromReports += v.doubleValue();
                                     }
                                 }
                             }
@@ -279,8 +273,8 @@ public class TestClientDemand {
                             // check that the server load is the summary of all
                             // resource
                             // reports in the region
-                            Assert.assertEquals("Checking estimation window: " + estimationWindow,
-                                    regionTaskContainerLoad, summaryTaskContainerLoad, demandTolerance);
+                            Assert.assertEquals("Checking estimation window: " + estimationWindow, summaryFromReports,
+                                    regionTaskContainerLoad, demandTolerance);
                         }
 
                     } // foreach server
@@ -294,44 +288,37 @@ public class TestClientDemand {
 
     /**
      * Compute the sum of the task container load across all nodes in the
-     * simulation that are in the specified region.
+     * simulation.
      * 
      * @param sim
      *            where to get all of the node information from
-     * @param region
-     *            the region to sum the load for
      * @param estimationWindow
      *            the window to look at when computing the sum
      * @return the sum of the task container load for all nodes in the region
      */
     private static double sumTaskContainerLoad(final Simulation sim,
-            final RegionIdentifier region,
             final ResourceReport.EstimationWindow estimationWindow) {
         double sum = 0;
-        for (final Map.Entry<DeviceUID, Controller> serverEntry : sim.getScenario().getServers().entrySet()) {
-            final Controller server = serverEntry.getValue();
-            if (region.equals(server.getRegionIdentifier())) {
-                final SimResourceManager resourceManager = sim.getResourceManager(server);
+        for (final Controller server : sim.getAllControllers()) {
+            final SimResourceManager resourceManager = sim.getResourceManager(server);
 
-                final ResourceReport serviceResourceReport = resourceManager.getCurrentResourceReport(estimationWindow);
-                LOGGER.info("ResourceReport compute load: {} on host {}", serviceResourceReport.getComputeLoad(),
-                        server.getName());
+            final ResourceReport serviceResourceReport = resourceManager.getCurrentResourceReport(estimationWindow);
+            LOGGER.info("ResourceReport compute load: {} on host {}", serviceResourceReport.getComputeLoad(),
+                    server.getName());
 
-                final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> serviceClientLoad = serviceResourceReport
-                        .getComputeLoad();
+            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> serviceClientLoad = serviceResourceReport
+                    .getComputeLoad();
 
-                for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> clientLoadEntry : serviceClientLoad
-                        .entrySet()) {
-                    for (final Map.Entry<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> regionEntry : clientLoadEntry
-                            .getValue().entrySet()) {
-                        final Double v = regionEntry.getValue().get(NodeMetricName.TASK_CONTAINERS);
-                        if (null != v) {
-                            sum += v.doubleValue();
-                        }
+            for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> clientLoadEntry : serviceClientLoad
+                    .entrySet()) {
+                for (final Map.Entry<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> regionEntry : clientLoadEntry
+                        .getValue().entrySet()) {
+                    final Double v = regionEntry.getValue().get(NodeAttribute.TASK_CONTAINERS);
+                    if (null != v) {
+                        sum += v.doubleValue();
                     }
                 }
-
-            } // correct region
+            }
         } // foreach server
 
         return sum;
@@ -353,7 +340,7 @@ public class TestClientDemand {
         final RegionIdentifier regionA = new StringRegionIdentifier(regionAName);
         final String regionBName = "B";
         final RegionIdentifier regionB = new StringRegionIdentifier(regionBName);
-        final LinkMetricName datarateAttribute = LinkMetricName.DATARATE_TX;
+        final LinkAttribute datarateAttribute = LinkAttribute.DATARATE_TX;
         final NodeIdentifier nodeA0Id = new DnsNameIdentifier("nodeA0");
         final NodeIdentifier nodeB0Id = new DnsNameIdentifier("nodeB0");
 
@@ -372,11 +359,13 @@ public class TestClientDemand {
             final Controller nodeA0 = sim.getControllerById(nodeA0Id);
             Assert.assertNotNull("Looking up nodeA0", nodeA0);
 
-            final ImmutableMap<NodeIdentifier, ImmutableMap<LinkAttribute<?>, Double>> nodeA0NetworkCapacities = nodeA0
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<LinkAttribute, Double>> nodeA0NetworkCapacities = nodeA0
                     .getNeighborLinkCapacity(datarateAttribute);
             Assert.assertNotNull("nodeA0Network capacities", nodeA0NetworkCapacities);
             Assert.assertEquals("nodeA0 network capacity size", 1, nodeA0NetworkCapacities.size());
-            final ImmutableMap<LinkAttribute<?>, Double> nodeA0B0Capacity = nodeA0NetworkCapacities.get(nodeB0Id);
+            final ImmutableMap<LinkAttribute, Double> nodeA0B0Capacity = nodeA0NetworkCapacities.entrySet().stream()
+                    .filter(entry -> entry.getKey().getNeighbors().contains(nodeB0Id)).map(Map.Entry::getValue)
+                    .findAny().get();
             Assert.assertNotNull("nodeA0B0Capacity", nodeA0B0Capacity);
 
             final Double a0B0NetworkCapacity = nodeA0B0Capacity.get(datarateAttribute);
@@ -391,8 +380,7 @@ public class TestClientDemand {
 
             boolean foundDcopA = false;
             boolean foundDcopB = false;
-            for (final Map.Entry<DeviceUID, Controller> entry : sim.getScenario().getServers().entrySet()) {
-                final Controller server = entry.getValue();
+            for (final Controller server : sim.getAllControllers()) {
                 if (server.isRunDCOP()) {
                     // only the DCOP node will have the complete region summary
                     LOGGER.info("DCOP is running on node: " + server.getName());
@@ -418,9 +406,9 @@ public class TestClientDemand {
                             LOGGER.info("Checking estimation window: " + estimationWindow);
 
                             final ResourceSummary summary = server.getNetworkState().getRegionSummary(estimationWindow);
-                            final ImmutableMap<RegionIdentifier, ImmutableMap<LinkAttribute<?>, Double>> networkCapacity = summary
+                            final ImmutableMap<RegionIdentifier, ImmutableMap<LinkAttribute, Double>> networkCapacity = summary
                                     .getNetworkCapacity();
-                            final ImmutableMap<LinkAttribute<?>, Double> networkCapacityToOther = networkCapacity
+                            final ImmutableMap<LinkAttribute, Double> networkCapacityToOther = networkCapacity
                                     .get(otherRegion);
                             Assert.assertNotNull("No network capacity to " + otherRegion + " from " + thisRegion,
                                     networkCapacityToOther);
@@ -470,18 +458,23 @@ public class TestClientDemand {
 
         final Path demandPath = baseDirectory.resolve("short_demand");
 
+        final long clientDemandDurationMs = 10 * 1000;
+
         final VirtualClock clock = new SimpleClock();
         try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
                 TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
             final ClientSim clientSim = sim.getClientSimulators().stream()
-                    .filter(c -> c.getClientName().equals("clientPoolA")).findFirst().orElse(null);
+                    .filter(c -> c.getSimName().equals("clientPoolA")).findFirst().orElse(null);
 
             final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
 
             sim.startSimulation();
             sim.startClients();
             SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+
+            // need to wait for the client demand to finish
+            clock.waitForDuration(clientDemandDurationMs);
             clock.stopClock();
 
             final ContainerSim containerRunningService = sim.getContainerForService(

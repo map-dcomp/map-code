@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -34,7 +34,7 @@ package com.bbn.map.simulator;
 import javax.annotation.Nonnull;
 
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
 
@@ -53,13 +53,13 @@ import com.google.common.collect.ImmutableMap;
      *            see {@Link #getClient()}
      */
     /* package */ LinkLoadEntry(@Nonnull final LinkResourceManager parent,
-            @Nonnull final NodeIdentifier client,
+            @Nonnull final NodeNetworkFlow flow,
             final long startTime,
             final long duration,
             @Nonnull final ServiceIdentifier<?> service,
-            @Nonnull final ImmutableMap<LinkAttribute<?>, Double> networkLoad) {
+            @Nonnull final ImmutableMap<LinkAttribute, Double> networkLoad) {
         this.parent = parent;
-        this.client = client;
+        this.flow = flow;
         this.startTime = startTime;
         this.duration = duration;
         this.service = service;
@@ -77,14 +77,14 @@ import com.google.common.collect.ImmutableMap;
         return parent;
     }
 
-    private final NodeIdentifier client;
+    private final NodeNetworkFlow flow;
 
     /**
      * 
-     * @return the client generating the load
+     * @return the flow that is creating the load
      */
-    public NodeIdentifier getClient() {
-        return client;
+    public NodeNetworkFlow getFlow() {
+        return flow;
     }
 
     private final ServiceIdentifier<?> service;
@@ -97,13 +97,13 @@ import com.google.common.collect.ImmutableMap;
         return service;
     }
 
-    private final ImmutableMap<LinkAttribute<?>, Double> networkLoad;
+    private final ImmutableMap<LinkAttribute, Double> networkLoad;
 
     /**
      * 
      * @return the load that is applied to the network
      */
-    public ImmutableMap<LinkAttribute<?>, Double> getNetworkLoad() {
+    public ImmutableMap<LinkAttribute, Double> getNetworkLoad() {
         return networkLoad;
     }
 
@@ -112,7 +112,7 @@ import com.google.common.collect.ImmutableMap;
     /**
      * 
      * @return the start of the request
-     * @see ClientLoad#getStartTime()
+     * @see BaseNetworkLoad#getStartTime()
      */
     public long getStartTime() {
         return startTime;
@@ -123,7 +123,7 @@ import com.google.common.collect.ImmutableMap;
     /**
      * 
      * @return the amount of time that the request is active on the network
-     * @see ClientLoad#getNetworkDuration()
+     * @see BaseNetworkLoad#getNetworkDuration()
      */
     public long getDuration() {
         return duration;
@@ -131,7 +131,7 @@ import com.google.common.collect.ImmutableMap;
 
     @Override
     public String toString() {
-        return String.format("client: %s start: %s duration: %s load: %s", getClient(), getStartTime(), getDuration(),
+        return String.format("flow: %s start: %s duration: %s load: %s", getFlow(), getStartTime(), getDuration(),
                 getNetworkLoad());
     }
 }

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -34,6 +34,7 @@ package com.bbn.map;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,16 +54,14 @@ import javax.annotation.Nonnull;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.CloseableThreadContext;
-import org.protelis.lang.datatype.DeviceUID;
 import org.protelis.lang.datatype.Tuple;
 import org.protelis.vm.ProtelisProgram;
-import org.protelis.vm.impl.AbstractExecutionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AbstractService.Status;
+import com.bbn.map.ap.ApLogger;
 import com.bbn.map.appmgr.util.AppMgrUtils;
-import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.dcop.DCOPService;
 import com.bbn.map.dcop.DcopInfoProvider;
 import com.bbn.map.dcop.DcopSharedInformation;
@@ -74,7 +73,9 @@ import com.bbn.map.rlg.RlgInfoProvider;
 import com.bbn.map.rlg.RlgSharedInformation;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.SimulationRunner;
+import com.bbn.map.ta2.OverlayTopology;
 import com.bbn.map.utils.JsonUtils;
+import com.bbn.map.utils.MAPServices;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.ContainerInfo;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
@@ -95,10 +96,10 @@ import com.bbn.protelis.networkresourcemanagement.ServiceReport;
 import com.bbn.protelis.utils.VirtualClock;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -106,7 +107,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * The controller for a MAP Agent. This object starts the appropriate services
  * and makes data accessible to the various services.
  */
-public class Controller extends NetworkServer implements DcopInfoProvider, RlgInfoProvider {
+public class Controller extends NetworkServer implements DcopInfoProvider, RlgInfoProvider, ApLogger {
 
     /**
      * Event types that can show up in the event log.
@@ -115,22 +116,22 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      *
      */
     public enum EventTypes {
-    /**
-     * A new DCOP plan has been published.
-     */
-    DCOP_PLAN_PLUBLIED,
-    /**
-     * A new RLG plan has been published.
-     */
-    RLG_PLAN_PUBLISHED,
-    /**
-     * The DNS has been updated successfully.
-     */
-    DNS_UPDATE_SUCCEEDED,
-    /**
-     * The DNS update failed.
-     */
-    DNS_UPDATE_FAILED;
+        /**
+         * A new DCOP plan has been published.
+         */
+        DCOP_PLAN_PLUBLIED,
+        /**
+         * A new RLG plan has been published.
+         */
+        RLG_PLAN_PUBLISHED,
+        /**
+         * The DNS has been updated successfully.
+         */
+        DNS_UPDATE_SUCCEEDED,
+        /**
+         * The DNS update failed.
+         */
+        DNS_UPDATE_FAILED;
     }
 
     private final Logger logger;
@@ -187,7 +188,8 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         this.rlg = new RLGService(name.getName(), getRegionIdentifier(), this, AppMgrUtils.getApplicationManager());
         this.networkServices = networkServices;
         this.allowDnsChanges = allowDnsChanges;
-        this.enableDcop = enableDcop;
+        this.enableDcop = enableDcop
+                && !AgentConfiguration.RlgAlgorithm.NO_MAP.equals(AgentConfiguration.getInstance().getRlgAlgorithm());
         this.enableRlg = enableRlg;
         this.dnsPrevLoadBalancerPlan = null;
         this.dnsPrevRegionServiceState = null;
@@ -269,6 +271,20 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         }
 
         manageContainers();
+
+        fetchServiceImages();
+    }
+
+    private void fetchServiceImages() {
+        if (AgentConfiguration.ImageFetchAlgorithm.DCOP
+                .equals(AgentConfiguration.getInstance().getImageFetchAlgorithm())) {
+            final RegionPlan dcopPlan = getNetworkState().getRegionPlan();
+            final ResourceManager<?> resMgr = getResourceManager();
+            final RegionIdentifier region = getRegionIdentifier();
+
+            dcopPlan.getPlan().entrySet().stream().filter(e -> e.getValue().getOrDefault(region, 0D) > 0)
+                    .map(Map.Entry::getKey).forEach(service -> resMgr.fetchImage(service));
+        }
     }
 
     private void updateDnsInformation() {
@@ -281,8 +297,49 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         if (!newLoadBalancerPlan.equals(dnsPrevLoadBalancerPlan)
                 || !newRegionServiceState.equals(dnsPrevRegionServiceState)) {
 
-            logger.trace("Differences prevLoad: {} newLoad: {} prevService: {} newService: {}", dnsPrevLoadBalancerPlan,
-                    newLoadBalancerPlan, dnsPrevRegionServiceState, newRegionServiceState);
+            if (logger.isTraceEnabled()) {
+                final ObjectWriter mapper = createDumpWriter();
+
+                String prevLoadStr = null;
+                try (StringWriter writer = new StringWriter()) {
+                    mapper.writeValue(writer, dnsPrevLoadBalancerPlan);
+                    prevLoadStr = writer.toString();
+                } catch (final IOException e) {
+                    logger.error("Unable to write out debug state", e);
+                }
+
+                String newLoadStr = null;
+                try (StringWriter writer = new StringWriter()) {
+                    mapper.writeValue(writer, newLoadBalancerPlan);
+                    newLoadStr = writer.toString();
+                } catch (final IOException e) {
+                    logger.error("Unable to write out debug state", e);
+                }
+
+                String prevServiceStr = null;
+                try (StringWriter writer = new StringWriter()) {
+                    mapper.writeValue(writer, dnsPrevRegionServiceState);
+                    prevServiceStr = writer.toString();
+                } catch (final IOException e) {
+                    logger.error("Unable to write out debug state", e);
+                }
+
+                String newServiceStr = null;
+                try (StringWriter writer = new StringWriter()) {
+                    mapper.writeValue(writer, newRegionServiceState);
+                    newServiceStr = writer.toString();
+                } catch (final IOException e) {
+                    logger.error("Unable to write out debug state", e);
+                }
+
+                logger.trace("Differences prevLoad: {} newLoad: {} equal? {} prevService: {} newService: {} equal? {}",
+                        prevLoadStr, //
+                        newLoadStr, //
+                        newLoadBalancerPlan.equals(dnsPrevLoadBalancerPlan), //
+                        prevServiceStr, //
+                        newServiceStr, //
+                        !newRegionServiceState.equals(dnsPrevRegionServiceState));
+            }
 
             final ImmutableCollection<Pair<DnsRecord, Double>> newDnsEntries = networkServices.getPlanTranslator()
                     .convertToDns(newLoadBalancerPlan, newRegionServiceState);
@@ -401,6 +458,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      */
     private void manageContainers() {
         try (CloseableThreadContext.Instance ctc = CloseableThreadContext.push(getName())) {
+            final long time = getResourceManager().getClock().getCurrentTime();
 
             final ResourceManager<?> resMgr = getResourceManager();
 
@@ -414,6 +472,11 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                         prevContainerPlan, nodeServicePlan, rlgPlan);
                 return;
             }
+
+            final long delay = time - rlgPlan.getTimestamp();
+
+            logger.debug("manageContainers: Acting on new {} with timestamp {} at time {} after a delay of {} ms.",
+                    LoadBalancerPlan.class.getSimpleName(), rlgPlan.getTimestamp(), time, delay);
 
             logger.trace("Manging containers RLG service plan for this node: {}", nodeServicePlan);
 
@@ -501,10 +564,9 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private void startDCOP() {
         if (enableDcop) {
-            if (logger.isInfoEnabled()) {
-                logger.info("Starting DCOP");
-            }
+            logger.info("Starting DCOP");
             dcop.startService();
+            logger.info("DCOP started");
         } else {
             if (logger.isTraceEnabled()) {
                 logger.trace("Attempt to start DCOP ignored because DCOP is disabled");
@@ -513,10 +575,9 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     }
 
     private void stopDCOP() {
-        if (isDCOPRunning() && logger.isInfoEnabled()) {
-            logger.info("Stopping DCOP");
-        }
+        logger.info("Stopping DCOP");
         dcop.stopService(AgentConfiguration.getInstance().getServiceShutdownWaitTime().toMillis());
+        logger.info("DCOP stopped");
     }
 
     /**
@@ -530,9 +591,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private void startRLG() {
         if (enableRlg) {
-            if (logger.isInfoEnabled()) {
-                logger.info("Starting RLG");
-            }
+            logger.info("Starting RLG");
 
             rlg.startService();
         } else {
@@ -543,11 +602,9 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     }
 
     private void stopRLG() {
-        if (isRLGRunning() && logger.isInfoEnabled()) {
-            logger.info("Stopping RLG");
-        }
-
+        logger.info("Stopping RLG");
         rlg.stopService(AgentConfiguration.getInstance().getServiceShutdownWaitTime().toMillis());
+        logger.info("RLG stopped");
     }
 
     /**
@@ -595,27 +652,36 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         return runRLG;
     }
 
-    /**
-     * Allow AP to write debug messages to the logger.
-     * 
-     * @param str
-     *            the string to write
-     */
+    // ----- ApLogger
+    @Override
+    public void apErrorMessage(final String str) {
+        apLogger.error("{} ({}): {}", getName(), getExecutionCount(), str);
+    }
+
+    @Override
+    public void apWarnMessage(final String str) {
+        apLogger.warn("{} ({}): {}", getName(), getExecutionCount(), str);
+    }
+
+    @Override
+    public void apInfoMessage(final String str) {
+        apLogger.info("{} ({}): {}", getName(), getExecutionCount(), str);
+    }
+
+    @Override
     public void apDebugMessage(final String str) {
         apLogger.debug("{} ({}): {}", getName(), getExecutionCount(), str);
     }
 
-    /**
-     * Allow AP to write trace messages to the logger.
-     * 
-     * @param str
-     *            the string to write
-     */
+    @Override
     public void apTraceMessage(final String str) {
         apLogger.trace("{} ({}): {}", getName(), getExecutionCount(), str);
     }
+    // ----- end ApLogger
 
     // ---- DcopInfoProvider
+    private final Object dcopSharedInformationLock = new Object();
+
     private DcopSharedInformation localDcopSharedInformation = new DcopSharedInformation();
 
     /**
@@ -625,12 +691,18 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      */
     @Nonnull
     public DcopSharedInformation getLocalDcopSharedInformation() {
-        return localDcopSharedInformation;
+        synchronized (dcopSharedInformationLock) {
+            logger.debug("Getting local DCOP information {}", localDcopSharedInformation);
+            return localDcopSharedInformation;
+        }
     }
 
     @Override
     public void setLocalDcopSharedInformation(@Nonnull final DcopSharedInformation v) {
-        localDcopSharedInformation = v;
+        synchronized (dcopSharedInformationLock) {
+            logger.debug("Sharing DCOP information {}", v);
+            localDcopSharedInformation = v;
+        }
     }
 
     private ImmutableMap<RegionIdentifier, DcopSharedInformation> allDcopSharedInformation = ImmutableMap.of();
@@ -643,7 +715,10 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     @Override
     @Nonnull
     public ImmutableMap<RegionIdentifier, DcopSharedInformation> getAllDcopSharedInformation() {
-        return allDcopSharedInformation;
+        synchronized (dcopSharedInformationLock) {
+            logger.debug("Returning all DCOP information {}", allDcopSharedInformation);
+            return allDcopSharedInformation;
+        }
     }
 
     /**
@@ -675,13 +750,19 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 logger.error("Got unexpected value as DCOP shared value, ignoring: " + value);
             }
         }
-        allDcopSharedInformation = builder.build();
+        synchronized (dcopSharedInformationLock) {
+            allDcopSharedInformation = builder.build();
+            logger.debug("Set new DCOP shared information {}", allDcopSharedInformation);
+        }
     }
 
     private RegionPlan prevDcopPlan = null;
 
     @Override
     public void publishDcopPlan(@Nonnull RegionPlan plan) {
+        final long time = getResourceManager().getClock().getCurrentTime();
+        plan.setTimestamp(time);
+
         getNetworkState().setRegionPlan(plan);
         notifyDcopPlanListeners(plan);
         if (!plan.equals(prevDcopPlan)) {
@@ -690,7 +771,8 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             final String message = String.format("%s", EventTypes.DCOP_PLAN_PLUBLIED);
             writeEventLog(message);
 
-            logger.debug("Published new DCOP plan at round {}: {}", getExecutionCount(), plan);
+            logger.debug("Published new DCOP plan with time {} at round {}: {}", plan.getTimestamp(),
+                    getExecutionCount(), plan);
 
             prevDcopPlan = plan;
         }
@@ -710,7 +792,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 logger.warn("DCOP plan for region {} service {} has weight sum of {}, which is not 1",
                         plan.getRegion().getName(), service.getIdentifier(), serviceWeightSum);
             }
-            if (ApplicationCoordinates.UNMANAGED.equals(service) || ApplicationCoordinates.AP.equals(service)) {
+            if (MAPServices.UNPLANNED_SERVICES.contains(service)) {
                 logger.warn("DCOP plan for region {} specifies the service {} which MAP does not control",
                         plan.getRegion().getName(), service.getIdentifier());
             }
@@ -736,8 +818,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 containerInfos.forEach(info -> {
                     if (null == info.getService()) {
                         logger.warn("RLG plan for node {} container {} has null service", node.getName(), info.getId());
-                    } else if (ApplicationCoordinates.UNMANAGED.equals(info.getService())
-                            || ApplicationCoordinates.AP.equals(info.getService())) {
+                    } else if (MAPServices.UNPLANNED_SERVICES.contains(info.getService())) {
                         logger.warn(
                                 "RLG plan for node {} container {} specifies the service {} which MAP does not control",
                                 plan.getRegion().getName(), info.getService().getIdentifier());
@@ -779,6 +860,11 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     }
 
     // ----- RLGInfoProvider
+    @Override
+    @Nonnull
+    public RegionIdentifier getRegion() {
+        return getRegionIdentifier();
+    }
 
     @Override
     public boolean isServiceAvailable(final RegionIdentifier region, final ServiceIdentifier<?> service) {
@@ -786,6 +872,8 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             return allNetworkAvailableServices.isServiceAvailable(region, service);
         }
     }
+
+    private final Object rlgSharedInformationLock = new Object();
 
     private RlgSharedInformation localRlgSharedInformation = new RlgSharedInformation();
 
@@ -796,12 +884,16 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      */
     @Nonnull
     public RlgSharedInformation getLocalRlgSharedInformation() {
-        return localRlgSharedInformation;
+        synchronized (rlgSharedInformationLock) {
+            return localRlgSharedInformation;
+        }
     }
 
     @Override
     public void setLocalRlgSharedInformation(@Nonnull final RlgSharedInformation v) {
-        localRlgSharedInformation = v;
+        synchronized (rlgSharedInformationLock) {
+            localRlgSharedInformation = v;
+        }
     }
 
     private ImmutableMap<RegionIdentifier, RlgSharedInformation> allRlgSharedInformation = ImmutableMap.of();
@@ -814,7 +906,9 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     @Override
     @Nonnull
     public ImmutableMap<RegionIdentifier, RlgSharedInformation> getAllRlgSharedInformation() {
-        return allRlgSharedInformation;
+        synchronized (rlgSharedInformationLock) {
+            return allRlgSharedInformation;
+        }
     }
 
     /**
@@ -846,18 +940,39 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 logger.error("Got unexpected value as RLG shared value, ignoring: " + value);
             }
         }
-        allRlgSharedInformation = builder.build();
+        synchronized (rlgSharedInformationLock) {
+            allRlgSharedInformation = builder.build();
+        }
     }
 
     @Override
     @Nonnull
     public ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow) {
-        return getNetworkState().getRegionSummary(estimationWindow);
+        final long now = getResourceManager().getClock().getCurrentTime();
+
+        ResourceSummary summary = getNetworkState().getRegionSummary(estimationWindow);
+        final long minDelay = now - summary.getMinTimestamp();
+        final long maxDelay = now - summary.getMaxTimestamp();
+
+        logger.debug(
+                "getRegionSummary: Retrieving {} with timestamp range {}-{} at time {} after delay range of {}-{} ms",
+                ResourceSummary.class.getSimpleName(), summary.getMinTimestamp(), summary.getMaxTimestamp(), now,
+                minDelay, maxDelay);
+
+        return summary;
     }
 
     @Override
     @Nonnull
     public RegionPlan getDcopPlan() {
+        final long now = getResourceManager().getClock().getCurrentTime();
+
+        RegionPlan plan = getNetworkState().getRegionPlan();
+        final long delay = now - plan.getTimestamp();
+
+        logger.debug("getDcopPlan: Retrieving {} with timestamp {} at time {} after delay of {} ms",
+                RegionPlan.class.getSimpleName(), plan.getTimestamp(), now, delay);
+
         return getNetworkState().getRegionPlan();
     }
 
@@ -871,6 +986,9 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     @Override
     public void publishRlgPlan(@Nonnull LoadBalancerPlan plan) {
+        final long time = getResourceManager().getClock().getCurrentTime();
+        plan.setTimestamp(time);
+
         getNetworkState().setLoadBalancerPlan(plan);
 
         notifyRlgPlanListeners(plan);
@@ -882,10 +1000,23 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
             writeEventLog(message);
 
-            logger.debug("Published new RLG plan at round {}: {}", getExecutionCount(), plan);
+            logger.debug("Published new RLG plan with timestamp {} at round {}: {}", plan.getTimestamp(),
+                    getExecutionCount(), plan);
 
             prevRlgPlan = plan;
         }
+    }
+
+    @Override
+    @Nonnull
+    public OverlayTopology getCurrentRegionTopology() {
+        return networkServices.getTA2Interface().getOverlay(getRegionIdentifier());
+    }
+
+    @Override
+    @Nonnull
+    public ImmutableSet<ResourceReport> getNodeResourceReports() {
+        return getRegionNodeState().getNodeResourceReports();
     }
 
     // ---- end RLGInfoProvider
@@ -972,60 +1103,6 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      */
     public boolean isHandleDnsChanges() {
         return handleDnsChanges;
-    }
-
-    /**
-     * Child context used for {@link NetworkServer#instance()}.
-     */
-    public class ChildContext extends AbstractExecutionContext {
-        private Controller parent;
-
-        /**
-         * Create a child context.
-         * 
-         * @param parent
-         *            the parent environment to get information from.
-         */
-        public ChildContext(final Controller parent) {
-            super(parent.getExecutionEnvironment(), parent.getNetworkManager());
-            this.parent = parent;
-        }
-
-        @Override
-        public Number getCurrentTime() {
-            return parent.getCurrentTime();
-        }
-
-        @Override
-        public DeviceUID getDeviceUID() {
-            return parent.getDeviceUID();
-        }
-
-        @Override
-        public double nextRandomDouble() {
-            return parent.nextRandomDouble();
-        }
-
-        @Override
-        protected AbstractExecutionContext instance() {
-            return new ChildContext(parent);
-        }
-
-        /**
-         * Used by AP to access the methods in the controller. Simplifies the
-         * workaround for how ChildContexts work.
-         * 
-         * @return parent
-         * @see Controller#getController()
-         */
-        public Controller getController() {
-            return parent;
-        }
-    }
-
-    @Override
-    protected AbstractExecutionContext instance() {
-        return new ChildContext(this);
     }
 
     /**
@@ -1126,7 +1203,6 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     public static ObjectWriter createDumpWriter() {
         final ObjectWriter mapper = JsonUtils.getStandardMapObjectMapper()//
                 .writer()//
-                .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)//
                 .withDefaultPrettyPrinter();
 
         return mapper;
@@ -1304,13 +1380,13 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 final RegionNodeState nodeState = getRegionNodeState();
                 mapper.writeValue(writer, nodeState);
             }
+        }
 
-            // LoadBalancerPlan
-            final Path loadBalancerPlanFilename = outputDir.resolve("loadBalancerPlan.json");
-            try (BufferedWriter writer = Files.newBufferedWriter(loadBalancerPlanFilename, Charset.defaultCharset())) {
-                final LoadBalancerPlan plan = getNetworkState().getLoadBalancerPlan();
-                mapper.writeValue(writer, plan);
-            }
+        // LoadBalancerPlan
+        final Path loadBalancerPlanFilename = outputDir.resolve("loadBalancerPlan.json");
+        try (BufferedWriter writer = Files.newBufferedWriter(loadBalancerPlanFilename, Charset.defaultCharset())) {
+            final LoadBalancerPlan plan = getNetworkState().getLoadBalancerPlan();
+            mapper.writeValue(writer, plan);
         }
 
         if (isHandleDnsChanges()) {
@@ -1320,6 +1396,12 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                     mapper.writeValue(writer, dnsEntries);
                 }
             }
+
+            final Path filename = outputDir.resolve("regionServiceState.json");
+            try (BufferedWriter writer = Files.newBufferedWriter(filename, Charset.defaultCharset())) {
+                mapper.writeValue(writer, getRegionServiceState());
+            }
+
         }
     }
 

@@ -1,0 +1,6 @@
+{
+  "dcopCapacityThreshold" : 0.55,
+  "dcopAlgorithm" : "CDIFF_PLUS",
+  "rlgAlgorithm" : "STUB",
+  "rlgStubChooseNcp" : "MOST_AVAILABLE_CONTAINERS"
+}

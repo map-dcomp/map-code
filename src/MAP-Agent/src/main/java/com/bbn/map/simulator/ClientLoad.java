@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -33,14 +33,11 @@ package com.bbn.map.simulator;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 import javax.annotation.Nonnull;
 
@@ -48,15 +45,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -66,45 +60,16 @@ import com.google.common.collect.ImmutableMap;
  * simulated as executing at the same time.
  *
  */
-public class ClientLoad implements Serializable {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ClientLoad.class);
+public class ClientLoad extends BaseNetworkLoad {
 
     private static final long serialVersionUID = 1L;
 
-    private static final LinkMetricName OLD_DATARATE = new LinkMetricName("DATARATE");
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClientLoad.class);
 
     /**
-     * Take a network capacity map and make sure that if the old datarate is
-     * there convert it to rx and tx. Don't overwrite rx and tx values if they
-     * are present.
-     * 
-     * @param networkLoad
-     *            the value to be migrated
-     * @return the new value with {@link LinkMetricName#DATARATE_RX} and
-     *         {@link LinkMetricName#DATARATE_TX} and without DATARATE. May be
-     *         the same as the original value.
+     * Used by JSON deserialization for construction.
      */
-    public static ImmutableMap<LinkMetricName, Double> migrateDatarate(
-            final ImmutableMap<LinkMetricName, Double> networkLoad) {
-        if (networkLoad.containsKey(OLD_DATARATE)) {
-            final double datarate = networkLoad.get(OLD_DATARATE);
-            final Map<LinkMetricName, Double> newMap = new HashMap<>(networkLoad);
-
-            if (!newMap.containsKey(LinkMetricName.DATARATE_RX)) {
-                newMap.put(LinkMetricName.DATARATE_RX, datarate);
-            }
-
-            if (!newMap.containsKey(LinkMetricName.DATARATE_TX)) {
-                newMap.put(LinkMetricName.DATARATE_TX, datarate);
-            }
-
-            newMap.remove(OLD_DATARATE);
-
-            return ImmutableMap.copyOf(newMap);
-        } else {
-            return networkLoad;
-        }
+    public ClientLoad() {
     }
 
     /**
@@ -123,32 +88,29 @@ public class ClientLoad implements Serializable {
      * @param networkLoad
      *            see {@link #getNetworkLoad()}
      */
-    public ClientLoad(@JsonProperty("startTime") final long startTime,
-            @JsonProperty("serverDuration") final long serverDuration,
-            @JsonProperty("networkDuration") final long networkDuration,
-            @JsonProperty("numClients") final int numClients,
-            @JsonProperty("service") final ApplicationCoordinates service,
-            @JsonProperty("nodeLoad") final ImmutableMap<NodeMetricName, Double> nodeLoad,
-            @JsonProperty("networkLoad") final ImmutableMap<LinkMetricName, Double> networkLoad) {
-        this.startTime = startTime;
+    public ClientLoad(final long startTime,
+            final long serverDuration,
+            final long networkDuration,
+            final int numClients,
+            final ApplicationCoordinates service,
+            final ImmutableMap<NodeAttribute, Double> nodeLoad,
+            final ImmutableMap<LinkAttribute, Double> networkLoad) {
+        super(startTime, networkDuration, service, networkLoad);
         this.serverDuration = serverDuration;
-        this.networkDuration = networkDuration;
-        this.numClients = numClients;
-        this.service = service;
         this.nodeLoad = nodeLoad;
-        this.networkLoad = migrateDatarate(networkLoad);
+        this.numClients = numClients;
     }
 
-    private final long startTime;
+    private long serverDuration;
 
     /**
-     * @return when the request starts
+     * 
+     * @param v
+     *            see {@link #getServerDuration()}
      */
-    public long getStartTime() {
-        return startTime;
+    public void setServerDuration(final long v) {
+        serverDuration = v;
     }
-
-    private final long serverDuration;
 
     /**
      * This duration is the minimum duration for the request to effect the
@@ -161,20 +123,46 @@ public class ClientLoad implements Serializable {
         return serverDuration;
     }
 
-    private final long networkDuration;
+    private ImmutableMap<NodeAttribute, Double> nodeLoad;
 
     /**
-     * This duration is the minimum duration for the request to effect the
-     * network. Depending on how busy the network is the actual network
-     * processing time may be longer.
      * 
-     * @return how long the request is active for
+     * @param v
+     *            see {@Link #getNodeLoad()}
      */
-    public long getNetworkDuration() {
-        return networkDuration;
+    public void setNodeLoad(final ImmutableMap<NodeAttribute, Double> v) {
+        nodeLoad = v;
     }
 
-    private final int numClients;
+    /**
+     * 
+     * @return how much load is on the node
+     */
+    public ImmutableMap<NodeAttribute, Double> getNodeLoad() {
+        return nodeLoad;
+    }
+
+    /**
+     * This is computed from the {@link #getNodeLoad()} and defaults to 0 if the
+     * {@link NodeAttribute#TASK_CONTAINERS} attribute is not present.
+     * 
+     * @return the number of standard sized containers that the request is using
+     */
+    @JsonIgnore
+    public double getNumberOfContainers() {
+        return getNodeLoad().getOrDefault(NodeAttribute.TASK_CONTAINERS, 0D);
+    }
+
+    private int numClients;
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getNumClients()}
+     */
+    public void setNumClients(final int v) {
+        numClients = v;
+    }
 
     /**
      * The number of clients to simulate. This defaults to 1.
@@ -185,109 +173,17 @@ public class ClientLoad implements Serializable {
         return numClients;
     }
 
-    private final ApplicationCoordinates service;
-
-    /**
-     * @return which service is being used
-     */
-    public ApplicationCoordinates getService() {
-        return service;
-    }
-
-    private final ImmutableMap<NodeMetricName, Double> nodeLoad;
-
-    /**
-     * 
-     * @return how much load is on the node
-     */
-    public ImmutableMap<NodeMetricName, Double> getNodeLoad() {
-        return nodeLoad;
-    }
-
-    private final ImmutableMap<LinkMetricName, Double> networkLoad;
-
-    /**
-     * 
-     * @return how much load there is on the network
-     */
-    public ImmutableMap<LinkMetricName, Double> getNetworkLoad() {
-        return networkLoad;
-    }
-
-    private transient ImmutableMap<LinkAttribute<?>, Double> netLoadAsAttribute = null;
-
-    /**
-     * This is cached so subsequent calls are fast.
-     * 
-     * @return the network load as {@link LinkAttribute}
-     * @see #getNetworkLoad()
-     */
-    @JsonIgnore
-    public ImmutableMap<LinkAttribute<?>, Double> getNetworkLoadAsAttribute() {
-        if (null == netLoadAsAttribute) {
-            final ImmutableMap.Builder<LinkAttribute<?>, Double> networkLoad = ImmutableMap.builder();
-
-            getNetworkLoad().forEach((attr, value) -> {
-                networkLoad.put(attr, value);
-            });
-
-            netLoadAsAttribute = networkLoad.build();
-        }
-        return netLoadAsAttribute;
-    }
-
-    private transient ImmutableMap<LinkAttribute<?>, Double> netLoadAsAttributeFlipped = null;
-
-    /**
-     * This is cached so subsequent calls are fast.
-     * 
-     * @return the network load as {@link LinkAttribute} with TX and RX flipped
-     * @see #getNetworkLoad()
-     */
-    @JsonIgnore
-    public ImmutableMap<LinkAttribute<?>, Double> getNetworkLoadAsAttributeFlipped() {
-        if (null == netLoadAsAttributeFlipped) {
-            final ImmutableMap.Builder<LinkAttribute<?>, Double> networkLoad = ImmutableMap.builder();
-
-            getNetworkLoad().forEach((attr, value) -> {
-                final LinkMetricName toInsert;
-                if (LinkMetricName.DATARATE_RX.equals(attr)) {
-                    toInsert = LinkMetricName.DATARATE_TX;
-                } else if (LinkMetricName.DATARATE_TX.equals(attr)) {
-                    toInsert = LinkMetricName.DATARATE_RX;
-                } else {
-                    toInsert = attr;
-                }
-                networkLoad.put(toInsert, value);
-            });
-
-            netLoadAsAttributeFlipped = networkLoad.build();
-        }
-        return netLoadAsAttributeFlipped;
-    }
-
     @Override
     public String toString() {
         return getClass().getSimpleName() + "[" //
-                + " start: " + startTime //
-                + " serverDuration: " + serverDuration //
-                + " networkDuration: " + networkDuration //
-                + " numClients: " + numClients //
-                + " service: " + service //
-                + " nodeLoad: " + nodeLoad //
-                + " networkLoad: " + networkLoad //
+                + " start: " + getStartTime() //
+                + " serverDuration: " + getServerDuration() //
+                + " networkDuration: " + getNetworkDuration() //
+                + " numClients: " + getNumClients() //
+                + " service: " + getService() //
+                + " nodeLoad: " + getNodeLoad() //
+                + " networkLoad: " + getNetworkLoad() //
                 + " ]";
-    }
-
-    /**
-     * This is computed from the {@link #getNodeLoad()} and defaults to 0 if the
-     * {@link NodeMetricName#TASK_CONTAINERS} attribute is not present.
-     * 
-     * @return the number of standard sized containers that the request is using
-     */
-    @JsonIgnore
-    public double getNumberOfContainers() {
-        return getNodeLoad().getOrDefault(NodeMetricName.TASK_CONTAINERS, 0D);
     }
 
     /**
@@ -308,7 +204,7 @@ public class ClientLoad implements Serializable {
         try {
             try (Reader reader = Files.newBufferedReader(clientDemandPath, StandardCharsets.UTF_8)) {
 
-                ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper().registerModule(new GuavaModule());
+                final ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper();
 
                 final List<ClientLoad> demand = mapper.readValue(reader, new TypeReference<LinkedList<ClientLoad>>() {
                 });

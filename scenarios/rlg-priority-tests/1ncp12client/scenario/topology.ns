@@ -1,0 +1,34 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# Clients
+set client2Pool1 [$ns node]
+set client2Pool2 [$ns node]
+set client2Pool3 [$ns node]
+set client2Pool4 [$ns node]
+set client3Pool1 [$ns node]
+set client3Pool2 [$ns node]
+set client3Pool3 [$ns node]
+set client3Pool4 [$ns node]
+set client4Pool1 [$ns node]
+set client4Pool2 [$ns node]
+set client4Pool3 [$ns node]
+set client4Pool4 [$ns node]
+
+# NCPs
+set serverX1 [$ns node]
+tb-set-hardware $serverX1 pc3000
+
+
+# Links
+set lanClient2 [$ns make-lan "$serverX1 $client2Pool1 $client2Pool2 $client2Pool3 $client2Pool4" 100Mb 0ms]
+set lanClient3 [$ns make-lan "$serverX1 $client3Pool1 $client3Pool2 $client3Pool3 $client3Pool4" 100Mb 0ms]
+set lanClient4 [$ns make-lan "$serverX1 $client4Pool1 $client4Pool2 $client4Pool3 $client4Pool4" 100Mb 0ms]
+
+
+
+
+
+$ns rtproto Static
+$ns run
+

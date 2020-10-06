@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -40,10 +40,10 @@ import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableMap;
@@ -67,7 +67,7 @@ import com.google.common.collect.ImmutableMap;
 
     private final int hashCode;
 
-    private final ImmutableMap<LinkAttribute<?>, Double> capacity;
+    private final ImmutableMap<LinkAttribute, Double> capacity;
 
     private final LinkLoadTracker loadTracker = new LinkLoadTracker();
 
@@ -75,7 +75,7 @@ import com.google.common.collect.ImmutableMap;
      * 
      * @return the capacity of this link
      */
-    public ImmutableMap<LinkAttribute<?>, Double> getCapacity() {
+    public ImmutableMap<LinkAttribute, Double> getCapacity() {
         return capacity;
     }
 
@@ -83,7 +83,7 @@ import com.google.common.collect.ImmutableMap;
 
     /**
      * @return The default node for receiving traffic.
-     * @see #addLinkLoad(long, ClientLoad, NodeIdentifier, NodeIdentifier)
+     * @see #addLinkLoad(long, BaseNetworkLoad, NodeIdentifier, NodeIdentifier)
      */
     @Nonnull
     public NodeIdentifier getReceiver() {
@@ -95,7 +95,7 @@ import com.google.common.collect.ImmutableMap;
     /**
      * 
      * @return The default node for transmitting traffic.
-     * @see #addLinkLoad(long, ClientLoad, NodeIdentifier, NodeIdentifier)
+     * @see #addLinkLoad(long, BaseNetworkLoad, NodeIdentifier, NodeIdentifier)
      */
     @Nonnull
     public NodeIdentifier getTransmitter() {
@@ -107,12 +107,12 @@ import com.google.common.collect.ImmutableMap;
      * {@link #LinkResourceManager(VirtualClock, NodeIdentifier, NodeIdentifier, ImmutableMap)
      * with the values from link.
      * 
-     * @see LinkMetricName#DATARATE_RX
-     * @see LinkMetricName#DATARATE_TX
+     * @see LinkAttribute#DATARATE_RX
+     * @see LinkAttribute#DATARATE_TX
      */
     /* package */ LinkResourceManager(@Nonnull final NetworkLink link) {
         this(link.getLeft().getNodeIdentifier(), link.getRight().getNodeIdentifier(), ImmutableMap
-                .of(LinkMetricName.DATARATE_RX, link.getBandwidth(), LinkMetricName.DATARATE_TX, link.getBandwidth()));
+                .of(LinkAttribute.DATARATE_RX, link.getBandwidth(), LinkAttribute.DATARATE_TX, link.getBandwidth()));
     }
 
     /**
@@ -134,7 +134,7 @@ import com.google.common.collect.ImmutableMap;
      */
     /* package */ LinkResourceManager(@Nonnull final NodeIdentifier one,
             @Nonnull final NodeIdentifier two,
-            @Nonnull final ImmutableMap<LinkAttribute<?>, Double> capacity) throws IllegalArgumentException {
+            @Nonnull final ImmutableMap<LinkAttribute, Double> capacity) throws IllegalArgumentException {
         this.capacity = capacity;
 
         // this comparison for left and right needs to match
@@ -152,8 +152,8 @@ import com.google.common.collect.ImmutableMap;
         }
         hashCode = Objects.hash(receiver, transmitter);
 
-        final double capacityRx = this.capacity.getOrDefault(LinkMetricName.DATARATE_RX, 0D);
-        final double capacityTx = this.capacity.getOrDefault(LinkMetricName.DATARATE_TX, 0D);
+        final double capacityRx = this.capacity.getOrDefault(LinkAttribute.DATARATE_RX, 0D);
+        final double capacityTx = this.capacity.getOrDefault(LinkAttribute.DATARATE_TX, 0D);
         final double capacityTolerance = 1E-6;
         if (Math.abs(capacityRx - capacityTx) > capacityTolerance) {
             throw new IllegalArgumentException(
@@ -183,31 +183,31 @@ import com.google.common.collect.ImmutableMap;
     /**
      * Specify some load on the link.
      * 
-     * @param now
-     *            the current time from the clock used
+     * @param startTime
+     *            The current time and the start of the network request.
      * @param req
      *            the client request, only networkLoad is used
-     * @param client
-     *            the client causing the load. This is the originator of the
-     *            traffic, not necessarily one of the end points of the link.
+     * @param clientReqFlow
+     *            the network flow information.
      * @param transmittingNode
      *            the end point that is doing the transmitting, must be one of
      *            {@link #getReceiver()} or {@link #getTransmitter(). This is
      *            used to determine how to store
-     *            {@link LinkMetricName#DATARATE_RX} and
-     *            {@link LinkMetricName#DATARATE_TX} so that this information
-     *            can be properly reported in resource reports.
+     *            {@link LinkAttribute#DATARATE_RX} and
+     *            {@link LinkAttribute#DATARATE_TX} so that this information can
+     *            be properly reported in resource reports.
      * @return status of the request, if the status is
-     *         {@link ClientSim.RequestResult#FAIL}, then the link load is not
-     *         modified. The {@link LinkLoadEntry} can be used to remove the
-     *         link load with {@link #removeLinkLoad(LinkLoadEntry)}. The
-     *         resulting load is also returned.
-     * @see #removeLinkLoad(ClientLoad, NodeIdentifier)
+     *         {@link RequestResult#FAIL}, then the link load is not modified.
+     *         The {@link LinkLoadEntry} can be used to remove the link load
+     *         with {@link #removeLinkLoad(LinkLoadEntry)}. The resulting load
+     *         is also returned.
+     * @see #removeLinkLoad(BaseNetworkLoad, NodeIdentifier)
+     * @see LoadTracker#addLoad(LoadEntry)
      */
-    public ImmutableTriple<ClientSim.RequestResult, LinkLoadEntry, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> addLinkLoad(
-            final long now,
-            @Nonnull final ClientLoad req,
-            @Nonnull final NodeIdentifier client,
+    public ImmutableTriple<RequestResult, LinkLoadEntry, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> addLinkLoad(
+            final long startTime,
+            @Nonnull final BaseNetworkLoad req,
+            @Nonnull final NodeNetworkFlow clientReqFlow,
             @Nonnull final NodeIdentifier transmittingNode) {
         synchronized (lock) {
             final boolean flipDatarateDirection;
@@ -220,29 +220,35 @@ import com.google.common.collect.ImmutableMap;
                         transmittingNode, getReceiver(), getTransmitter()));
             }
 
-            final ImmutableMap<LinkAttribute<?>, Double> networkLoad;
+            // when flipping the network direction, the flow needs to be flipped
+            // as well
+            final ImmutableMap<LinkAttribute, Double> networkLoad;
+            final NodeNetworkFlow flow;
             if (flipDatarateDirection) {
                 networkLoad = req.getNetworkLoadAsAttributeFlipped();
+                flow = new NodeNetworkFlow(clientReqFlow.getDestination(), clientReqFlow.getSource(),
+                        clientReqFlow.getServer());
             } else {
                 networkLoad = req.getNetworkLoadAsAttribute();
+                flow = clientReqFlow;
             }
 
             // first remove expired entries
-            loadTracker.removeExpiredEntries(now, ignore -> {
+            loadTracker.removeExpiredEntries(startTime, ignore -> {
             });
 
             // need to add, then check the thresholds and then possibly
             // remove
-            final LinkLoadEntry entry = new LinkLoadEntry(this, client, req.getStartTime(), req.getNetworkDuration(),
+            final LinkLoadEntry entry = new LinkLoadEntry(this, flow, startTime, req.getNetworkDuration(),
                     req.getService(), networkLoad);
             loadTracker.addLoad(entry);
 
-            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> load = loadTracker
+            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> load = loadTracker
                     .getCurrentLoad();
 
-            final ClientSim.RequestResult result = determineClientRequestStatus();
+            final RequestResult result = determineClientRequestStatus();
 
-            if (ClientSim.RequestResult.FAIL.equals(result)) {
+            if (RequestResult.FAIL.equals(result)) {
                 loadTracker.removeLoad(entry);
             }
 
@@ -254,9 +260,9 @@ import com.google.common.collect.ImmutableMap;
      * Undoes the changes done by {@Link #addLinkLoad(ClientRequest)}.
      *
      * @param entry
-     *            the return value from {@link #addLinkLoad(ClientLoad)}
+     *            the return value from {@link #addLinkLoad(BaseNetworkLoad)}
      * @return true if the load was removed
-     * @see #addLinkLoad(ClientLoad)
+     * @see #addLinkLoad(BaseNetworkLoad)
      */
     public void removeLinkLoad(final LinkLoadEntry entry) {
         synchronized (lock) {
@@ -273,9 +279,9 @@ import com.google.common.collect.ImmutableMap;
      *            the node that is receiving traffic. If this does not match
      *            {@link #getReceiver()}, then the network RX/TX values will be
      *            flipped.
-     * @return source -> service -> attribute -> value
+     * @return flow -> service -> attribute -> value
      */
-    public ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> computeCurrentLinkLoad(
+    public ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computeCurrentLinkLoad(
             final long now,
             @Nonnull final NodeIdentifier receivingNode) {
 
@@ -295,11 +301,11 @@ import com.google.common.collect.ImmutableMap;
         }
     }
 
-    private ClientSim.RequestResult determineClientRequestStatus() {
-        final Map<LinkAttribute<?>, Double> aggregateLinkLoad = loadTracker.getCurrentTotalLoad();
+    private RequestResult determineClientRequestStatus() {
+        final Map<LinkAttribute, Double> aggregateLinkLoad = loadTracker.getCurrentTotalLoad();
 
-        for (final Map.Entry<LinkAttribute<?>, Double> entry : aggregateLinkLoad.entrySet()) {
-            final LinkAttribute<?> attribute = entry.getKey();
+        for (final Map.Entry<LinkAttribute, Double> entry : aggregateLinkLoad.entrySet()) {
+            final LinkAttribute attribute = entry.getKey();
             final double attributeValue = entry.getValue();
             final double attributeCapacity = capacity.getOrDefault(attribute, 0D);
 
@@ -308,13 +314,13 @@ import com.google.common.collect.ImmutableMap;
                 LOGGER.trace("adding link load failed attribute {} capacity: {} value: {}", attribute, capacity,
                         attributeValue);
 
-                return ClientSim.RequestResult.FAIL;
+                return RequestResult.FAIL;
             } else if (percentageOfCapacity > SimulationConfiguration.getInstance().getSlowNetworkThreshold()) {
-                return ClientSim.RequestResult.SLOW;
+                return RequestResult.SLOW;
             }
         }
 
-        return ClientSim.RequestResult.SUCCESS;
+        return RequestResult.SUCCESS;
     }
 
 }

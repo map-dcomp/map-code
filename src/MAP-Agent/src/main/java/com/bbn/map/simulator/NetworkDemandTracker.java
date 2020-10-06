@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -41,8 +41,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
@@ -57,23 +58,25 @@ public class NetworkDemandTracker {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NetworkDemandTracker.class);
 
-    private final Map<Long, ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>>> networkLoadHistory = new HashMap<>();
+    private final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory = new HashMap<>();
 
     /**
      * Update the current demand state. Used for
      * {@link #computeNetworkDemand(long, com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow)}.
      * 
-     * @param timestamp the time that the value was measured at
-     * @param networkLoad the value measured
+     * @param timestamp
+     *            the time that the value was measured at
+     * @param networkLoad
+     *            the value measured
      */
     public void updateDemandValues(final long timestamp,
-            @Nonnull final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad) {
+            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
         updateDemandValues(timestamp, networkLoad, networkLoadHistory);
     }
 
     private static void updateDemandValues(final long timestamp,
-            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad,
-            final Map<Long, ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>>> networkLoadHistory) {
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad,
+            final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory) {
         // add new entry
         networkLoadHistory.put(timestamp, networkLoad);
 
@@ -82,7 +85,7 @@ public class NetworkDemandTracker {
                 - Math.max(AgentConfiguration.getInstance().getDcopEstimationWindow().toMillis(),
                         AgentConfiguration.getInstance().getRlgEstimationWindow().toMillis());
 
-        final Iterator<Map.Entry<Long, ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>>>> networkIter = networkLoadHistory
+        final Iterator<Map.Entry<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>>> networkIter = networkLoadHistory
                 .entrySet().iterator();
         while (networkIter.hasNext()) {
             final Map.Entry<Long, ?> entry = networkIter.next();
@@ -99,7 +102,7 @@ public class NetworkDemandTracker {
     }
 
     /**
-     * Compute the current network demand per client.
+     * Compute the current network demand per interface.
      * 
      * @param now
      *            the current time
@@ -108,15 +111,16 @@ public class NetworkDemandTracker {
      * @return the demand value
      */
     @Nonnull
-    public ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> computeNetworkDemand(
-            final long now, @Nonnull final ResourceReport.EstimationWindow estimationWindow) {
+    public ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand(
+            final long now,
+            @Nonnull final ResourceReport.EstimationWindow estimationWindow) {
         return computeNetworkDemand(now, estimationWindow, networkLoadHistory);
     }
 
-    private ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> computeNetworkDemand(
+    private ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand(
             final long now,
             @Nonnull final ResourceReport.EstimationWindow estimationWindow,
-            @Nonnull final Map<Long, ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>>> networkLoadHistory) {
+            @Nonnull final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory) {
         final long duration;
         switch (estimationWindow) {
         case LONG:
@@ -130,11 +134,11 @@ public class NetworkDemandTracker {
         }
 
         final long cutoff = now - duration;
-        final Map<NodeIdentifier, Map<NodeIdentifier, Map<ServiceIdentifier<?>, Map<LinkAttribute<?>, Double>>>> sums = new HashMap<>();
-        final Map<NodeIdentifier, Map<NodeIdentifier, Map<ServiceIdentifier<?>, Map<LinkAttribute<?>, Integer>>>> counts = new HashMap<>();
+        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> sums = new HashMap<>();
+        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Integer>>>> counts = new HashMap<>();
         historyMapCountSum(networkLoadHistory, cutoff, sums, counts);
 
-        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> reportDemand = historyMapAverage(
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportDemand = historyMapAverage(
                 sums, counts);
 
         return reportDemand;

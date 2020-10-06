@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -33,6 +33,7 @@ package com.bbn.map.simulator;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.core.IsNull.notNullValue;
 import static org.hamcrest.number.IsCloseTo.closeTo;
 import static org.junit.Assert.assertThat;
@@ -43,6 +44,7 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Map;
 
 import org.apache.logging.log4j.CloseableThreadContext;
 import org.hamcrest.core.IsEqual;
@@ -55,13 +57,13 @@ import org.slf4j.LoggerFactory;
 
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
@@ -87,7 +89,7 @@ public class InducedDemandTests {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext());
+    public RuleChain chain = TestUtils.getStandardRuleChain();
 
     /**
      * Run induced-demand-simple relative to this class. Check that the
@@ -109,6 +111,8 @@ public class InducedDemandTests {
         final double loadTolerance = 8E-4;
         final double expectedTxLinkLoad = 3;
         final double expectedRxLinkLoad = 0.25;
+        final double expectedTxLinkLoadFlipped = expectedRxLinkLoad;
+        final double expectedRxLinkLoadFlipped = expectedTxLinkLoad;
         final String expectedSourceRegionName = "A";
         final RegionIdentifier expectedSourceRegion = new StringRegionIdentifier(expectedSourceRegionName);
 
@@ -160,6 +164,11 @@ public class InducedDemandTests {
             assertThat(containerRunningService2.getService(), IsEqual.equalTo(service2));
 
             // check all estimation windows
+            final NodeNetworkFlow expectedFlow = new NodeNetworkFlow(containerIdRunningService2,
+                    containerIdRunningService1, containerIdRunningService2);
+            final NodeNetworkFlow expectedFlowFlipped = new NodeNetworkFlow(expectedFlow.getDestination(),
+                    expectedFlow.getSource(), expectedFlow.getServer());
+
             for (final ResourceReport.EstimationWindow estimationWindow : ResourceReport.EstimationWindow.values()) {
                 try (CloseableThreadContext.Instance context = CloseableThreadContext
                         .push(estimationWindow.toString())) {
@@ -171,46 +180,48 @@ public class InducedDemandTests {
                     assertThat("Service resource report", containerResourceReport, notNullValue());
 
                     // check node load
-                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> serviceNodeLoadByNode = containerResourceReport
+                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> serviceNodeLoadByNode = containerResourceReport
                             .getComputeLoad();
                     assertThat("service node load by node", serviceNodeLoadByNode, is(notNullValue()));
                     assertThat("number of regions with load", serviceNodeLoadByNode.size(), is(1));
 
-                    final ImmutableMap<NodeAttribute<?>, Double> serviceLoad = serviceNodeLoadByNode
-                            .get(containerRunningService1.getIdentifier());
+                    final ImmutableMap<NodeAttribute, Double> serviceLoad = serviceNodeLoadByNode
+                            .get(NodeIdentifier.UNKNOWN);
                     assertThat("no service load for the expected source node in " + serviceNodeLoadByNode, serviceLoad,
                             is(notNullValue()));
 
-                    assertThat("Size of service load", serviceLoad.size(), is(1));
-                    final Double taskContainersLoad = serviceLoad.get(NodeMetricName.TASK_CONTAINERS);
+                    final Double taskContainersLoad = serviceLoad.get(NodeAttribute.TASK_CONTAINERS);
                     assertThat("task containers not found in " + serviceLoad, taskContainersLoad, is(notNullValue()));
                     assertThat("Containers load", taskContainersLoad,
                             closeTo(expectedTaskContainersLoad, loadTolerance));
 
                     // check link load
-                    final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad = containerResourceReport
+                    final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = containerResourceReport
                             .getNetworkLoad();
                     assertThat(networkLoad, notNullValue());
 
-                    final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> neighborNetworkLoad = networkLoad
-                            .get(server2NcpId);
+                    final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborNetworkLoad = networkLoad
+                            .entrySet().stream().filter(entry -> entry.getKey().getNeighbors().contains(server2NcpId))
+                            .map(Map.Entry::getValue).findFirst().get();
                     assertThat("missing neighbor network load in " + networkLoad, neighborNetworkLoad, notNullValue());
+                    assertThat(neighborNetworkLoad, hasKey(expectedFlowFlipped));
 
-                    final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>> sourceNetworkLoad = neighborNetworkLoad
-                            .get(containerIdRunningService1);
-                    assertThat("missing source network load in " + neighborNetworkLoad, neighborNetworkLoad,
+                    final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> sourceNetworkLoad = neighborNetworkLoad
+                            .get(expectedFlowFlipped);
+                    assertThat("missing source network load in " + neighborNetworkLoad, sourceNetworkLoad,
                             notNullValue());
+                    assertThat(sourceNetworkLoad, hasKey(service2));
 
-                    final ImmutableMap<LinkAttribute<?>, Double> serviceNetworkLoad = sourceNetworkLoad.get(service2);
+                    final ImmutableMap<LinkAttribute, Double> serviceNetworkLoad = sourceNetworkLoad.get(service2);
                     assertThat(sourceNetworkLoad, notNullValue());
 
-                    final Double actualTx = serviceNetworkLoad.get(LinkMetricName.DATARATE_TX);
+                    final Double actualTx = serviceNetworkLoad.get(LinkAttribute.DATARATE_TX);
                     assertThat(actualTx, notNullValue());
-                    assertThat(actualTx, closeTo(expectedTxLinkLoad, loadTolerance));
+                    assertThat(actualTx, closeTo(expectedTxLinkLoadFlipped, loadTolerance));
 
-                    final Double actualRx = serviceNetworkLoad.get(LinkMetricName.DATARATE_RX);
+                    final Double actualRx = serviceNetworkLoad.get(LinkAttribute.DATARATE_RX);
                     assertThat(actualRx, notNullValue());
-                    assertThat(actualRx, closeTo(expectedRxLinkLoad, loadTolerance));
+                    assertThat(actualRx, closeTo(expectedRxLinkLoadFlipped, loadTolerance));
 
                     LOGGER.info("Finished checking {}", estimationWindow);
                 } // logging context

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -47,22 +47,21 @@ import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.ApplicationManagerApi;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
+import com.bbn.map.utils.MAPServices;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
-import com.bbn.protelis.networkresourcemanagement.ServiceState;
+import com.bbn.protelis.networkresourcemanagement.ServiceStatus;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 /**
- * Translate {@link RegionPlan} and {@link LoadBalancerPlan} to
- * {@link DnsRecord}s. The object can be shared across multiple nodes if
- * desired. The object itself is immutable and does not contain any region
- * specific information.
+ * Translate {@link LoadBalancerPlan} to {@link DnsRecord}s. The object can be
+ * shared across multiple nodes if desired. The object itself is immutable and
+ * does not contain any region specific information.
  */
 public class PlanTranslator {
 
@@ -109,13 +108,30 @@ public class PlanTranslator {
         // node -> containers
         final Map<NodeIdentifier, Set<NodeIdentifier>> containersToIgnore = new HashMap<>();
 
+        // stores the weight for each container
+        final Map<NodeIdentifier, Double> containerWeights = new HashMap<>();
+        final Map<NodeIdentifier, ServiceIdentifier<?>> containerToServiceMap = new HashMap<>();
+        final Map<ServiceIdentifier<?>, Double> serviceTotalContainerWeights = new HashMap<>();
+
         loadBalancerPlan.getServicePlan().forEach((node, containers) -> {
             containers.forEach(info -> {
                 if (info.isStop() || info.isStopTrafficTo()) {
                     containersToIgnore.computeIfAbsent(node, k -> new HashSet<>()).add(info.getId());
                 }
+
+                containerToServiceMap.put(info.getId(), info.getService());
+                containerWeights.computeIfAbsent(info.getId(), k -> info.getWeight());
+                serviceTotalContainerWeights.merge(info.getService(), info.getWeight(), Double::sum);
             });
         });
+
+        for (NodeIdentifier nodeId : containerWeights.keySet()) {
+            containerWeights.compute(nodeId,
+                    (id, w) -> w / serviceTotalContainerWeights.get(containerToServiceMap.get(nodeId)));
+        }
+
+        LOGGER.debug("serviceTotalContainerWeights: {}", serviceTotalContainerWeights);
+        LOGGER.debug("convertToDns: containerWeights: {}, loadBalancerPlan: {}", containerWeights, loadBalancerPlan);
 
         final Map<ServiceIdentifier<?>, Set<NodeIdentifier>> containersRunningServices = new HashMap<>();
         regionServiceState.getServiceReports().forEach(serviceReport -> {
@@ -124,11 +140,11 @@ public class PlanTranslator {
             final Set<NodeIdentifier> nodeContainersToIgnore = containersToIgnore.getOrDefault(node,
                     Collections.emptySet());
             serviceReport.getServiceState().forEach((containerId, serviceState) -> {
-                final ServiceState.Status status = serviceState.getStatus();
+                final ServiceStatus status = serviceState.getStatus();
                 // TODO check if this service is synchronous or asynchronous -
                 // in the application manager. If synchronous then only add the
                 // record if RUNNING.
-                if (ServiceState.Status.STARTING.equals(status) || ServiceState.Status.RUNNING.equals(status)) {
+                if (ServiceStatus.STARTING.equals(status) || ServiceStatus.RUNNING.equals(status)) {
                     if (!nodeContainersToIgnore.contains(containerId)) {
                         final ServiceIdentifier<?> service = serviceState.getService();
                         final Set<NodeIdentifier> containers = containersRunningServices.computeIfAbsent(service,
@@ -154,43 +170,55 @@ public class PlanTranslator {
         final ApplicationManagerApi appManager = AppMgrUtils.getApplicationManager();
         for (final ApplicationSpecification spec : appManager.getAllApplicationSpecifications()) {
             final ApplicationCoordinates service = spec.getCoordinates();
-            final RegionIdentifier defaultNodeRegion = spec.getServiceDefaultRegion();
+            if (!MAPServices.UNPLANNED_SERVICES.contains(service)) {
+                final RegionIdentifier defaultNodeRegion = spec.getServiceDefaultRegion();
 
-            final Set<NodeIdentifier> serviceNodes = containersRunningServices.getOrDefault(service,
-                    Collections.emptySet());
+                final Set<NodeIdentifier> serviceNodes = containersRunningServices.getOrDefault(service,
+                        Collections.emptySet());
 
-            final ImmutableMap<RegionIdentifier, Double> regionServicePlan = overflowDetails.get(service);
-            LOGGER.trace("Region service plan: {}", regionServicePlan);
-            if (null == regionServicePlan) {
-                // no region plan for this service
+                final ImmutableMap<RegionIdentifier, Double> regionServicePlan = overflowDetails.get(service);
+                LOGGER.trace("Region service plan: {}", regionServicePlan);
+                if (null == regionServicePlan) {
+                    // no region plan for this service
 
-                if (serviceNodes.isEmpty()) {
-                    // no local nodes for this service, just add the default
-                    if (localRegion.equals(defaultNodeRegion)) {
-                        LOGGER.error(
-                                "Attempting to add a delegate to the current region ({}). This means that all of the nodes for service {} are stopped in this region and it is the default region for the service.",
-                                localRegion, service);
-                        // don't make DNS changes here, just leave things in place as they are
-                        return null;
-                    } else {
-                        if (null == defaultNodeRegion) {
-                            LOGGER.warn("Default region for service {} is null, cannot add a delegate record", service);
+                    if (serviceNodes.isEmpty()) {
+                        // no local nodes for this service, just add the default
+                        if (localRegion.equals(defaultNodeRegion)) {
+                            LOGGER.error(
+                                    "Attempting to add a delegate to the current region ({}). This means that all of the nodes for service {} are stopped in this region and it is the default region for the service.",
+                                    localRegion, service);
+                            // don't make DNS changes here, just leave things in
+                            // place as they are
+                            return null;
                         } else {
-                            addDelegateRecord(dnsRecords, service, defaultNodeRegion, 1);
+                            if (null == defaultNodeRegion) {
+                                LOGGER.warn("Default region for service {} is null, cannot add a delegate record",
+                                        service);
+                            } else {
+                                addDelegateRecord(dnsRecords, service, defaultNodeRegion, 1);
+                            }
                         }
+                    } else {
+                        // add a record for each node that should be running the
+                        // service
+                        serviceNodes.forEach(containerId -> {
+                            Double weight = containerWeights.get(containerId);
+
+                            if (weight == null) {
+                                weight = 1.0;
+                                LOGGER.warn(
+                                        "No weight found in plan for container '{}' running service '{}'. Weight defaulting to {}.",
+                                        containerId, service, weight);
+                            }
+
+                            addNameRecord(dnsRecords, service, containerId, weight);
+                        });
                     }
                 } else {
-                    // add a record for each node that should be running the
-                    // service
-                    serviceNodes.forEach(containerId -> {
-                        addNameRecord(dnsRecords, service, containerId, 1);
-                    });
+                    createRecordsForService(localRegion, service, defaultNodeRegion, regionServicePlan,
+                            containerWeights, serviceNodes, dnsRecords);
                 }
-            } else {
-                createRecordsForService(localRegion, service, defaultNodeRegion, regionServicePlan, serviceNodes,
-                        dnsRecords);
-            }
-
+            } // planned service
         } // foreach known service
 
         return dnsRecords.build();
@@ -200,6 +228,7 @@ public class PlanTranslator {
             @Nonnull final ServiceIdentifier<?> service,
             final RegionIdentifier serviceDefaultRegion,
             @Nonnull final ImmutableMap<RegionIdentifier, Double> regionServicePlan,
+            @Nonnull final Map<NodeIdentifier, Double> containerWeights,
             @Nonnull final Set<NodeIdentifier> serviceNodes,
             @Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords) {
 
@@ -209,9 +238,11 @@ public class PlanTranslator {
         // if there are no services, then multiple by 1
         final double weightMultiplier = Math.max(1D, numServicesInLocalRegion);
 
+        final double regionWeightSum = regionServicePlan.entrySet().stream().mapToDouble(Map.Entry::getValue).sum();
+
         for (final ImmutableMap.Entry<RegionIdentifier, Double> regionEntry : regionServicePlan.entrySet()) {
             final RegionIdentifier destRegion = regionEntry.getKey();
-            final double destRegionWeight = regionEntry.getValue();
+            final double destRegionWeight = regionEntry.getValue() / regionWeightSum;
 
             if (destRegion.equals(localRegion)) {
                 // need to add entries to specific nodes
@@ -223,11 +254,21 @@ public class PlanTranslator {
                     } else {
                         // only add a single record since there are no other
                         // nodes to round robin with
-                        addDelegateRecord(dnsRecords, service, serviceDefaultRegion, 1);
+                        addDelegateRecord(dnsRecords, service, serviceDefaultRegion, 1 * destRegionWeight);
                     }
                 } else {
+
                     serviceNodes.forEach(containerId -> {
-                        addNameRecord(dnsRecords, service, containerId, 1);
+                        Double weight = containerWeights.get(containerId);
+
+                        if (weight == null) {
+                            weight = 1.0;
+                            LOGGER.warn(
+                                    "No weight found in plan for container '{}' running service '{}'. Weight defaulting to {}.",
+                                    containerId, service, weight);
+                        }
+
+                        addNameRecord(dnsRecords, service, containerId, weight * destRegionWeight);
                     });
                 }
             } else {

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -49,8 +49,8 @@ import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.SpiderWebPlot;
 import org.jfree.data.category.DefaultCategoryDataset;
 
-import com.bbn.map.ap.visualizer.region.RegionGraphVisualizer;
 import com.bbn.map.simulator.Simulation;
+import com.bbn.map.utils.MapUtils;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
 
@@ -136,8 +136,7 @@ public class RegionStatusPlot extends JPanel {
             format = LOAD_NUMBER_FORMAT;
             series = "Source of Load";
             chart.setTitle("Amount of load from each region to region " + destRegion.getName());
-            newSourceData = sim.computeRegionLoadPercentageBySource(destRegion,
-                    RegionGraphVisualizer.RELEVANT_NODE_ATTRIBUTE);
+            newSourceData = sim.computeRegionLoadPercentageBySource(destRegion, MapUtils.COMPUTE_ATTRIBUTE);
             break;
         case REQUEST_COUNT:
             format = INTEGER_NUMBER_FORMAT;

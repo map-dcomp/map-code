@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -35,9 +35,9 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
-import com.bbn.map.simulator.ClientSim.RequestResult;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableMap;
@@ -52,9 +52,9 @@ public final class ClientRequestRecord {
     private final NodeIdentifier ncpContacted;
     private final NodeIdentifier containerContacted;
     private final long timeSent;
-    private final ClientLoad request;
+    private final BaseNetworkLoad request;
     private final int linksTraversed;
-    private final List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkLoads;
+    private final List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoads;
     private final RequestResult networkRequestResult;
     private final RequestResult serverResult;
     private final boolean downNode;
@@ -83,9 +83,9 @@ public final class ClientRequestRecord {
     public ClientRequestRecord(@JsonProperty("ncpContacted") final NodeIdentifier ncpContacted,
             @JsonProperty("containerContacted") final NodeIdentifier containerContacted,
             @JsonProperty("timeSent") final long timeSent,
-            @JsonProperty("request") final ClientLoad request,
+            @JsonProperty("request") final BaseNetworkLoad request,
             @JsonProperty("linksTraversed") final int linksTraversed,
-            @JsonProperty("linkLoads") final List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkLoads,
+            @JsonProperty("linkLoads") final List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoads,
             @JsonProperty("networkResult") final RequestResult networkRequestResult,
             @JsonProperty("serverResult") final RequestResult serverResult,
             @JsonProperty("downNode") final boolean downNode) {
@@ -101,16 +101,17 @@ public final class ClientRequestRecord {
     }
 
     /**
-     * @return the identifier of the NCP that the request was sent to. This
-     *         may be null if the request failed.
+     * @return the identifier of the NCP that the request was sent to. This may
+     *         be null if the request failed.
      */
     public NodeIdentifier getNcpContacted() {
         return ncpContacted;
     }
 
     /**
-     * @return the identifier of the container that the request was sent to.
-     *         This may be null if the request failed.
+     * @return the identifier of the container (maybe an NCP if this is for
+     *         background traffic) that the request was sent to. This may be
+     *         null if the request failed.
      */
     public NodeIdentifier getContainerContacted() {
         return containerContacted;
@@ -127,7 +128,7 @@ public final class ClientRequestRecord {
      * @return the request that was sent
      */
     @Nonnull
-    public ClientLoad getRequest() {
+    public BaseNetworkLoad getRequest() {
         return request;
     }
 
@@ -141,21 +142,21 @@ public final class ClientRequestRecord {
     /**
      * @return the new load on each link from the path to the NCP
      */
-    public List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> getLinkLoads() {
+    public List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> getLinkLoads() {
         return linkLoads;
     }
 
     /**
-     * @return the status after attempting to send the request over the
-     *         network.
+     * @return the status after attempting to send the request over the network.
      */
     public RequestResult getNetworkRequestResult() {
         return networkRequestResult;
     }
 
     /**
-     * @return the status after attempting to send the request to the
-     *         server. Will be null if the network request failed.
+     * @return the status after attempting to send the request to the server.
+     *         Will be null if the network request failed or there was no server
+     *         request.
      * @see #getNetworkRequestResult()
      */
     @Nonnull
@@ -165,8 +166,8 @@ public final class ClientRequestRecord {
 
     /**
      * 
-     * @return true if the node to contact is down or a path to the node
-     *         cannot be found
+     * @return true if the node to contact is down or a path to the node cannot
+     *         be found
      */
     public boolean getDownNode() {
         return downNode;

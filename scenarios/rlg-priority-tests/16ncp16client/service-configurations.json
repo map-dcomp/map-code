@@ -1,0 +1,40 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app2",
+	    "version": "1.0"
+	},
+	"hostname": "app2.map.dcomp",
+	"defaultNodes": {
+		"serverX1" : 1,
+		"serverX2" : 1,
+		"serverX3" : 1,
+		"serverX4" : 1,
+		"serverX5" : 1,
+		"serverX6" : 1,
+		"serverX7" : 1,
+		"serverX8" : 1,
+		"serverX9" : 1,
+		"serverX10" : 1,
+		"serverX11" : 1,
+		"serverX12" : 1,
+		"serverX13" : 1,
+		"serverX14" : 1,
+		"serverX15" : 1,
+		"serverX16" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    }
+]

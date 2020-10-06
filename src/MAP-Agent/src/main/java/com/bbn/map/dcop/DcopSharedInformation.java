@@ -3,10 +3,11 @@ package com.bbn.map.dcop;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+
+import org.protelis.vm.CodePath;
 
 import com.bbn.map.AgentConfiguration;
-import com.bbn.map.AgentConfiguration.DcopAlgorithm;
-
 
 /**
  * Information shared between DCOP instances in other regions.
@@ -16,18 +17,14 @@ public class DcopSharedInformation implements Serializable {
     /**
      * 
      */
-    private static final long serialVersionUID = -2447204674044360290L;
-    /** iterationDcopInfoMap of new algorithm.
-     * 
-     */
-    private final Map<Integer, MessagesPerIteration> iterationDcopInfoMap = new HashMap<>();
-    /** iterationDcopInfoMap for previous algorithm.
-     * 
-     */
-    private final Map<Integer, DcopInfoMessage> itDcopInfoMap = new HashMap<>(); 
+    private static final long serialVersionUID = -9057295256757549573L;
+
+    private final Map<Integer, DcopReceiverMessage> iterationMessageMap = new HashMap<>();
+
+    private DcopReceiverMessage asynchronousMessage = new DcopReceiverMessage();
 
     /**
-     *  Default constructor.
+     * Default constructor.
      */
     public DcopSharedInformation() {
     }
@@ -40,12 +37,16 @@ public class DcopSharedInformation implements Serializable {
      */
     public DcopSharedInformation(DcopSharedInformation o) {
         if (null != o) {
-            for (Map.Entry<Integer, MessagesPerIteration> entry : o.getIterationDcopInfoMap().entrySet()) {
-                this.addIterationDcopInfo(entry.getKey(), new MessagesPerIteration(entry.getValue()));
+            for (Map.Entry<Integer, DcopReceiverMessage> entry : o.getIterationMessageMap().entrySet()) {
+                DcopReceiverMessage msg = entry.getValue();
+                this.putMessageAtIteration(entry.getKey(),
+                        new DcopReceiverMessage(msg, AgentConfiguration.getInstance().getDcopAlgorithm()));
             }
-            for (Map.Entry<Integer, DcopInfoMessage> entry : o.getItDcopInfoMap().entrySet()) {
-                this.addIterationDcopInfo(entry.getKey(), new DcopInfoMessage(entry.getValue()));
-            }
+
+            asynchronousMessage = new DcopReceiverMessage(o.getAsynchronousMessage(),
+                    AgentConfiguration.getInstance().getDcopAlgorithm());
+            // don't copy Protelis state as that will already be immutable or
+            // a copy
         }
     }
 
@@ -54,41 +55,57 @@ public class DcopSharedInformation implements Serializable {
      *            DCOP iteration
      * @return DcopInfoMessage
      */
-    public MessagesPerIteration getMessageAtIteration(int iteration) {
-        return iterationDcopInfoMap.get(iteration);
+    public DcopReceiverMessage getMessageAtIteration(int iteration) {
+        return iterationMessageMap.get(iteration);
 
+    }
+
+    /**
+     * @param iteration
+     *            .
+     * @param msgPerIteration
+     *            .
+     * @return MessagePerIteration or msgPerIteration
+     */
+    public DcopReceiverMessage getMessageAtIterationOrDefault(int iteration, DcopReceiverMessage msgPerIteration) {
+        return iterationMessageMap.getOrDefault(iteration, msgPerIteration);
+    }
+
+    /**
+     * @param iteration
+     *            .
+     * @return containsKey()
+     * 
+     */
+    public boolean containMessageAtIteration(int iteration) {
+        return iterationMessageMap.containsKey(iteration);
     }
 
     /**
      * @return a mapping from iteration to DcopInfoMessage
      */
-    public Map<Integer, MessagesPerIteration> getIterationDcopInfoMap() {
-        return iterationDcopInfoMap;
-    }  
+    public Map<Integer, DcopReceiverMessage> getIterationMessageMap() {
+        return iterationMessageMap;
+    }
 
+    /**
+     * @param iteration
+     *            .
+     * @param msgPerIteration
+     *            .
+     */
+    public void setMessageAtIteration(int iteration, DcopReceiverMessage msgPerIteration) {
+        iterationMessageMap.put(iteration, msgPerIteration);
+    }
 
     /**
      * @param iteration
      *            DCOP iteration
-     * @param dcopInfoMessage
+     * @param msgPerIteration
      *            dcopInfoMessage to add
      */
-    public void addIterationDcopInfo(int iteration, MessagesPerIteration dcopInfoMessage) {
-        iterationDcopInfoMap.put(iteration, dcopInfoMessage);
-    }
-
-    @Override
-    public String toString() {
-        StringBuffer buf = new StringBuffer();
-        if(DcopAlgorithm.DISTRIBUTED_ROUTING_DIFFUSION.equals(AgentConfiguration.getInstance().getDcopAlgorithm()))
-            for (Map.Entry<Integer, MessagesPerIteration> entry : iterationDcopInfoMap.entrySet()) {
-                buf.append("ITERATION " + entry.getKey() + " " + entry.getValue() + "\n");
-            }
-        else
-            for (Map.Entry<Integer, DcopInfoMessage> entry : itDcopInfoMap.entrySet()) {
-                buf.append("ITERATION " + entry.getKey() + " " + entry.getValue() + "\n");
-            }
-        return buf.toString();
+    public void putMessageAtIteration(int iteration, DcopReceiverMessage msgPerIteration) {
+        iterationMessageMap.put(iteration, msgPerIteration);
     }
 
     /**
@@ -96,56 +113,96 @@ public class DcopSharedInformation implements Serializable {
      *            iteration to remove message in the inbox
      */
     public void removeMessageAtIteration(int iteration) {
-        if(DcopAlgorithm.DISTRIBUTED_ROUTING_DIFFUSION.equals(AgentConfiguration.getInstance().getDcopAlgorithm())) iterationDcopInfoMap.remove(iteration);
-        else itDcopInfoMap.remove(iteration);
+        iterationMessageMap.remove(iteration);
     }
-    
+
     /**
      * Clear all messages from all iterations.
      */
     public void clear() {
-        iterationDcopInfoMap.clear();
+        iterationMessageMap.clear();
     }
-    
+
     /**
-     * Clear all messages from all iterations.
-     */
-    public void clearItDcopInfomap() {
-        itDcopInfoMap.clear();
-    }
-    
-    ///Methods for previous algorithm
-    /**
-     * @param iteration
-     *            DCOP iteration
-     * @param dcopInfoMessage
-     *            dcopInfoMessage to add
-     */
-    public void addIterationDcopInfo(int iteration, DcopInfoMessage dcopInfoMessage) {
-        itDcopInfoMap.put(iteration, dcopInfoMessage);
-    }
-    
-    /**
-     * @param iteration
-     *            DCOP iteration
-     * @return DcopInfoMessage
-     * Replaces to getMessageAtIteration (different return type)
-     */
-    public DcopInfoMessage getMsgAtIteration(int iteration) {
-        return itDcopInfoMap.get(iteration);
-    }
-    /**
-     * @return a mapping from iteration to DcopInfoMessage
-     */
-    public Map<Integer, DcopInfoMessage> getItDcopInfoMap() {
-        return itDcopInfoMap;
-    }
-        
-    
-    /** Check if the map is empty.
+     * Check if the map is empty.
+     * 
      * @return true if the map is empty
      */
-    public boolean isEmptyNewAlgorithm() {
-        return iterationDcopInfoMap.isEmpty();
+    public boolean isIterationMessageMapEmpty() {
+        return iterationMessageMap.isEmpty();
+    }
+
+    /**
+     * Check if the inbox has tree message sent by this region.
+     * 
+     * @param treeIteration
+     *            the iteration
+     * @return true if the inbox contains tree message
+     */
+    public boolean hasDataCenterTreeMessage(int treeIteration) {
+        return iterationMessageMap.containsKey(treeIteration);
+    }
+
+    /**
+     * @return the asynchronousMessage
+     */
+    public DcopReceiverMessage getAsynchronousMessage() {
+        return asynchronousMessage;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("DcopSharedInformation [iterationMessageMap=");
+        builder.append(iterationMessageMap);
+        builder.append(", asynchronousMessage=");
+        builder.append(asynchronousMessage);
+        builder.append("]");
+        return builder.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(iterationMessageMap, asynchronousMessage);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        } else if (null == obj || getClass() != obj.getClass()) {
+            return false;
+        } else {
+            final DcopSharedInformation other = (DcopSharedInformation) obj;
+            return Objects.equals(getIterationMessageMap(), other.getIterationMessageMap())
+                    && Objects.equals(getAsynchronousMessage(), other.getAsynchronousMessage());
+        }
+    }
+
+    /**
+     * @param asynchronousMessage
+     *            the asynchronousMessage to set
+     */
+    public void setAsynchronousMessage(DcopReceiverMessage asynchronousMessage) {
+        this.asynchronousMessage = asynchronousMessage;
+    }
+
+    private Map<CodePath, Object> protelisState = null;
+
+    /**
+     * 
+     * @param v
+     *            the state to share with protelis
+     */
+    public void setProtelisState(final Map<CodePath, Object> v) {
+        protelisState = v;
+    }
+
+    /**
+     * 
+     * @return see {@link #setProtelisState(Map)}
+     */
+    public Map<CodePath, Object> getProtelisState() {
+        return protelisState;
     }
 }

@@ -1,6 +1,6 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-# To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
 # Dispersed Computing (DCOMP)
@@ -44,28 +44,30 @@ basedir=${PWD}
 # configuration of experiment
 #   - scenario assumes demand is in sub-folder demand
 #########################################################
-expfolder=jon
+expfolder=run_scenarios_3_19
 dir_scenario=${basedir}/${expfolder}
 dir_output=${basedir}/${expfolder}-output
-test_config=${basedir}/rlg_algorithms_to_run.txt
-num_runs=5
-time_limit_per_run="60m"
+test_config=${basedir}/rlg_algorithms_to_run_3_19.txt
+num_runs=3
+time_limit_per_run="10m"
+time_limit_kill="2m"
+log_message_matchers_file=${basedir}/log_message_category_matchers.txt
 
 ##########################
 # location of binaries 
 ##########################
 jarlocation=${basedir}/jar
-simversion=2.6.101
-chartversion=0.1.2
+simversion=2.10.2
+chartversion=0.2.0
 
 chart_generation_jar=${jarlocation}/MAP-ChartGeneration-${chartversion}-executable.jar
 agent_jar=${jarlocation}/map-sim-runner-${simversion}-executable.jar
 
 
 if [ ! -f ${chart_generation_jar} ]; then
-	fatal "could not locate chart gen"
+	fatal "could not locate chart gen at ${chart_generation_jar}"
 fi
 
 if [ ! -f ${agent_jar} ]; then
-	fatal "could not locate agent jar"
+	fatal "could not locate agent jar ${agent_jar}"
 fi

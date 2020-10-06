@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -53,9 +53,9 @@ import org.apache.commons.collections15.Transformer;
 
 import com.bbn.map.Controller;
 import com.bbn.map.ap.visualizer.utils.VisualizationViewerControlPanel;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.protelis.common.visualizer.MultiVertexRenderer;
+import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 
@@ -85,11 +85,6 @@ public class RegionGraphVisualizer extends JPanel {
     private Simulation sim = null;
 
     private final VisualizationViewerControlPanel viewerControl;
-
-    /**
-     * The {@link NodeAttribute} that we are going to report on.
-     */
-    public static final NodeMetricName RELEVANT_NODE_ATTRIBUTE = NodeMetricName.TASK_CONTAINERS;
 
     private double maxRegionCapacity = 0;
     private int maxClientPoolSize = 1;
@@ -137,13 +132,14 @@ public class RegionGraphVisualizer extends JPanel {
             final Map<RegionIdentifier, RegionDisplayNode> regionNodes = new HashMap<>();
             final List<ClientDisplayNode> clientNodes = new LinkedList<>();
 
-            this.sim.getScenario().getServers().forEach((k, controller) -> {
+            this.sim.getAllControllers().forEach(controller -> {
                 final RegionIdentifier region = controller.getRegionIdentifier();
                 final RegionDisplayNode display = regionNodes.computeIfAbsent(region,
                         k1 -> new RegionDisplayNode(this, k1, sim));
                 graph.addVertex(display);
             });
-            this.sim.getScenario().getClients().forEach((k, client) -> {
+            this.sim.getClientSimulators().forEach(csim -> {
+                final NetworkClient client = csim.getClient();
                 final ClientDisplayNode display = new ClientDisplayNode(this, client);
                 clientNodes.add(display);
                 maxClientPoolSize = Math.max(maxClientPoolSize, client.getNumClients());

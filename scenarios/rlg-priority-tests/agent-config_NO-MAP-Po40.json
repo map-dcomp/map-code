@@ -1,0 +1,9 @@
+{
+  "rlgAlgorithm" : "STUB",
+  "rlgStubChooseNcp" : "CURRENTLY_RUNNING_SERVICE",
+  "rlgNullOverflowPlan" : "true",
+  "rlgLoadThreshold" : 0.40,
+  "rlgUnderloadEndedThreshold" : 0.35,
+  "rlgUnderloadThreshold" : 0.25,
+  "rlgPriorityPolicy" : "NO_PRIORITY"
+}

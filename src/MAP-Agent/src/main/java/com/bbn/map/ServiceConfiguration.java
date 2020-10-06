@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -47,11 +47,11 @@ import org.slf4j.LoggerFactory;
 
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
@@ -104,8 +104,8 @@ public class ServiceConfiguration implements Serializable {
      *            see {@link #isReplicable()}
      * @param imageName
      *            see {@link #getImageName()}
-     * @param trafficType
-     *            see {@link #getTrafficType()}
+     * @param serverPort
+     *            see {@link #getServerPort()}
      */
     public ServiceConfiguration(@Nonnull final ApplicationCoordinates service,
             @Nonnull final String hostname,
@@ -115,7 +115,7 @@ public class ServiceConfiguration implements Serializable {
             final int priority,
             final boolean replicable,
             final String imageName,
-            final ApplicationSpecification.ServiceTrafficType trafficType) {
+            final int serverPort) {
         this.service = service;
         this.hostname = hostname;
         this.defaultNodes = defaultNodes;
@@ -124,7 +124,7 @@ public class ServiceConfiguration implements Serializable {
         this.priority = priority;
         this.replicable = replicable;
         this.imageName = imageName;
-        this.trafficType = trafficType;
+        this.serverPort = serverPort;
     }
 
     private final ApplicationCoordinates service;
@@ -207,13 +207,13 @@ public class ServiceConfiguration implements Serializable {
         return imageName;
     }
 
-    private final ApplicationSpecification.ServiceTrafficType trafficType;
+    private final int serverPort;
 
     /**
-     * @return see {@link ApplicationSpecification#getTrafficType()}
+     * @return see {@link ApplicationSpecification#getServerPort()}
      */
-    public ApplicationSpecification.ServiceTrafficType getTrafficType() {
-        return trafficType;
+    public int getServerPort() {
+        return serverPort;
     }
 
     /**
@@ -273,7 +273,7 @@ public class ServiceConfiguration implements Serializable {
 
                 final ServiceConfiguration sconfig = new ServiceConfiguration(service, config.getHostname(),
                         defaultNodes, defaultNodeRegion, containerParams, config.getPriority(), config.isReplicable(),
-                        config.getImageName(), config.getTrafficType());
+                        config.getImageName(), config.getServerPort());
                 map.put(sconfig.getService(), sconfig);
             });
 
@@ -282,7 +282,6 @@ public class ServiceConfiguration implements Serializable {
 
     }
 
-    // @JsonDeserialize(using = DeserializeServiceConfig.class)
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static final class ParsedServiceConfiguration {
 
@@ -354,19 +353,19 @@ public class ServiceConfiguration implements Serializable {
             defaultNodeRegion = v;
         }
 
-        private ImmutableMap<NodeMetricName, Double> computeCapacity = ImmutableMap.of();
+        private ImmutableMap<NodeAttribute, Double> computeCapacity = ImmutableMap.of();
 
         /**
          * 
          * @return the compute capacity for containers running this service
          */
         @Nonnull
-        public ImmutableMap<NodeMetricName, Double> getComputeCapacity() {
+        public ImmutableMap<NodeAttribute, Double> getComputeCapacity() {
             return computeCapacity;
         }
 
         @SuppressWarnings("unused")
-        private void setComputeCapacity(final ImmutableMap<NodeMetricName, Double> v) {
+        private void setComputeCapacity(final ImmutableMap<NodeAttribute, Double> v) {
             if (null == v) {
                 computeCapacity = ImmutableMap.of();
             } else {
@@ -374,7 +373,7 @@ public class ServiceConfiguration implements Serializable {
             }
         }
 
-        private ImmutableMap<LinkMetricName, Double> networkCapacity = ImmutableMap.of();
+        private ImmutableMap<LinkAttribute, Double> networkCapacity = ImmutableMap.of();
 
         /**
          * 
@@ -382,12 +381,12 @@ public class ServiceConfiguration implements Serializable {
          *         running this service
          */
         @Nonnull
-        public ImmutableMap<LinkMetricName, Double> getNetworkCapacity() {
+        public ImmutableMap<LinkAttribute, Double> getNetworkCapacity() {
             return networkCapacity;
         }
 
         @SuppressWarnings("unused")
-        private void setNetworkCapacity(final ImmutableMap<LinkMetricName, Double> v) {
+        private void setNetworkCapacity(final ImmutableMap<LinkAttribute, Double> v) {
             if (null == v) {
                 networkCapacity = ImmutableMap.of();
             } else {
@@ -449,24 +448,25 @@ public class ServiceConfiguration implements Serializable {
             this.imageName = v;
         }
 
-        private ApplicationSpecification.ServiceTrafficType trafficType = ApplicationSpecification.ServiceTrafficType.UNKNOWN;
+        private int serverPort = 0;
 
         /**
-         * @return see {@link ApplicationSpecification#getTrafficType()}
+         * 
+         * @return the port that the server runs on
          */
         @SuppressWarnings("unused")
-        public ApplicationSpecification.ServiceTrafficType getTrafficType() {
-            return trafficType;
+        public int getServerPort() {
+            return serverPort;
         }
 
         /**
          * 
          * @param v
-         *            see {@link #getTrafficType()}
+         *            see {@link #getServerPort()}
          */
         @SuppressWarnings("unused")
-        public void setTrafficType(final ApplicationSpecification.ServiceTrafficType v) {
-            this.trafficType = v;
+        public void setServerPort(final int v) {
+            this.serverPort = v;
         }
     }
 

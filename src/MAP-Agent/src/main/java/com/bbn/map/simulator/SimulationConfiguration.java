@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -79,7 +79,7 @@ public final class SimulationConfiguration {
      * This value should be between 0 and 1 as it represents a percentage.
      * 
      * @return the slow threshold for network links, defaults to 0.8.
-     * @see ClientSim.RequestResult#SLOW
+     * @see RequestResult#SLOW
      */
     public double getSlowNetworkThreshold() {
         return slowNetworkThreshold;
@@ -108,7 +108,7 @@ public final class SimulationConfiguration {
      * This value should be between 0 and 1 as it represents a percentage.
      * 
      * @return the slow threshold for servers, defaults to 0.8.
-     * @see ClientSim.RequestResult#SLOW
+     * @see RequestResult#SLOW
      */
     public double getSlowServerThreshold() {
         return slowServerThreshold;

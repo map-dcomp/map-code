@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -48,8 +48,9 @@ import org.slf4j.LoggerFactory;
 
 import com.bbn.map.Controller;
 import com.bbn.map.ap.visualizer.DisplayController;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.simulator.Simulation;
+import com.bbn.map.utils.MapUtils;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 
 /**
@@ -68,7 +69,7 @@ public class RegionDisplayNode extends AbstractRegionDisplayNode {
 
     /**
      * @return the capacity of this region
-     * @see RegionGraphVisualizer#RELEVANT_NODE_ATTRIBUTE
+     * @see MapUtils#COMPUTE_ATTRIBUTE
      */
     public double getRegionCapacity() {
         return regionCapacity;
@@ -96,7 +97,7 @@ public class RegionDisplayNode extends AbstractRegionDisplayNode {
         this.visualizer = visualizer;
         this.region = region;
         this.sim = sim;
-        this.regionCapacity = sim.getRegionCapacity(region, RegionGraphVisualizer.RELEVANT_NODE_ATTRIBUTE);
+        this.regionCapacity = sim.getRegionCapacity(region, MapUtils.COMPUTE_ATTRIBUTE);
     }
 
     @Override
@@ -123,7 +124,7 @@ public class RegionDisplayNode extends AbstractRegionDisplayNode {
         final BufferedImage image = new BufferedImage(diameterInt, diameterInt, BufferedImage.TYPE_INT_ARGB);
         final Graphics2D graphics = image.createGraphics();
 
-        final double loadPercentage = getLoadPercentage(RegionGraphVisualizer.RELEVANT_NODE_ATTRIBUTE);
+        final double loadPercentage = getLoadPercentage(MapUtils.COMPUTE_ATTRIBUTE);
 
         if (LOGGER.isTraceEnabled()) {
             LOGGER.trace("Computed load percentage {} on node {}", loadPercentage, getVertexLabel());
@@ -166,7 +167,7 @@ public class RegionDisplayNode extends AbstractRegionDisplayNode {
      *            the attribute to get the load percentage for
      * @return a value between 0 and 1 representing the load percentage
      */
-    private double getLoadPercentage(@Nonnull final NodeMetricName attribute) {
+    private double getLoadPercentage(@Nonnull final NodeAttribute attribute) {
         if (regionCapacity > 0) {
             final double load = sim.computeRegionLoad(region, attribute);
             if (load > 0) {

@@ -1,0 +1,7 @@
+{
+  "dcopCapacityThreshold" : 0.55,
+  "dcopAlgorithm" : "DISTRIBUTED_ROUTING_DIFFUSION",
+  "rlgAlgorithm" : "BIN_PACKING",
+    "rlgStubChooseNcp" : "MOST_AVAILABLE_CONTAINERS",
+    "rlgNullOverflowPlan" : true
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "zero",
+    "capacity": {
+      "CPU": 4,
+      "MEMORY": 8000000000,
+      "TASK_CONTAINERS": 0
+    }
+  },
+  {
+    "name": "small",
+    "capacity": {
+      "CPU": 4,
+      "MEMORY": 8000000000,
+      "TASK_CONTAINERS": 4
+    }
+  },
+  {
+    "name": "large",
+    "capacity": {
+      "CPU": 8,
+      "MEMORY": 16000000000,
+      "TASK_CONTAINERS": 8
+    }
+  }
+]

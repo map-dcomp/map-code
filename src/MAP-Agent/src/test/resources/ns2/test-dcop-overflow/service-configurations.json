@@ -8,7 +8,7 @@
     "hostname": "image-recognition-high",
     "defaultNode": "nodeA0",
     "defaultNodeRegion": "A",
-    "initialInstances": "2",
+    "initialInstances": "1",
     "computeCapacity": {
       "TASK_CONTAINERS": "1"
     },

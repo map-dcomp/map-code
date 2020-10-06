@@ -1,0 +1,35 @@
+[ {
+  "startTime" : 0,
+  "networkDuration" : 960000,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app8",
+    "version" : "1.0"
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  },
+  "serverDuration" : 960000,
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.1
+  },
+  "numClients" : 10
+}, {
+  "startTime" : 960000,
+  "networkDuration" : 960000,
+  "service" : {
+    "group" : "com.bbn",
+    "artifact" : "app8",
+    "version" : "1.0"
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.001,
+    "DATARATE_RX" : 0.001
+  },
+  "serverDuration" : 960000,
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.1
+  },
+  "numClients" : 10
+} ]

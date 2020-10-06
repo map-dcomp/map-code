@@ -1,0 +1,370 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app1",
+	    "version": "1.0"
+	},
+	"hostname": "app1.map.dcomp",
+	"defaultNodes": {
+		"serverX1" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app2",
+	    "version": "1.0"
+	},
+	"hostname": "app2.map.dcomp",
+	"defaultNodes": {
+		"serverX2" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app3",
+	    "version": "1.0"
+	},
+	"hostname": "app3.map.dcomp",
+	"defaultNodes": {
+		"serverX3" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app4",
+	    "version": "1.0"
+	},
+	"hostname": "app4.map.dcomp",
+	"defaultNodes": {
+		"serverX4" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app5",
+	    "version": "1.0"
+	},
+	"hostname": "app5.map.dcomp",
+	"defaultNodes": {
+		"serverX5" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app6",
+	    "version": "1.0"
+	},
+	"hostname": "app6.map.dcomp",
+	"defaultNodes": {
+		"serverX6" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app7",
+	    "version": "1.0"
+	},
+	"hostname": "app7.map.dcomp",
+	"defaultNodes": {
+		"serverX7" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app8",
+	    "version": "1.0"
+	},
+	"hostname": "app8.map.dcomp",
+	"defaultNodes": {
+		"serverX8" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app9",
+	    "version": "1.0"
+	},
+	"hostname": "app9.map.dcomp",
+	"defaultNodes": {
+		"serverX9" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app10",
+	    "version": "1.0"
+	},
+	"hostname": "app10.map.dcomp",
+	"defaultNodes": {
+		"serverX10" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app11",
+	    "version": "1.0"
+	},
+	"hostname": "app11.map.dcomp",
+	"defaultNodes": {
+		"serverX11" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app12",
+	    "version": "1.0"
+	},
+	"hostname": "app12.map.dcomp",
+	"defaultNodes": {
+		"serverX12" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app13",
+	    "version": "1.0"
+	},
+	"hostname": "app13.map.dcomp",
+	"defaultNodes": {
+		"serverX13" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app14",
+	    "version": "1.0"
+	},
+	"hostname": "app14.map.dcomp",
+	"defaultNodes": {
+		"serverX14" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app15",
+	    "version": "1.0"
+	},
+	"hostname": "app15.map.dcomp",
+	"defaultNodes": {
+		"serverX15" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app16",
+	    "version": "1.0"
+	},
+	"hostname": "app16.map.dcomp",
+	"defaultNodes": {
+		"serverX16" : 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    }
+]

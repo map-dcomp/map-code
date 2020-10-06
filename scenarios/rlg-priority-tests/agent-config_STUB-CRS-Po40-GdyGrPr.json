@@ -1,0 +1,10 @@
+{
+  "dcopCapacityThreshold" : 0.55,
+  "dcopAlgorithm" : "DISTRIBUTED_ROUTING_DIFFUSION",
+  "rlgAlgorithm" : "STUB",
+  "rlgStubChooseNcp" : "MOST_AVAILABLE_CONTAINERS",
+  "rlgLoadThreshold" : 0.40,
+  "rlgUnderloadEndedThreshold" : 0.35,
+  "rlgUnderloadThreshold" : 0.25,
+  "rlgPriorityPolicy" : "GREEDY_GROUP"
+}

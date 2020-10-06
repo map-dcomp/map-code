@@ -12,6 +12,7 @@ public class Service {
     private int divideFactor;
     private Server originalServer;
     private double serverTotal;
+    private boolean addedToRlg;
 
     /**
      * Construct a new service object.
@@ -29,6 +30,7 @@ public class Service {
         this.divideFactor = divideFactor;
         this.originalServer = null;
         this.serverTotal = 0.0;
+        this.addedToRlg = false;
     }
 
     /**
@@ -43,6 +45,20 @@ public class Service {
      */
     public double getLoad() {
         return serviceLoad;
+    }
+
+    /**
+     * @return true if this service has been added to the RLG plan.
+     */
+    public boolean isAdded() {
+        return addedToRlg;
+    }
+
+    /**
+     * Mark this service as added to the RLG plan.
+     */
+    public void addToRlg() {
+        addedToRlg = true;
     }
 
     /**

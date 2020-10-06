@@ -72,19 +72,14 @@ node-failures.json
 
 This file maps a list of `Simulation.NodeFailure` objects.
 
-The time specifies a a number of milliseconds into the simulation to stop the node or container.
+The time specifies a a number of milliseconds into the simulation to stop the node.
 The name is the name of the node or container.
-
-Containers are named based on their parent node. For instance the first
-container of nodeA1 is nodeA1_c00.
 
 Nodes do not come back after being shutdown.
 
-Containers will be restarted if directed to start more containers on the
-node.
-
 As of 12/6/2018 any node running RLG, DCOP, DNS or the global leader for AP
 cannot be stopped.
+The global leader can be stopped if leader election is enabled.
 
 
 Demand scenario definition
@@ -107,3 +102,10 @@ specifies that the server is receiving data at 2Mbps and sending data at
 The node and link attributes are documented in the class `LinkMetricName`.
 Look for the constants that match the names in the node and link load
 values.
+
+Background traffic
+------------------
+
+The file `background-traffic.json` contains a list of instances of
+`BackgroundNetworkLoad` objects that are used to create unmanaged
+network traffic.

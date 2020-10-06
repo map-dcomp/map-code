@@ -1,3 +1,7 @@
 [submodule "src/P2Protelis"]
 	path = src/P2Protelis
-	url = https://github.com/map-dcomp/P2Protelis.git
+	url = gitoLite@dsl-external.bbn.com:map-low-fidelity-testbed
+
+[submodule "netflowTool/nfdump"]
+	path = netflowTool/nfdump
+	url = https://github.com/phaag/nfdump.git

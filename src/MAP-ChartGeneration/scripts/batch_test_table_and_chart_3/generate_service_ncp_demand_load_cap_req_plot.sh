@@ -1,6 +1,6 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-# To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
 # Dispersed Computing (DCOMP)
@@ -102,7 +102,8 @@ get_service_node_color(s, n, services, ncps)=(s*ncps + (n-1) + 1)
 convert_time_unit(time)=(time / 1000)   # convert time from milliseconds to seconds
 convert_time(time)=convert_time_unit(time - time_offset)   # offset and convert time from milliseconds to seconds
 
-n_demand_files=system("ls ${folder}/client_demand/*-${load_unit}.csv | wc -l")
+n_demand_files_by_client=system("ls ${folder}/client_demand/client_*-${load_unit}.csv | wc -l")
+n_demand_files_by_service=system("ls ${folder}/client_demand/service_*-${load_unit}.csv | wc -l")
 n_load_files=system("ls ${folder}/load/ncp_load-*-${load_unit}.csv | wc -l")
 n_demand_reported_files=system("ls ${folder}/load/ncp_demand-*-${load_unit}.csv | wc -l")
 n_allocated_capacity_files=system("ls ${folder}/load/ncp_allocated_capacity-*-${load_unit}.csv | wc -l")
@@ -112,7 +113,8 @@ n_requests_results_load_files=system("ls ${folder}/requests_results/binned_reque
 load_file(f)=system("ls ${folder}/load/ncp_load-*-${load_unit}.csv | head -n " . f . " | tail -n 1")
 demand_reported_file(f)=system("ls ${folder}/load/ncp_demand-*-${load_unit}.csv | head -n " . f . " | tail -n 1")
 allocated_capacity_file(f)=system("ls ${folder}/load/ncp_allocated_capacity-*-${load_unit}.csv | head -n " . f . " | tail -n 1")
-demand_file(f)=system("ls ${folder}/client_demand/*-${load_unit}.csv | head -n " . f . " | tail -n 1")
+demand_file_by_client(f)=system("ls ${folder}/client_demand/client_*-${load_unit}.csv | head -n " . f . " | tail -n 1")
+demand_file_by_service(f)=system("ls ${folder}/client_demand/service_*-${load_unit}.csv | head -n " . f . " | tail -n 1")
 requests_results_count_file(f)=system("ls ${folder}/requests_results/binned_request_count-*.csv | head -n " . f . " | tail -n 1")
 requests_results_load_file(f)=system("ls ${folder}/requests_results/binned_request_load-*-${load_unit}.csv | head -n " . f . " | tail -n 1")
 
@@ -135,7 +137,7 @@ do for [f=1:n_load_files] {
 services = (n_load_files > services ? n_load_files : services)
 services = (n_allocated_capacity_files > services ? n_allocated_capacity_files : services)
 
-clients = n_demand_files
+clients = n_demand_files_by_client
 
 print "Services: " . services
 print "NCPS: " . ncps
@@ -160,13 +162,17 @@ y_scale_max_requests_results = 0
 
 
 # demand files
-do for [f=1:n_demand_files] {
-	stats demand_file(f) using 1 nooutput
+do for [f=1:n_demand_files_by_service] {
+	stats demand_file_by_service(f) using 1 nooutput
 	min_time = STATS_min
 	max_time = STATS_max
 
 	do for [s=1:services] {
-		stats demand_file(f) using (s+1) nooutput
+
+		stats demand_file_by_service(f) skip 1 nooutput
+		cols = floor(STATS_columns)
+
+		stats demand_file_by_service(f) using 2 nooutput
 		min_value = STATS_min
 		max_value = STATS_max
 
@@ -241,7 +247,11 @@ x_offset = x_scale_min
 x_scale_min = x_scale_min - x_offset
 x_scale_max = ceil((x_scale_max - x_offset) * 1.02)
 
-
+y_scale_max = (y_scale_max_demand > y_scale_max ? y_scale_max_demand : y_scale_max)
+y_scale_max = (y_scale_max_load > y_scale_max ? y_scale_max_demand : y_scale_max)
+y_scale_max = (y_scale_max_allocated_capacity > y_scale_max ? y_scale_max_demand : y_scale_max)
+#y_scale_max = (y_scale_max_requests_results > y_scale_max ? y_scale_max_demand : y_scale_max)
+y_scale_max = y_scale_max * 1.1
 
 
 print "\n"
@@ -264,7 +274,7 @@ do for [service=1:services] {
 	print("Service " . service)
 
 	set xrange [x_scale_min:x_scale_max]
-	set yrange[0:]
+	set yrange[y_scale_min:]
 
 	# construct string for plot command
 	plot_string=""
@@ -272,44 +282,27 @@ do for [service=1:services] {
 
 	# add demand lines
 	print("   Demand")
+	demand_line_string=""
 	service_demand_plot_string=""
 	service_all_demand_plot_string=""
 	service_all_demand_title_plot_string=""
 
-	do for [f=1:n_demand_files] {
-		print("      Reading Demand file " . f . " : " . demand_file(f))
 
-		stats demand_file(f) skip 1 nooutput
+	f=service
+	do for [s=1:services] {
+		stats demand_file_by_service(f) skip 1 nooutput
 		cols = floor(STATS_columns)
 
-		print("      cols = " . cols)
+		if (s == service) {
+			demand_line_string = "demand_file_by_service(".f.") using (convert_time(column(1))):(col_sum(2, ".cols.")) lc rgb 'black' lw 3 dt 1 t ('demand') with lines, "
 
-		do for [s=1:services] {
-			col = s+1
-
-			if (s == service) {        # check if col corresponds to the current service being plotted
-				if (f == 1) {
-#					demand_line_string = "demand_file(".f.") using (convert_time(column(1))):(col_sum(".col.", ".col.")) lc rgb 'black' lw 3 dt 1 t (service_name(columnhead(".col.")) . ' : ' . 'demand') with lines, "
-					demand_line_string = "demand_file(".f.") using (convert_time(column(1))):(col_sum(".col.", ".col.")) lc rgb 'black' lw 3 dt 1 t ('demand') with lines, "
-				} else {
-					demand_line_string = "demand_file(".f.") using (convert_time(column(1))):(col_sum(".col.", ".col.")) lc rgb 'black' lw 3 dt 1 notitle with lines, "				
-				}
-
-				service_demand_plot_string=service_demand_plot_string . \
-					demand_line_string
-
-				service_all_demand_plot_string=service_all_demand_plot_string . \
-					demand_line_string
-			} else {
-				service_all_demand_plot_string=service_all_demand_plot_string . \
-					"demand_file(".f.") using (convert_time(column(1))):(col_sum(".col.", ".col.")) lc rgb 'black' lw 1 dt 9 notitle with lines, "
-			}
+			service_demand_plot_string=service_demand_plot_string . demand_line_string
+		} else {
+			demand_line_string = "demand_file_by_service(".f.") using (convert_time(column(1))):(col_sum(2, ".cols.")) lc rgb 'black' lw 3 dt 1 notitle with lines, "
 		}
 
-		#print("      demand plot string = " . service_all_demand_plot_string)
+		service_all_demand_plot_string=service_all_demand_plot_string . demand_line_string
 	}
-
-
 
 
 

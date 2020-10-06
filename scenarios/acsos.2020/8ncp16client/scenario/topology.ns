@@ -1,0 +1,70 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# Clients
+set client1Pool1 [$ns node]
+set client1Pool2 [$ns node]
+set client1Pool3 [$ns node]
+set client1Pool4 [$ns node]
+set client2Pool1 [$ns node]
+set client2Pool2 [$ns node]
+set client2Pool3 [$ns node]
+set client2Pool4 [$ns node]
+set client3Pool1 [$ns node]
+set client3Pool2 [$ns node]
+set client3Pool3 [$ns node]
+set client3Pool4 [$ns node]
+set client4Pool1 [$ns node]
+set client4Pool2 [$ns node]
+set client4Pool3 [$ns node]
+set client4Pool4 [$ns node]
+
+# NCPs
+
+set serverX1 [$ns node]
+tb-set-node-os $serverX1 XEN46-64-STD
+tb-set-hardware $serverX1 pc3000
+
+set serverX2 [$ns node]
+tb-set-node-os $serverX2 XEN46-64-STD
+tb-set-hardware $serverX2 pc3000
+
+set serverX3 [$ns node]
+tb-set-node-os $serverX3 XEN46-64-STD
+tb-set-hardware $serverX3 pc3000
+
+set serverX4 [$ns node]
+tb-set-node-os $serverX4 XEN46-64-STD
+tb-set-hardware $serverX4 pc3000
+
+set serverX5 [$ns node]
+tb-set-node-os $serverX5 XEN46-64-STD
+tb-set-hardware $serverX5 pc3000
+
+set serverX6 [$ns node]
+tb-set-node-os $serverX6 XEN46-64-STD
+tb-set-hardware $serverX6 pc3000
+
+set serverX7 [$ns node]
+tb-set-node-os $serverX7 XEN46-64-STD
+tb-set-hardware $serverX7 pc3000
+
+set serverX8 [$ns node]
+tb-set-node-os $serverX8 XEN46-64-STD
+tb-set-hardware $serverX8 pc3000
+
+# Links
+
+set lanD [$ns make-lan "$serverX1 $serverX2 $serverX3 $serverX4 $serverX5 $serverX6 $serverX7 $serverX8" 100Mb 0ms]
+
+set lanClient1 [$ns make-lan "$serverX1 $client1Pool1 $client1Pool2 $client1Pool3 $client1Pool4" 100Mb 0ms]
+set lanClient2 [$ns make-lan "$serverX2 $client2Pool1 $client2Pool2 $client2Pool3 $client2Pool4" 100Mb 0ms]
+set lanClient3 [$ns make-lan "$serverX3 $client3Pool1 $client3Pool2 $client3Pool3 $client3Pool4" 100Mb 0ms]
+set lanClient4 [$ns make-lan "$serverX4 $client4Pool1 $client4Pool2 $client4Pool3 $client4Pool4" 100Mb 0ms]
+
+
+$ns rtproto Manual
+$ns run
+
+
+

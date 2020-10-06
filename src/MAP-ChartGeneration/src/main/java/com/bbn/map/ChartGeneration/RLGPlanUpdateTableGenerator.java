@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,6 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map.ChartGeneration;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -39,6 +40,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,6 +49,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -60,6 +64,7 @@ import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.ContainerInfo
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.diffplug.common.base.Errors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
@@ -74,7 +79,7 @@ import java8.util.Lists;
  *
  */
 public class RLGPlanUpdateTableGenerator {
-    private static final Logger LOGGER = LogManager.getLogger(DCOPPlanUpdateTableGenerator.class);
+    private static final Logger LOGGER = LogManager.getLogger(RLGPlanUpdateTableGenerator.class);
 
     private static final String RLG_PLAN_FILENAME = "loadBalancerPlan.json";
     private static final String NODE_STATE_FILENAME = "state.json";
@@ -88,6 +93,12 @@ public class RLGPlanUpdateTableGenerator {
     private static final String CSV_FILE_EXTENSION = ".csv";
 
     private final ObjectMapper mapper;
+    
+    // service -> time -> from region -> name of node publishing the plan -> to region -> percent requests
+    private Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> serviceRLGROverflowPlans = new HashMap<>();
+    
+    
+    
 
     /**
      * Constructs an instance with the modules necessary for JSON
@@ -126,17 +137,17 @@ public class RLGPlanUpdateTableGenerator {
         // region name -> time -> node name -> RegionPlan
         Map<String, Map<Long, Map<String, LoadBalancerPlan>>> rlgPlans = new HashMap<>();
 
-        // service -> time -> from region -> name of node publishing the plan ->
-        // to region -> percent
-        // requests
-        Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> serviceRLGROverflowPlans = new HashMap<>();
+//        // service -> time -> from region -> name of node publishing the plan -> to region -> percent requests
+//        Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> serviceRLGROverflowPlans = new HashMap<>();
         List<RegionIdentifier> regions = new ArrayList<>();
 
-        // service -> time -> region -> name of node publishing the plan -> node
-        // -> number of instances
-        // of service
+        // service -> time -> region -> name of node publishing the plan -> node -> number of instances of service
         Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<NodeIdentifier, Integer>>>>> serviceRLGPlans = new HashMap<>();
         List<NodeIdentifier> nodes = new ArrayList<>();
+        
+        // service -> time -> container -> weight
+        Map<ServiceIdentifier<?>, Map<Long, Map<NodeIdentifier, Double>>> serviceContainerWeights = new HashMap<>();
+        
 
         ChartGenerationUtils.visitTimeFolders(inputFolder.toPath(), (nodeName, timeFolder, time) -> {
 
@@ -144,6 +155,7 @@ public class RLGPlanUpdateTableGenerator {
 
             try (BufferedReader nodeStateReader = Files.newBufferedReader(nodeStateFile)) {
                 NodeState nodeState = mapper.readValue(nodeStateReader, NodeState.class);
+                
                 LOGGER.debug("Read state for node '{}': {}", nodeState.getName(), nodeState.isRLG());
 
                 if (nodeState.isRLG()) {
@@ -153,6 +165,7 @@ public class RLGPlanUpdateTableGenerator {
                         try (BufferedReader rlgPlanReader = Files.newBufferedReader(rlgPlanFile)) {
 
                             LoadBalancerPlan rlgPlan = mapper.readValue(rlgPlanReader, LoadBalancerPlan.class);
+                            
                             LOGGER.debug("Read RLG plan for time {}: {}", time, rlgPlan);
                             processRLGPlan(time, nodeState.getRegion().getName(), nodeState.getName(), rlgPlan,
                                     rlgPlans);
@@ -192,7 +205,7 @@ public class RLGPlanUpdateTableGenerator {
                 leaderNodePlans.forEach((nodeName, regionPlan) -> {
                     if (regionPlan != null) {
                         processServiceOverflowRLGPlan(time, nodeName, regionPlan, serviceRLGROverflowPlans, regions);
-                        processServiceRLGPlan(time, nodeName, regionPlan, serviceRLGPlans, nodes);
+                        processServiceRLGPlan(time, nodeName, regionPlan, serviceRLGPlans, serviceContainerWeights, nodes);
                     }
                 });
             });
@@ -201,18 +214,164 @@ public class RLGPlanUpdateTableGenerator {
         ChartGenerationUtils.outputRegionLeadersToCSV(outputFolder, "-rlg_leaders", timeBinnedRLGPlans);
         outputOverflowServicePlanChangeMatrices(outputFolder, serviceRLGROverflowPlans, binTimes, regions);
         outputServicePlanNodeChanges(outputFolder, serviceRLGPlans, binTimes, nodes);
+        
+        try {
+            outputRlgPlans(outputFolder.toPath(), timeBinnedRLGPlans, regions);
+            outputRlgPlanContainerWeights(outputFolder.toPath(), serviceContainerWeights);
+        } catch (final IOException e) {
+            LOGGER.error("Unable to print RLG plans", e);
+        }
     }
 
+
+    private void outputRlgPlanContainerWeights(final Path outputFolder,
+            Map<ServiceIdentifier<?>, Map<Long, Map<NodeIdentifier, Double>>> serviceContainerWeights) 
+                    throws IOException
+    {
+        for (Entry<ServiceIdentifier<?>, Map<Long, Map<NodeIdentifier, Double>>> entry : serviceContainerWeights.entrySet())
+        {
+            ServiceIdentifier<?> service = entry.getKey();
+            Map<Long, Map<NodeIdentifier, Double>> containerWeights = entry.getValue();
+            
+            List<Long> times = containerWeights.keySet().stream().sorted().collect(Collectors.toList());
+            
+            String serviceString = ChartGenerationUtils.serviceToFilenameString(service);
+            List<NodeIdentifier> containers = containerWeights.values().stream().flatMap(v -> v.keySet().stream())
+                    .distinct().filter(c -> c != null).sorted(new Comparator<NodeIdentifier>() {
+                        @Override
+                        public int compare(NodeIdentifier a, NodeIdentifier b)
+                        {
+                            return a.getName().compareTo(b.getName());
+                        }
+                    }).collect(Collectors.toList());            
+            
+            String[] header = new String[1 + containers.size()];
+            header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
+            
+            for (int c = 0; c < containers.size(); c++)
+            {
+                header[c + 1] = containers.get(c).getName();
+            }
+            
+            
+            final CSVFormat format = CSVFormat.EXCEL.withHeader(header);
+            
+            final Path outputFile = outputFolder.resolve("service_" + serviceString + "-container_weights" +
+                        ChartGenerationUtils.CSV_FILE_EXTENSION);
+            try (BufferedWriter writer = Files.newBufferedWriter(outputFile, Charset.defaultCharset());
+                    CSVPrinter printer = new CSVPrinter(writer, format))
+            {
+                for (int t = 0; t < times.size(); t++)
+                {
+                    Object[] record = new Object[header.length];
+                    record[0] = times.get(t);
+                    
+                    for (int c = 0; c < containers.size(); c++)
+                    {
+                        Double weight = containerWeights.get(times.get(t)).get(containers.get(c));
+                        record[1 + c] = (weight != null && Double.isFinite(weight) ? String.format("%.5f", weight) :
+                            ChartGenerationUtils.EMPTY_CELL_VALUE);
+                    }
+                    
+                    printer.printRecord(record);
+                }
+            }
+        }
+    }
+
+    private void outputRlgPlans(final Path outputFolder,
+            final Map<String, Map<Long, Map<String, LoadBalancerPlan>>> timeBinnedPlans,
+            final List<RegionIdentifier> regions) throws IOException {
+
+        final Map<RegionIdentifier, Map<Long, LoadBalancerPlan>> plansPerRegion = new HashMap<>();
+        timeBinnedPlans.forEach((regionName, regionData) -> {
+            regionData.forEach((time, timeData) -> {
+                timeData.forEach((nodeName, plan) -> {
+                    if (null != plan) {
+                        plansPerRegion.computeIfAbsent(plan.getRegion(), k -> new HashMap<>()).put(time, plan);
+                    }
+                });
+            });
+        });
+
+        final int numNonRegionColumns = 3;
+        final String[] header = new String[numNonRegionColumns + regions.size()];
+        header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
+        header[1] = "service";
+        header[2] = "plan_region";
+        for (int i = 0; i < regions.size(); ++i) {
+            header[numNonRegionColumns + i] = regions.get(i).getName();
+        }
+
+        final CSVFormat format = CSVFormat.EXCEL.withHeader(header);
+
+        final Path outputFile = outputFolder.resolve("all_rlg_overflow_plans" + ChartGenerationUtils.CSV_FILE_EXTENSION);
+        try (BufferedWriter writer = Files.newBufferedWriter(outputFile, Charset.defaultCharset());
+                CSVPrinter printer = new CSVPrinter(writer, format)) {
+
+            // use Object[] so that printer.printRecord handles the
+            // variable arguments correctly
+            final Object[] line = new String[header.length];
+
+            plansPerRegion.entrySet().forEach(Errors.rethrow().wrap(regionEntry -> {
+                final RegionIdentifier region = regionEntry.getKey();
+                line[2] = region.getName();
+                
+                regionEntry.getValue().entrySet().forEach(Errors.rethrow().wrap(timeEntry -> {
+                    final long time = timeEntry.getKey();
+                    final LoadBalancerPlan plan = timeEntry.getValue();
+                    line[0] = Long.toString(time);
+
+                    final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowPlan = plan
+                            .getOverflowPlan();
+
+                    overflowPlan.entrySet().forEach(Errors.rethrow().wrap(serviceEntry -> {
+                        final ServiceIdentifier<?> service = serviceEntry.getKey();
+
+                        // mark all overflow regions as unknown values by
+                        // default
+                        Arrays.fill(line, numNonRegionColumns, line.length, ChartGenerationUtils.EMPTY_CELL_VALUE);
+
+                        line[1] = ChartGenerationUtils.serviceToFilenameString(service);
+
+                        final double overflowSum = serviceEntry.getValue().entrySet().stream()
+                                .mapToDouble(Map.Entry::getValue).sum();
+
+                        serviceEntry.getValue().entrySet().forEach(planEntry -> {
+                            final RegionIdentifier overflowRegion = planEntry.getKey();
+                            final double value = planEntry.getValue();
+                            final int regionIndex = regions.indexOf(overflowRegion);
+                            if (-1 == regionIndex) {
+                                throw new RuntimeException(
+                                        "Cannot find index of " + overflowRegion + " in regions: " + regions);
+                            }
+
+                            // divide by sum to ensure that we have a common
+                            // base of 1
+                            line[regionIndex + numNonRegionColumns] = Double.toString(value / overflowSum);
+                        }); // foreach region plan entry
+
+                        printer.printRecord(line);
+                    })); // foreach service
+                })); // foreach time
+
+            })); // foreach region
+
+        } // allocate csv writer
+    }
+    
     private void processServiceRLGPlan(final Long time,
             final String nodeName,
             final LoadBalancerPlan rlgPlan,
             final Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<NodeIdentifier, Integer>>>>> serviceRLGPlans,
+            final Map<ServiceIdentifier<?>, Map<Long, Map<NodeIdentifier, Double>>> serviceContainerWeights,
             final List<NodeIdentifier> nodes) {
         LOGGER.debug("Add region plan for time {} and node '{}': {}", time, nodeName, rlgPlan);
 
         final RegionIdentifier fromRegion = rlgPlan.getRegion();
 
         final ImmutableMap<NodeIdentifier, ImmutableCollection<ContainerInfo>> servicePlans = rlgPlan.getServicePlan();
+        
 
         servicePlans.forEach((node, containerInfos) -> {
             if (!nodes.contains(node)) {
@@ -224,6 +383,11 @@ public class RLGPlanUpdateTableGenerator {
                 if (!info.isStop()) {
                     numInstancesOfService.merge(info.getService(), 1, Integer::sum);
                 }
+                
+                serviceContainerWeights
+                        .computeIfAbsent(info.getService(), k -> new HashMap<>())
+                        .computeIfAbsent(time, k -> new HashMap<>())
+                        .put(info.getId(), (!info.isStop() && !info.isStopTrafficTo() ? info.getWeight() : Double.NaN));
             });
 
             numInstancesOfService.forEach((service, numInstances) -> {
@@ -500,7 +664,7 @@ public class RLGPlanUpdateTableGenerator {
 
                     prevRowValues = rowValues;
                 }
-            } catch (FileNotFoundException e) {
+            } catch (NoSuchFileException | FileNotFoundException e) {
                 LOGGER.error("{}", e);
                 e.printStackTrace();
             } catch (IOException e) {
@@ -625,5 +789,14 @@ public class RLGPlanUpdateTableGenerator {
                 e.printStackTrace();
             }
         });
+    }
+    
+    
+    /**
+     * @return the RLG overflow plans that were read in from results files
+     */
+    public Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> getServiceRLGROverflowPlans()
+    {
+        return serviceRLGROverflowPlans;
     }
 }

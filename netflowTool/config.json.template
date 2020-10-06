@@ -1,0 +1,12 @@
+{
+	"nsFilePath": "",
+	"nsFilePath_Comment": "put the full path to the .ns file (including filename)",
+	"nodeCpuCSVPath": "",
+	"nodeCpuCSVPath_Comment": "put the full path to the csv file containing the timestamped node loads (including filename)",
+	"flowDir": "",
+	"flowDir_Comment": "put the path to the flow directory",
+	"maxPacketLoss": "1",
+	"maxPacketLoss_Comment": "This is the maximum number of packets that can be lost before flows are automaticly considered to not be the same flow",
+	"maxTimeDifference": "1",
+	"maxTimeDifference_Comment": "This is the maximum number of milliseconds that flows can differ in, ignoring link delay times, before flows are automaticly considered to not be the same flow."
+}

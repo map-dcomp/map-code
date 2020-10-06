@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -51,10 +51,11 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.common.value.Dependency;
 import com.bbn.map.common.value.DependencyDemandFunction;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.utils.JsonUtils;
+import com.bbn.map.utils.MAPServices;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
+import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -162,6 +163,10 @@ public final class AppMgrUtils {
      * the application manager to avoid test data from conflicting with what is
      * being loaded.
      * 
+     * Also make sure that services in {@link MAPServices#UNPLANNED_SERVICES}
+     * exist with default values to avoid issues with others retrieving these
+     * specifications.
+     * 
      * Public for testing.
      * 
      * @param serviceConfigurations
@@ -196,9 +201,19 @@ public final class AppMgrUtils {
             appSpec.setReplicable(sconfig.isReplicable());
             appSpec.setPriority(sconfig.getPriority());
             appSpec.setImageName(sconfig.getImageName());
-            appSpec.setTrafficType(sconfig.getTrafficType());
+            appSpec.setServerPort(sconfig.getServerPort());
             appManager.save(appSpec);
         });
+
+        // make sure all unmanaged services exist
+        MAPServices.UNPLANNED_SERVICES.forEach(service -> {
+            final ApplicationSpecification apSpec = appManager.getApplicationSpecification(service);
+            if (null == apSpec) {
+                // use default values
+                appManager.save(new ApplicationSpecification(service));
+            }
+        });
+
     }
 
     /**
@@ -260,8 +275,8 @@ public final class AppMgrUtils {
     private static final class ParsedDependency {
         public ApplicationCoordinates application;
         public ApplicationCoordinates dependentApplication;
-        public Map<NodeMetricName, Double> nodeAttributeMultipliers;
-        public Map<LinkMetricName, Double> linkAttributeMultipliers;
+        public Map<NodeAttribute, Double> nodeAttributeMultipliers;
+        public Map<LinkAttribute, Double> linkAttributeMultipliers;
 
         public double startStartMultiplier;
         public double startServerDurationMultiplier;

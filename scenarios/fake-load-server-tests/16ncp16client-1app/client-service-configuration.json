@@ -1,0 +1,13 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app2",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    }
+]

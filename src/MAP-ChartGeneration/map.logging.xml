@@ -3,11 +3,11 @@
     <Appenders>
         <!-- limit CONSOLE to be info -->
         <Console name="CONSOLE" target="SYSTEM_OUT">
-            <PatternLayout pattern="%r [%t] %p %c %notEmpty{%x} %notEmpty{%X}- %m%n" />
+            <PatternLayout pattern="%d{yyyy-MM-dd/HH:mm:ss.SSS/Z} [%t] %p %c %notEmpty{%x} %notEmpty{%X}- %m%n" />
         </Console>
 
         <RollingFile name="LOGFILE" filename="chart_generation.log" filePattern="chart_generation-%d{yyyyMMdd-HHmmss}.%i.log">
-            <PatternLayout pattern="%r [%t] %p %c %notEmpty{%x} %notEmpty{%X}- %m%n" />
+            <PatternLayout pattern="%d{yyyy-MM-dd/HH:mm:ss.SSS/Z} [%t] %p %c %notEmpty{%x} %notEmpty{%X}- %m%n" />
              <Policies>
                 <OnStartupTriggeringPolicy />
             </Policies>

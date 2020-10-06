@@ -1,0 +1,478 @@
+[
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app1",
+      "version": "1.0"
+    },
+    "hostname": "app1",
+    "defaultNode": "nodeA1",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app2",
+      "version": "1.0"
+    },
+    "hostname": "app2",
+    "defaultNode": "nodeA1",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app3",
+      "version": "1.0"
+    },
+    "hostname": "app3",
+    "defaultNode": "nodeA1",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app4",
+      "version": "1.0"
+    },
+    "hostname": "app4",
+    "defaultNode": "nodeA1",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app5",
+      "version": "1.0"
+    },
+    "hostname": "app5",
+    "defaultNode": "nodeA2",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app6",
+      "version": "1.0"
+    },
+    "hostname": "app6",
+    "defaultNode": "nodeA2",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app7",
+      "version": "1.0"
+    },
+    "hostname": "app7",
+    "defaultNode": "nodeA2",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app8",
+      "version": "1.0"
+    },
+    "hostname": "app8",
+    "defaultNode": "nodeA2",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app9",
+      "version": "1.0"
+    },
+    "hostname": "app9",
+    "defaultNode": "nodeA3",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app10",
+      "version": "1.0"
+    },
+    "hostname": "app10",
+    "defaultNode": "nodeA3",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app11",
+      "version": "1.0"
+    },
+    "hostname": "app11",
+    "defaultNode": "nodeA3",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app12",
+      "version": "1.0"
+    },
+    "hostname": "app12",
+    "defaultNode": "nodeA3",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app13",
+      "version": "1.0"
+    },
+    "hostname": "app13",
+    "defaultNode": "nodeA4",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app14",
+      "version": "1.0"
+    },
+    "hostname": "app14",
+    "defaultNode": "nodeA4",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app15",
+      "version": "1.0"
+    },
+    "hostname": "app15",
+    "defaultNode": "nodeA4",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app16",
+      "version": "1.0"
+    },
+    "hostname": "app16",
+    "defaultNode": "nodeA4",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app17",
+      "version": "1.0"
+    },
+    "hostname": "app17",
+    "defaultNode": "nodeA5",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app18",
+      "version": "1.0"
+    },
+    "hostname": "app18",
+    "defaultNode": "nodeA5",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app19",
+      "version": "1.0"
+    },
+    "hostname": "app19",
+    "defaultNode": "nodeA5",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app20",
+      "version": "1.0"
+    },
+    "hostname": "app20",
+    "defaultNode": "nodeA5",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app21",
+      "version": "1.0"
+    },
+    "hostname": "app21",
+    "defaultNode": "nodeA6",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app22",
+      "version": "1.0"
+    },
+    "hostname": "app22",
+    "defaultNode": "nodeA6",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app23",
+      "version": "1.0"
+    },
+    "hostname": "app23",
+    "defaultNode": "nodeA6",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app24",
+      "version": "1.0"
+    },
+    "hostname": "app24",
+    "defaultNode": "nodeA6",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  },
+  {
+    "service": {
+      "group": "com.bbn.map",
+      "artifact": "app25",
+      "version": "1.0"
+    },
+    "hostname": "app25",
+    "defaultNode": "nodeA7",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "1",
+      "CPU": "1"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": "100",
+      "DATARATE_RX": "100"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -39,22 +39,33 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Iterator;
-import java.util.Map;
+import java.util.LinkedList;
+import java.util.List;
 
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
 import org.junit.rules.RuleChain;
-import org.protelis.lang.datatype.DeviceUID;
+import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.RlgAlgorithm;
 import com.bbn.map.Controller;
 import com.bbn.map.ap.ReportUtils;
 import com.bbn.map.appmgr.util.AppMgrUtils;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.simulator.SimUtils;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
+import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
@@ -70,28 +81,66 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * @author sohaib Note: Some code re-used from RegionalOverloadTest.java.
  *
  */
+@RunWith(Theories.class)
 public class RlgThresholdTest {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RlgThresholdTest.class);
 
     /**
      * Add test name to logging and use the application manager.
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
+    public RuleChain chain = TestUtils.getStandardRuleChain()
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
+
+    /**
+     * @return the weights to use
+     */
+    @DataPoints
+    public static List<RlgAlgorithm> algorithms() {
+        final List<RlgAlgorithm> values = new LinkedList<>();
+        for (RlgAlgorithm a : RlgAlgorithm.values()) {
+            if (!RlgAlgorithm.NO_MAP.equals(a)) {
+                values.add(a);
+            }
+        }
+        return values;
+    }
+
+    /**
+     * Reset the {@link AgentConfiguration} object to default values. This is
+     * done before and after all tests to ensure that other tests are not
+     * effected by using the different algorithms here.
+     */
+    @Before
+    @After
+    public void resetAgentConfiguration() {
+        AgentConfiguration.resetToDefaults();
+        GlobalNetworkConfiguration.resetToDefaults();
+    }
 
     /**
      * Test using rlg-example. The test will pass if every NCP is below
      * threshold when the region is also below threshold. If demand in region is
      * above threshold, RLG does not guarantee every NCP to be below threshold.
      * 
+     * @param algorithm
+     *            the RLG algorithm to run the test with
      * @throws IOException
      *             if an error occurs in reading test files
      * @throws URISyntaxException
      *             if test files cannot be converted to URI
      */
-    @Test
-    public void test() throws IOException, URISyntaxException {
+    @Theory
+    public void test(final RlgAlgorithm algorithm) throws IOException, URISyntaxException {
+        // assumeThat("Bin packing is under development", algorithm,
+        // not(equalTo(RlgAlgorithm.BIN_PACKING)));
+
+        AgentConfiguration.getInstance().setRlgAlgorithm(algorithm);
+
+        LOGGER.info("Running test with algorithm {}", AgentConfiguration.getInstance().getRlgAlgorithm());
+
         final double threshold = 0.75;
 
         final long pollingInterval = Duration.ofMillis(10).toMillis();
@@ -123,54 +172,63 @@ public class RlgThresholdTest {
             SimUtils.waitForApRounds(sim, numApRoundsToWaitForResults);
             clock.stopClock();
 
-            double totalCapacity = 0.0;
-            double totalLoad = 0.0;
+            double regionCapacity = 0.0;
+            double regionLoad = 0.0;
 
             // iterate over the list of servers
-            Map<DeviceUID, Controller> servers = sim.getScenario().getServers();
-            Iterator<Map.Entry<DeviceUID, Controller>> itr = servers.entrySet().iterator();
+            final Collection<Controller> servers = sim.getAllControllers();
+            Iterator<Controller> itr = servers.iterator();
 
             while (itr.hasNext()) {
-                Map.Entry<DeviceUID, Controller> currentServer = itr.next();
-                final ResourceManager<?> manager = sim.getResourceManager(currentServer.getValue());
+                final Controller currentServer = itr.next();
+                final ResourceManager<?> manager = sim.getResourceManager(currentServer);
 
                 // final double nodeCapacity =
-                // manager.getComputeCapacity().get(NodeMetricName.TASK_CONTAINERS);
-                final double nodeCapacity = manager.getComputeCapacity().getOrDefault(NodeMetricName.TASK_CONTAINERS,
+                // manager.getComputeCapacity().get(NodeAttribute.TASK_CONTAINERS);
+                final double nodeCapacity = manager.getComputeCapacity().getOrDefault(NodeAttribute.TASK_CONTAINERS,
                         0D);
 
                 // add capacity of NCP to total capacity
-                totalCapacity += nodeCapacity;
+                regionCapacity += nodeCapacity;
 
                 // we're just checking load, so the estimation window doesn't
                 // matter, so just use short
                 final ResourceReport report = manager.getCurrentResourceReport(EstimationWindow.SHORT);
-                final double loadPercentage = ReportUtils.computeServerLoadPercentage(report);
 
-                // add load from NCP to total load
-                totalLoad += nodeCapacity * loadPercentage;
+                // loadPercentage of NCP is the load on containers weighted by
+                // the number of containers allocated
+                final double loadPercentage = report.getAllocatedServiceContainers()
+                        * ReportUtils.computeServerLoadPercentage(report) / nodeCapacity;
+
+                // add load from NCP to total region load
+                regionLoad += nodeCapacity * loadPercentage;
             }
 
-            // RLG will guarantee every NCP to be below threshold if load is
+            // RLG will guarantee every NCP to be below threshold if total load
+            // of region is
             // below threshold
-            if (totalLoad <= totalCapacity * threshold) {
+            if (regionLoad <= regionCapacity * threshold) {
                 // now check the resource utilization
-                sim.getScenario().getServers().forEach((deviceUid, controller) -> {
+                sim.getAllControllers().forEach(controller -> {
                     final ResourceManager<?> manager = sim.getResourceManager(controller);
 
                     // we're just checking load, so the estimation window
                     // doesn't
                     // matter, so just use short
                     final ResourceReport report = manager.getCurrentResourceReport(EstimationWindow.SHORT);
-
-                    final double loadPercentage = ReportUtils.computeServerLoadPercentage(report);
+                    // final double loadPercentage =
+                    // ReportUtils.computeServerLoadPercentage(report);
+                    final double nodeCapacity = manager.getComputeCapacity().getOrDefault(NodeAttribute.TASK_CONTAINERS,
+                            0D);
+                    final double loadPercentage = report.getAllocatedServiceContainers()
+                            * ReportUtils.computeServerLoadPercentage(report) / nodeCapacity;
 
                     Assert.assertTrue(String.format("Load percentage (%.2f) for node %s is greater than %.2f",
-                            loadPercentage, controller.getName(), threshold), loadPercentage < threshold);
+                            loadPercentage, controller.getName(), threshold), loadPercentage <= threshold);
                 });
             } else {
                 // do nothing, or assert true?
-                fail("The region total load (" + totalLoad + ") should not exceed capacity(" + totalCapacity
+                fail("The region total load (" + regionLoad + ") should not exceed capacity(" + regionCapacity
                         + ") * threshold (" + threshold + ")");
             }
         } // use simulation

@@ -1,0 +1,9 @@
+{
+    "rlgAlgorithm": "STUB",
+    "rlgStubChooseNcp": "MOST_AVAILABLE_CONTAINERS",
+    "rlgLoadThreshold": 0.6,
+    "rlgPriorityPolicy": "FIXED_TARGET",
+    "containerWeightAlgorithm": "ROUND_ROBIN",
+    "rlgMaxAllocationsPerRoundPerService": 1,
+    "rlgMaxShutdownsPerRoundPerService": 1
+}

@@ -1,13 +1,13 @@
 [
   {
     "service": {
-      "group": "testC",
-      "artifact": "test-serviceC",
+      "group": "test1",
+      "artifact": "test-service1",
       "version": "1"
     },
-    "hostname": "test-serviceC",
-    "defaultNode": "nodeC",
-    "defaultNodeRegion": "C",
+    "hostname": "test-service1",
+    "defaultNode": "nodeA",
+    "defaultNodeRegion": "A",
     "initialInstances": "1",
     "computeCapacity": {
       "TASK_CONTAINERS": "35"
@@ -21,11 +21,11 @@
   },
   {
     "service": {
-      "group": "testA",
-      "artifact": "test-serviceA",
+      "group": "test2",
+      "artifact": "test-service2",
       "version": "1"
     },
-    "hostname": "test-serviceA",
+    "hostname": "test-service2",
     "defaultNode": "nodeA",
     "defaultNodeRegion": "A",
     "initialInstances": "1",

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,7 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -43,60 +42,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @author awald
  *
  */
-public class ClientState {
+public class ClientState extends BaseClientState {
     private final String clientName;
     private final RegionIdentifier clientRegion;
 
-    private int numRequestsAttempted = 0;
-
-    /* package */ void incrementRequestsAttempted() {
-        ++numRequestsAttempted;
-    }
-
-    private int numRequestsSucceeded = 0;
-
-    private int numRequestsFailedForServerLoad = 0;
-
-    /* package */ void incrementRequestsFailedForServerLoad() {
-        ++numRequestsFailedForServerLoad;
-    }
-
-    private int numRequestsFailedForNetworkLoad = 0;
-
-    /* package */ void incrementRequestsFailedForNetworkLoad() {
-        ++numRequestsFailedForNetworkLoad;
-    }
-
-    private int numRequestsSlowForServerLoad = 0;
-
-    /* package */ void incrementRequestsSlowForServerLoad() {
-        ++numRequestsSlowForServerLoad;
-    }
-
-    private int numRequestsSlowForNetworkLoad = 0;
-
-    /* package */ void incrementRequestsSlowForNetworkLoad() {
-        ++numRequestsSlowForNetworkLoad;
-    }
-
-    private int numRequestsSlowForNetworkAndServerLoad = 0;
-
-    /* package */ void incrementRequestsSlowForNetworkAndServerLoad() {
-        ++numRequestsSlowForNetworkAndServerLoad;
-    }
-
-    private int numRequestsFailedForDownNode = 0;
-
-    /* package */ void incrementRequestsFailedForDownNode() {
-        ++numRequestsFailedForDownNode;
-    }
-
-    private final Map<RegionIdentifier, Integer> numRequestsServicedByRegion;
-
-    /* package */ ClientState(ClientSim sim) {
-        clientName = sim.getClientName();
+    /* package */ ClientState(final ClientSim sim) {
+        clientName = sim.getSimName();
         clientRegion = sim.getClientRegion();
-        numRequestsServicedByRegion = new HashMap<>();
     }
 
     /**
@@ -141,17 +93,11 @@ public class ClientState {
             @JsonProperty("numRequestsSlowForNetworkAndServerLoad") final int numRequestsSlowForNetworkAndServerLoad,
             @JsonProperty("numRequestsServicedByRegion") final Map<RegionIdentifier, Integer> numRequestsServicedByRegion,
             @JsonProperty("numRequestsFailedForDownNode") final int numRequestsFailedForDownNode) {
+        super(numRequestsAttempted, numRequestsSucceeded, numRequestsFailedForServerLoad,
+                numRequestsFailedForNetworkLoad, numRequestsSlowForServerLoad, numRequestsSlowForNetworkLoad,
+                numRequestsSlowForNetworkAndServerLoad, numRequestsServicedByRegion, numRequestsFailedForDownNode);
         this.clientName = clientName;
         this.clientRegion = clientRegion;
-        this.numRequestsAttempted = numRequestsAttempted;
-        this.numRequestsSucceeded = numRequestsSucceeded;
-        this.numRequestsFailedForServerLoad = numRequestsFailedForServerLoad;
-        this.numRequestsFailedForNetworkLoad = numRequestsFailedForNetworkLoad;
-        this.numRequestsSlowForServerLoad = numRequestsSlowForServerLoad;
-        this.numRequestsSlowForNetworkLoad = numRequestsSlowForNetworkLoad;
-        this.numRequestsSlowForNetworkAndServerLoad = numRequestsSlowForNetworkAndServerLoad;
-        this.numRequestsServicedByRegion = numRequestsServicedByRegion;
-        this.numRequestsFailedForDownNode = numRequestsFailedForDownNode;
     }
 
     /**
@@ -168,106 +114,4 @@ public class ClientState {
         return clientRegion;
     }
 
-    /**
-     * The number of client requests attempted is the sum of the
-     * {@link ClientRequest#getNumClients()} property of the
-     * {@link ClientRequest} objects that have been processed.
-     * 
-     * @return the number of client requests that were attempted
-     */
-    public int getNumRequestsAttempted() {
-        return numRequestsAttempted;
-    }
-
-    /**
-     * The number of client requests succeeded.
-     * 
-     * @return the number of client requests that succeeded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSucceeded() {
-        return numRequestsSucceeded;
-    }
-
-    /**
-     * @return the number of client requests that failed because the server was
-     *         overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsFailedForServerLoad() {
-        return numRequestsFailedForServerLoad;
-    }
-
-    /**
-     * @return the number of client requests that failed because the network
-     *         path was overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsFailedForNetworkLoad() {
-        return numRequestsFailedForNetworkLoad;
-    }
-
-    /**
-     * @return the number of client requests that are slow because the server
-     *         was overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSlowForServerLoad() {
-        return numRequestsSlowForServerLoad;
-    }
-
-    /**
-     * @return the number of client requests that were slow because the network
-     *         path was overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSlowForNetworkLoad() {
-        return numRequestsSlowForNetworkLoad;
-    }
-
-    /**
-     * @return the number of client requests that were slow because both the
-     *         network path and the server were overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSlowForNetworkAndServerLoad() {
-        return numRequestsSlowForNetworkAndServerLoad;
-    }
-
-    /**
-     * The number of requests from this client that were serviced by each
-     * region.
-     * 
-     * @return key is region, value is count. Unmodifiable map.
-     */
-    public Map<RegionIdentifier, Integer> getNumRequestsServicedByRegion() {
-        return numRequestsServicedByRegion;
-    }
-
-    /**
-     * 
-     * @param region
-     *            increment the number of requests serviced by the specified
-     *            region
-     */
-    public void incrementRequestsServicedByRegion(final RegionIdentifier region) {
-        numRequestsServicedByRegion.merge(region, 1, (v1, v2) -> v1 + v2);
-        ++numRequestsSucceeded;
-    }
-
-    /**
-     * @return the number of requests that failed due to the node being down
-     */
-    public int getNumRequestsFailedForDownNode() {
-        return numRequestsFailedForDownNode;
-    }
-
-    /**
-     * 
-     * @param v
-     *            see {@link #getNumRequestsFailedForDownNode()}
-     */
-    public void setNumRequestsFailedForDownNode(final int v) {
-        numRequestsFailedForDownNode = v;
-    }
 }

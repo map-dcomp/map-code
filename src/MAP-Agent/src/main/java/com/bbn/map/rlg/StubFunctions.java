@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -39,8 +39,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
 
@@ -48,15 +48,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.rlg.RlgUtils.LoadPercentages;
+import com.bbn.map.utils.MAPServices;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlanBuilder;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
-import com.bbn.protelis.networkresourcemanagement.ServiceReport;
-import com.bbn.protelis.networkresourcemanagement.ServiceState;
+import com.bbn.protelis.networkresourcemanagement.ServiceStatus;
 import com.google.common.collect.ImmutableSet;
 
 /**
@@ -69,6 +69,11 @@ import com.google.common.collect.ImmutableSet;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StubFunctions.class);
 
+    /**
+     * How many containers to allocate at a time.
+     */
+    private static final int NUM_CONTAINERS_TO_ALLOCATE = AgentConfiguration.getInstance().getRlgMaxAllocationsPerRoundPerService();
+
     private StubFunctions() {
     }
 
@@ -80,7 +85,7 @@ import com.google.common.collect.ImmutableSet;
      * @return the node with the most container capacity
      */
     public static NodeIdentifier chooseNodeWithGreatestContainerCapacity(
-            @Nonnull final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity) {
+            @Nonnull final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity) {
         if (nodesWithAvailableCapacity.isEmpty()) {
             return null;
         }
@@ -98,7 +103,7 @@ import com.google.common.collect.ImmutableSet;
      *            nodes to choose from
      * @return a random node
      */
-    public static NodeIdentifier chooseRandomNode(final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity) {
+    public static NodeIdentifier chooseRandomNode(final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity) {
         if (nodesWithAvailableCapacity.isEmpty()) {
             return null;
         }
@@ -120,13 +125,13 @@ import com.google.common.collect.ImmutableSet;
      *         running the service
      */
     public static NodeIdentifier chooseNodeRunningService(
-            @Nonnull final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            @Nonnull final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
             @Nonnull final ServiceIdentifier<?> service,
             @Nonnull final LoadBalancerPlanBuilder newServicePlan) {
         final Set<NodeIdentifier> serviceNodes = getNodesRunningService(service, newServicePlan);
 
         final Optional<NodeIdentifier> node = nodesWithAvailableCapacity.entrySet().stream().map(Map.Entry::getKey)
-                .filter(n -> serviceNodes.contains(n)).findAny();
+                .filter(n -> serviceNodes.contains(n)).findFirst();
         if (node.isPresent()) {
             return node.get();
         } else {
@@ -138,7 +143,7 @@ import com.google.common.collect.ImmutableSet;
             final Collection<LoadBalancerPlan.ContainerInfo> containerInfos) {
         return containerInfos.stream()
                 .filter(info -> !info.isStop() && !info.isStopTrafficTo() && service.equals(info.getService()))
-                .findAny().isPresent();
+                .findFirst().isPresent();
     }
 
     private static Set<NodeIdentifier> getNodesRunningService(final ServiceIdentifier<?> service,
@@ -162,14 +167,14 @@ import com.google.common.collect.ImmutableSet;
      *         running the service
      */
     public static NodeIdentifier chooseNodeNotRunningService(
-            @Nonnull final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            @Nonnull final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
             @Nonnull final ServiceIdentifier<?> service,
             @Nonnull final LoadBalancerPlanBuilder newServicePlan) {
 
         final Set<NodeIdentifier> serviceNodes = getNodesRunningService(service, newServicePlan);
 
         final Optional<NodeIdentifier> node = nodesWithAvailableCapacity.entrySet().stream().map(Map.Entry::getKey)
-                .filter(n -> !serviceNodes.contains(n)).findAny();
+                .filter(n -> !serviceNodes.contains(n)).findFirst();
         if (node.isPresent()) {
             return node.get();
         } else {
@@ -177,20 +182,19 @@ import com.google.common.collect.ImmutableSet;
         }
     }
 
-    private static final class CompareByTaskContainers
-            implements Comparator<Map.Entry<?, Map<NodeAttribute<?>, Double>>> {
+    private static final class CompareByTaskContainers implements Comparator<Map.Entry<?, Map<NodeAttribute, Double>>> {
         public static final CompareByTaskContainers INSTANCE = new CompareByTaskContainers();
 
-        public int compare(final Map.Entry<?, Map<NodeAttribute<?>, Double>> o1,
-                final Map.Entry<?, Map<NodeAttribute<?>, Double>> o2) {
-            final Double v1 = o1.getValue().getOrDefault(NodeMetricName.TASK_CONTAINERS, 0D);
-            final Double v2 = o2.getValue().getOrDefault(NodeMetricName.TASK_CONTAINERS, 0D);
+        public int compare(final Map.Entry<?, Map<NodeAttribute, Double>> o1,
+                final Map.Entry<?, Map<NodeAttribute, Double>> o2) {
+            final Double v1 = o1.getValue().getOrDefault(NodeAttribute.TASK_CONTAINERS, 0D);
+            final Double v2 = o2.getValue().getOrDefault(NodeAttribute.TASK_CONTAINERS, 0D);
             return Double.compare(v1, v2);
         }
     }
 
     public static NodeIdentifier chooseNodeWithLowestOverallLoad(
-            @Nonnull final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            @Nonnull final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
             @Nonnull final LoadPercentages loadPercentages) {
 
         if (nodesWithAvailableCapacity.isEmpty()) {
@@ -204,21 +208,22 @@ import com.google.common.collect.ImmutableSet;
         return node;
     }
 
-    public static void allocateContainers(@Nonnull final ImmutableSet<ServiceReport> serviceStates,
+    public static void allocateContainersForOverloadedServices(@Nonnull ServicePriorityManager servicePriorityManager,
+            @Nonnull final ImmutableSet<ResourceReport> resourceReports,
             @Nonnull final LoadBalancerPlanBuilder newServicePlan,
-            @Nonnull final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            @Nonnull final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
             @Nonnull final List<ServiceIdentifier<?>> overloadedServices,
             @Nonnull final LoadPercentages loadPercentages) {
 
         final Map<ServiceIdentifier<?>, Integer> runningContainers = new HashMap<>();
 
-        serviceStates.forEach(sreport -> {
-            final Stream<ServiceState> reportRunningContainers = sreport.getServiceState().entrySet().stream()
-                    .map(Map.Entry::getValue).filter(s -> ServiceState.Status.RUNNING.equals(s.getStatus())
-                            || ServiceState.Status.STARTING.equals(s.getStatus()));
-            reportRunningContainers.forEach(sState -> {
-                final ServiceIdentifier<?> service = sState.getService();
-                runningContainers.merge(service, 1, Integer::sum);
+        resourceReports.forEach(resourceReport -> {
+            resourceReport.getContainerReports().forEach((containerId, containerReport) -> {
+                final ServiceStatus serviceStatus = containerReport.getServiceStatus();
+                if (ServiceStatus.RUNNING.equals(serviceStatus) || ServiceStatus.STARTING.equals(serviceStatus)) {
+                    final ServiceIdentifier<?> service = containerReport.getService();
+                    runningContainers.merge(service, 1, Integer::sum);
+                }
             });
         });
 
@@ -232,78 +237,165 @@ import com.google.common.collect.ImmutableSet;
             });
         });
 
-        final AgentConfiguration.RlgStubChooseNcp chooseAlgorithm = AgentConfiguration.getInstance()
-                .getRlgStubChooseNcp();
-        if (!overloadedServices.isEmpty() && !nodesWithAvailableCapacity.isEmpty()) {
+        if (!overloadedServices.isEmpty()) {
             // Add a new node for each node that is too busy
 
-            overloadedServices.forEach(service -> {
-                final int servicePlannedContainers = plannedContainers.getOrDefault(service, 0);
-                final int serviceRunningContainers = runningContainers.getOrDefault(service, 0);
+            List<ServiceIdentifier<?>> allocationServices = servicePriorityManager.getPriorityServiceAllocationList()
+                    .stream().filter(s -> overloadedServices.contains(s)).collect(Collectors.toList());
 
-                if (nodesWithAvailableCapacity.isEmpty()) {
-                    LOGGER.warn(
-                            "Service {} is overloaded, but there are no nodes with available capacity. No more containers can be added to the plan",
-                            service);
-                } else if (servicePlannedContainers <= serviceRunningContainers) {
-                    final NodeIdentifier newNode;
-                    switch (chooseAlgorithm) {
-                    case MOST_AVAILABLE_CONTAINERS:
-                        newNode = StubFunctions.chooseNodeWithGreatestContainerCapacity(nodesWithAvailableCapacity);
-                        break;
-                    case RANDOM:
-                        newNode = StubFunctions.chooseRandomNode(nodesWithAvailableCapacity);
-                        break;
-                    case CURRENTLY_NOT_RUNNING_SERIVCE:
-                        newNode = StubFunctions.chooseNodeNotRunningService(nodesWithAvailableCapacity, service,
-                                newServicePlan);
-                        break;
-                    case CURRENTLY_RUNNING_SERVICE:
-                        newNode = StubFunctions.chooseNodeRunningService(nodesWithAvailableCapacity, service,
-                                newServicePlan);
-                        break;
-                    case LOWEST_LOAD_PERCENTAGE:
-                        newNode = chooseNodeWithLowestOverallLoad(nodesWithAvailableCapacity, loadPercentages);
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Unknown stub NCP choose algorithm: " + chooseAlgorithm);
-                    }
-
-                    LOGGER.debug("allocateContainers: newNode = {}, nodesWithAvailableCapacity = {}", newNode,
-                            nodesWithAvailableCapacity);
-                    LOGGER.debug("allocateContainers: nodesWithAvailableCapacity.get(newNode) = {}",
-                            nodesWithAvailableCapacity.get(newNode));
-
-                    if (null != newNode) {
-                        final int availCap = nodesWithAvailableCapacity.get(newNode);
-
-                        final int usedCap = Math.min(availCap, 10);
-                        for (int i = 0; i < usedCap; ++i) {
-                            newServicePlan.addService(newNode, service, 1);
-                        }
-
-                        final int newCapacity = availCap - usedCap;
-                        if (newCapacity <= 0) {
-                            nodesWithAvailableCapacity.remove(newNode);
-                        } else {
-                            nodesWithAvailableCapacity.put(newNode, newCapacity);
-                        }
-
-                        LOGGER.trace("newNode: {} availCap: {} usedCap: {} newCapacity: {} nodesAvailable: {}", newNode,
-                                availCap, usedCap, newCapacity, nodesWithAvailableCapacity);
-                        LOGGER.trace("New plan after allocation: {}", newServicePlan);
-                    }
-
-                    if (LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Overloaded service: " + service + " new node: " + newNode);
-                    }
+            for (ServiceIdentifier<?> service : allocationServices) {
+                if (MAPServices.UNPLANNED_SERVICES.contains(service)) {
+                    LOGGER.warn("Service {} is overloaded, but MAP does not manage the service.", service);
                 } else {
-                    LOGGER.warn(
-                            "Service {} is overloaded. However the plan already wants to allocate more containers ({}) than are currently running ({}). No more containers will be added to the plan at this time. It is assumed that the node will start up more containers soon.",
-                            service, servicePlannedContainers, serviceRunningContainers);
-                }
-            }); // foreach overloaded service
+
+                    final int servicePlannedContainers = plannedContainers.getOrDefault(service, 0);
+                    final int serviceRunningContainers = runningContainers.getOrDefault(service, 0);
+
+                    if (servicePlannedContainers <= serviceRunningContainers) {
+                        // If the number of planned containers is less than the
+                        // number of currently running containers and the
+                        // service is
+                        // overloaded, then we can add more nodes.
+                        //
+                        // If the number of planned containers is more than the
+                        // number of running containers, then we are in a
+                        // situation
+                        // where the plan has not been realized yet, so we don't
+                        // want to add more containers as this can cause
+                        // over-allocation.
+
+                        if (!nodesWithAvailableCapacity.isEmpty()) {
+                            final NodeIdentifier newNode = chooseNode(service, newServicePlan,
+                                    nodesWithAvailableCapacity, loadPercentages);
+
+                            LOGGER.debug("allocateContainers: newNode = {}, nodesWithAvailableCapacity = {}", newNode,
+                                    nodesWithAvailableCapacity);
+
+                            if (null != newNode) {
+                                LOGGER.debug("allocateContainers: nodesWithAvailableCapacity.get(newNode) = {}",
+                                        nodesWithAvailableCapacity.get(newNode));
+
+                                allocateContainers(servicePriorityManager, service, newNode, NUM_CONTAINERS_TO_ALLOCATE,
+                                        newServicePlan, nodesWithAvailableCapacity);
+                            } else {                                
+                                servicePriorityManager.requestAllocation(service, NUM_CONTAINERS_TO_ALLOCATE);
+                            }
+
+                            if (LOGGER.isTraceEnabled()) {
+                                LOGGER.trace("Overloaded service: " + service + " new node: " + newNode);
+                            }
+
+                        } else {
+                            LOGGER.warn("Service {} is overloaded, but there are no nodes with available capacity. "
+                                    + "No more containers can be immediately added to the plan, "
+                                    + "but more containers are being requested.", service);
+
+                            servicePriorityManager.requestAllocation(service, NUM_CONTAINERS_TO_ALLOCATE);
+                        }
+                    } else {
+                        LOGGER.warn(
+                                "Service {} is overloaded. However the plan already wants to allocate more containers ({}) than are currently running ({}). No more containers will be added to the plan at this time. It is assumed that the node will start up more containers soon.",
+                                service, servicePlannedContainers, serviceRunningContainers);
+                    }
+                } // MAP managed service
+            } // for each overloaded service
 
         } // something to do
+    }
+
+    /**
+     * Allocate containers of service on the specified node. Up to maxContainers
+     * will be allocated based on available capacity.
+     * 
+     * @param service
+     *            the service being allocated
+     * @param newNode
+     *            the node to allocate the service on
+     * @param maxContainers
+     *            the maximum number of containers to allocate
+     * @param newServicePlan
+     *            the plan
+     * @param nodesWithAvailableCapacity
+     *            information about which nodes have available capacity, updated
+     *            by this method
+     */
+    public static void allocateContainers(@Nonnull final ServicePriorityManager servicePriorityManager,
+            @Nonnull final ServiceIdentifier<?> service,
+            @Nonnull final NodeIdentifier newNode,
+            final int maxContainers,
+            @Nonnull final LoadBalancerPlanBuilder newServicePlan,
+            @Nonnull final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity) {
+        if (!nodesWithAvailableCapacity.containsKey(newNode) || null == nodesWithAvailableCapacity.get(newNode)) {
+            LOGGER.error("Unable to allocate {} containers on {}. availableCapacity: {}", maxContainers,
+                    newNode.getName(), nodesWithAvailableCapacity);
+            return;
+        }
+        final int availCap = nodesWithAvailableCapacity.get(newNode);
+        if (availCap < 1) {
+            LOGGER.error("Unable to allocate {} containers on {}. availableCapacity: {}", maxContainers,
+                    newNode.getName(), nodesWithAvailableCapacity);
+            return;
+        }
+
+        final int maxUsedCap = Math.min(availCap, maxContainers);
+        final int usedCap = (int) Math.floor(servicePriorityManager.requestAllocation(service, maxUsedCap));
+        for (int i = 0; i < usedCap; ++i) {
+            newServicePlan.addService(newNode, service, 1);
+        }
+
+        final int newCapacity = availCap - usedCap;
+        if (newCapacity <= 0) {
+            nodesWithAvailableCapacity.remove(newNode);
+        } else {
+            nodesWithAvailableCapacity.put(newNode, newCapacity);
+        }
+
+        LOGGER.trace("newNode: {} availCap: {} usedCap: {} newCapacity: {} nodesAvailable: {}", newNode, availCap,
+                usedCap, newCapacity, nodesWithAvailableCapacity);
+        LOGGER.trace("New plan after allocation: {}", newServicePlan);
+    }
+
+    /**
+     * Choose a node to run the specified service on.
+     * 
+     * @param service
+     *            the service to find a node for
+     * @param newServicePlan
+     *            the plan that is being built
+     * @param nodesWithAvailableCapacity
+     *            information about what nodes have capacity
+     * @param loadPercentages
+     *            the load information
+     * @return the node to use or null if there are no nodes with available
+     *         capacity
+     */
+    public static NodeIdentifier chooseNode(@Nonnull final ServiceIdentifier<?> service,
+            @Nonnull final LoadBalancerPlanBuilder newServicePlan,
+            @Nonnull final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            @Nonnull final LoadPercentages loadPercentages) {
+
+        if (nodesWithAvailableCapacity.isEmpty()) {
+            LOGGER.error("Asking to choose a node for service {} and there are no nodes with available capacity",
+                    service);
+            return null;
+        }
+
+        final AgentConfiguration.RlgStubChooseNcp chooseAlgorithm = AgentConfiguration.getInstance()
+                .getRlgStubChooseNcp();
+
+        switch (chooseAlgorithm) {
+        case MOST_AVAILABLE_CONTAINERS:
+            return StubFunctions.chooseNodeWithGreatestContainerCapacity(nodesWithAvailableCapacity);
+        case RANDOM:
+            return StubFunctions.chooseRandomNode(nodesWithAvailableCapacity);
+        case CURRENTLY_NOT_RUNNING_SERIVCE:
+            return StubFunctions.chooseNodeNotRunningService(nodesWithAvailableCapacity, service, newServicePlan);
+        case CURRENTLY_RUNNING_SERVICE:
+            return StubFunctions.chooseNodeRunningService(nodesWithAvailableCapacity, service, newServicePlan);
+        case LOWEST_LOAD_PERCENTAGE:
+            return chooseNodeWithLowestOverallLoad(nodesWithAvailableCapacity, loadPercentages);
+        default:
+            throw new IllegalArgumentException("Unknown stub NCP choose algorithm: " + chooseAlgorithm);
+        }
     }
 }

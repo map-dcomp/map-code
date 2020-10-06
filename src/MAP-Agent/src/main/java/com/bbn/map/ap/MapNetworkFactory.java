@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,6 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map.ap;
 
 import java.util.Map;
+import java.util.function.Function;
 
 import javax.annotation.Nonnull;
 
@@ -40,6 +41,7 @@ import org.protelis.vm.ProtelisProgram;
 
 import com.bbn.map.Controller;
 import com.bbn.map.NetworkServices;
+import com.bbn.map.utils.MapUtils;
 import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkFactory;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
@@ -49,11 +51,14 @@ import com.bbn.protelis.networkresourcemanagement.NodeLookupService;
 import com.bbn.protelis.networkresourcemanagement.RegionLookupService;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceManagerFactory;
+import com.bbn.protelis.networkresourcemanagement.ns2.Link;
+import com.bbn.protelis.networkresourcemanagement.ns2.Node;
 
 /**
  * Implementation of {@link NetworkFactory} for MAP.
  */
-public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink, NetworkClient> {
+public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink, NetworkClient>,
+        MapUtils.GraphFactory<NetworkNode, NetworkLink> {
 
     private final NodeLookupService nodeLookupService;
     private final RegionLookupService regionLookupService;
@@ -64,6 +69,7 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
     private final boolean allowDnsChanges;
     private final boolean enableDcop;
     private final boolean enableRlg;
+    private final Function<String, NodeIdentifier> createNodeIdentifier;
 
     /**
      * Create a MAP factory.
@@ -91,6 +97,8 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
      *            set to false for testing where DCOP should not run
      * @param enableRlg
      *            set to false for testing where RLG should not run
+     * @param createNodeIdentifier
+     *            function for creating node identifiers from strings
      */
     public MapNetworkFactory(@Nonnull final NodeLookupService nodeLookupService,
             @Nonnull final RegionLookupService regionLookupService,
@@ -100,7 +108,8 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
             @Nonnull final NetworkServices networkServices,
             final boolean allowDnsChanges,
             final boolean enableDcop,
-            final boolean enableRlg) {
+            final boolean enableRlg,
+            @Nonnull final Function<String, NodeIdentifier> createNodeIdentifier) {
         this.nodeLookupService = nodeLookupService;
         this.regionLookupService = regionLookupService;
         this.program = program;
@@ -110,6 +119,7 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
         this.allowDnsChanges = allowDnsChanges;
         this.enableDcop = enableDcop;
         this.enableRlg = enableRlg;
+        this.createNodeIdentifier = createNodeIdentifier;
     }
 
     @Override
@@ -117,8 +127,11 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
     public NetworkLink createLink(final String name,
             final NetworkNode left,
             final NetworkNode right,
-            final double bandwidth) {
-        return new NetworkLink(name, left, right, bandwidth);
+            final double bandwidth, double delay) {
+        final NetworkLink link = new NetworkLink(name, left, right, bandwidth, delay);
+        left.addNeighbor(right, bandwidth);
+        right.addNeighbor(left, bandwidth);
+        return link;
     }
 
     @Override
@@ -146,6 +159,26 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
         final NetworkClient client = new NetworkClient(name, extraData);
 
         return client;
+    }
+
+    @Override
+    @Nonnull
+    public NetworkNode createVertex(@Nonnull final Node node) {
+        final NodeIdentifier id = createNodeIdentifier.apply(node.getName());
+        if (node.isClient()) {
+            final NetworkClient c = createClient(id, node.getExtraData());
+            return c;
+        } else {
+            final Controller s = createServer(id, node.getExtraData());
+            s.setHardware(node.getHardware());
+            return s;
+        }
+    }
+
+    @Override
+    @Nonnull
+    public NetworkLink createEdge(@Nonnull final Link link, @Nonnull final NetworkNode left, final NetworkNode right) {
+        return createLink(link.getName(), left, right, link.getBandwidth(), link.getDelay());
     }
 
 }

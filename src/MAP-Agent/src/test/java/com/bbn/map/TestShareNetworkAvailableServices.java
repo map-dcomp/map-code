@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -56,6 +56,7 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.simulator.SimUtils;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
+import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
@@ -80,7 +81,7 @@ public class TestShareNetworkAvailableServices {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
+    public RuleChain chain = TestUtils.getStandardRuleChain()
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     /**
@@ -92,9 +93,8 @@ public class TestShareNetworkAvailableServices {
     @After
     public void resetAgentConfiguration() {
         AgentConfiguration.resetToDefaults();
+        GlobalNetworkConfiguration.resetToDefaults();
     }
-
-    private static final int NUM_ROUNDS_BETWEEN_NEIGHBOR_CONNECT_ATTEMPTS = 1;
 
     /**
      * Test that dns information is shared with all nodes in the network.
@@ -131,16 +131,7 @@ public class TestShareNetworkAvailableServices {
 
             // wait for for everything to get connected
             LOGGER.info("Waiting for all nodes to be connected to AP");
-            // FIXME needs to get code from test-leader-election branch
-            // TestUtils
-            boolean done = false;
-            while (!done) {
-                done = sim.getAllControllers().stream().allMatch(c -> c.isApConnectedToAllNeighbors());
-                if (!done) {
-                    sim.getClock().waitForDuration(NUM_ROUNDS_BETWEEN_NEIGHBOR_CONNECT_ATTEMPTS);
-                }
-            }
-            // end duplicated code
+            sim.waitForAllNodesToConnectToNeighbors();
             LOGGER.info("All nodes connected");
 
             final double networkDiameter = sim.getNetworkDiameter();

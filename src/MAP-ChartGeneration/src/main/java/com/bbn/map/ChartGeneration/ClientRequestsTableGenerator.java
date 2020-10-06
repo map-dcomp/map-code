@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -50,24 +50,25 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.bbn.map.common.value.NodeMetricName;
+import com.bbn.map.simulator.ClientLoad;
 import com.bbn.map.simulator.ClientRequestRecord;
-import com.bbn.map.simulator.ClientSim.RequestResult;
 import com.bbn.map.simulator.ClientState;
+import com.bbn.map.simulator.RequestResult;
 import com.bbn.map.utils.JsonUtils;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multiset.Entry;
 
 /**
  * Class for generating tables with information about the number of client requests that succeeded, failed, or are slow.
@@ -98,11 +99,14 @@ public class ClientRequestsTableGenerator
     // service -> time -> resquests results summary
     private Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> requestsResultsSummaryDataByService = new HashMap<>();
     private Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> binnedRequestsResultsSummaryDataByService = new HashMap<>();
-    private Set<NodeMetricName> attributes = new HashSet<>();
-
+    private Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> cumulativeRequestsResultsSummaryDataByService = new HashMap<>();
+    private Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> binnedCumulativeRequestsResultsSummaryDataByService = new HashMap<>();
+    private Set<NodeAttribute> attributes = new HashSet<>();
 
     
-    
+    private Set<ServiceIdentifier<?>> scenarioServices = null;
+
+ 
     /**
      * Processes data for a scenario to produce request results tables.
      * 
@@ -208,9 +212,16 @@ public class ClientRequestsTableGenerator
         {
             LOGGER.error("Failed to find client requests sent files.");
             e1.printStackTrace();
-        }     
+        }
         
-        
+        if (scenarioServices != null)
+        {
+            scenarioServices.forEach((service) ->
+            {
+                requestsResultsSummaryDataByService.computeIfAbsent(service, k -> new HashMap<>());
+            });
+        }
+
         // bin request summaries
         requestsResultsSummaryDataByService.forEach((service, timeData) ->
         {
@@ -232,6 +243,13 @@ public class ClientRequestsTableGenerator
             }
         });
         
+        // accumulate request summaries
+        accumulate(requestsResultsSummaryDataByService, cumulativeRequestsResultsSummaryDataByService);
+        
+        // accumulate binned request summaries
+        accumulate(binnedRequestsResultsSummaryDataByService, binnedCumulativeRequestsResultsSummaryDataByService);
+        
+        
         
         List<String> table1Columns = new ArrayList<>();
         table1Columns.add(REQUESTS_SUCCEEDED_LABEL);
@@ -251,9 +269,41 @@ public class ClientRequestsTableGenerator
         
         outputRequestsResultsDataByServiceToCSV(outputFolder, "", requestsResultsSummaryDataByService, attributes);
         outputRequestsResultsDataByServiceToCSV(outputFolder, "binned_", binnedRequestsResultsSummaryDataByService, attributes);
+        outputRequestsResultsDataByServiceToCSV(outputFolder, "cumulative_", cumulativeRequestsResultsSummaryDataByService, attributes);
+        outputRequestsResultsDataByServiceToCSV(outputFolder, "binned_cumulative_", binnedCumulativeRequestsResultsSummaryDataByService, attributes);
     }
     
-    private void outputRequestsResultsDataByServiceToCSV(File outputFolder, String filenamePrefix, Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> requestsResultsSummaryDataByService, Set<NodeMetricName> attributes)
+    void accumulate(Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> input, Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> accumulation)
+    {
+        final RequestResultsSummary zeroRequestResultsSummary = new RequestResultsSummary();
+        input.forEach((service, timeData) ->
+        {
+            Map<Long, RequestResultsSummary> cumulativeTimeData = accumulation.computeIfAbsent(service, k -> new HashMap<>());
+
+            RequestResultsSummary sum = zeroRequestResultsSummary;
+            List<Long> times = timeData.keySet().stream().sorted().collect(Collectors.toList());
+            
+            for (int t = 0; t < times.size(); t++)
+            {
+                Long time = times.get(t);
+                sum = sumRequestResultsSummary(sum, timeData.get(time));
+                cumulativeTimeData.put(time, sum);
+            }
+        });
+    }
+    
+    /**
+     * Provides a set of services to use in addition to the services discovered through requests results.
+     * 
+     * @param services
+     *          the set of services in the scenario
+     */
+    public void setScenarioServices(Set<ServiceIdentifier<?>> services)
+    {
+        scenarioServices = services;
+    }
+    
+    private void outputRequestsResultsDataByServiceToCSV(File outputFolder, String filenamePrefix, Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> requestsResultsSummaryDataByService, Set<NodeAttribute> attributes)
     {
         String[] header = {ChartGenerationUtils.CSV_TIME_COLUMN_LABEL, REQUESTS_ATTEMPTED_LABEL, REQUESTS_SUCCEEDED_LABEL, 
                 REQUESTS_FAILED_FOR_SERVER_LABEL, REQUESTS_FAILED_FOR_NETWORK_LABEL};
@@ -277,9 +327,6 @@ public class ClientRequestsTableGenerator
                     List<Object> countRow = new LinkedList<>();
                     countRow.add(time);
                     
-                    List<Object> loadRow = new LinkedList<>();
-                    loadRow.add(time);
-
                     RequestResultsSummary results = timeRequestsData.get(time);
                     
                     for (int c = 1; c < header.length; c++)
@@ -321,7 +368,7 @@ public class ClientRequestsTableGenerator
             }
             
             
-            for (NodeMetricName attribute : attributes)
+            for (NodeAttribute attribute : attributes)
             {
                 File loadFile = new File(outputFolder + File.separator + filenamePrefix + "request_load-" +
                         ChartGenerationUtils.serviceToFilenameString(service) + "-" + attribute.getName() + ".csv");
@@ -381,7 +428,7 @@ public class ClientRequestsTableGenerator
     }
     
     
-    private void processClientRequestRecord(ClientRequestRecord record, Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> requestsResultsSummaryDataByService, Set<NodeMetricName> attributes)
+    private void processClientRequestRecord(ClientRequestRecord record, Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> requestsResultsSummaryDataByService, Set<NodeAttribute> attributes)
     {
         RequestResult networkResult = record.getNetworkRequestResult();
         RequestResult serverResult = record.getServerResult();
@@ -389,7 +436,13 @@ public class ClientRequestsTableGenerator
         ServiceIdentifier<?> service = record.getRequest().getService();
         long startTime = record.getRequest().getStartTime();
 
-        ImmutableMap<NodeMetricName, Double> nodeLoad = record.getRequest().getNodeLoad();
+        final ImmutableMap<NodeAttribute, Double> nodeLoad;
+        if (record.getRequest() instanceof ClientLoad) {
+            nodeLoad = ((ClientLoad) record.getRequest()).getNodeLoad();
+        } else {
+            // background traffic doesn't have node load
+            nodeLoad = ImmutableMap.of();
+        }
         attributes.addAll(nodeLoad.keySet());
         
         Map<Long, RequestResultsSummary> requestSummaryForService = requestsResultsSummaryDataByService.computeIfAbsent(service, k -> new HashMap<>());
@@ -462,9 +515,9 @@ public class ClientRequestsTableGenerator
     
     private static class RequestResultsSummary
     {
-        private Map<NodeMetricName, Double> loadSucceeded;
-        private Map<NodeMetricName, Double> loadFailedForServer;
-        private Map<NodeMetricName, Double> loadFailedForNetwork;
+        private Map<NodeAttribute, Double> loadSucceeded;
+        private Map<NodeAttribute, Double> loadFailedForServer;
+        private Map<NodeAttribute, Double> loadFailedForNetwork;
         
         private int requestsSucceeded;
         private int requestsFailedForServer;
@@ -497,7 +550,7 @@ public class ClientRequestsTableGenerator
             this.requestsFailedForNetwork = rrs.requestsFailedForNetwork;
         }
     
-        RequestResultsSummary(final Map<NodeMetricName, Double> loadSucceeded, final Map<NodeMetricName, Double> loadFailedForServer, final Map<NodeMetricName, Double> loadFailedForNetwork,
+        RequestResultsSummary(final Map<NodeAttribute, Double> loadSucceeded, final Map<NodeAttribute, Double> loadFailedForServer, final Map<NodeAttribute, Double> loadFailedForNetwork,
                 final int requestsSucceeded, final int requestsFailedForServer, final int requestsFailedForNetwork)
         {        
             this.loadSucceeded = loadSucceeded;
@@ -511,24 +564,24 @@ public class ClientRequestsTableGenerator
 
 
         
-        public Map<NodeMetricName, Double> getLoadSucceeded()
+        public Map<NodeAttribute, Double> getLoadSucceeded()
         {
             return loadSucceeded;
         }
 
-        public Map<NodeMetricName, Double> getLoadFailedForServer()
+        public Map<NodeAttribute, Double> getLoadFailedForServer()
         {
             return loadFailedForServer;
         }
 
-        public Map<NodeMetricName, Double> getLoadFailedForNetwork()
+        public Map<NodeAttribute, Double> getLoadFailedForNetwork()
         {
             return loadFailedForNetwork;
         }
         
-        public Map<NodeMetricName, Double> getLoadAttempted()
+        public Map<NodeAttribute, Double> getLoadAttempted()
         {
-            Map<NodeMetricName, Double> attempted = new HashMap<>();
+            Map<NodeAttribute, Double> attempted = new HashMap<>();
             
             loadSucceeded.forEach((attr, value) ->
             {
@@ -569,9 +622,9 @@ public class ClientRequestsTableGenerator
 
     private static RequestResultsSummary sumRequestResultsSummary(RequestResultsSummary a, RequestResultsSummary b)
     {
-        Map<NodeMetricName, Double> loadSucceeded = new HashMap<>();
-        Map<NodeMetricName, Double> loadFailedForServer = new HashMap<>();
-        Map<NodeMetricName, Double> loadFailedForNetwork = new HashMap<>();
+        Map<NodeAttribute, Double> loadSucceeded = new HashMap<>();
+        Map<NodeAttribute, Double> loadFailedForServer = new HashMap<>();
+        Map<NodeAttribute, Double> loadFailedForNetwork = new HashMap<>();
         
         a.loadSucceeded.forEach((attr, value) ->
         {

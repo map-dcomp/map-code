@@ -1,0 +1,28 @@
+[
+  {
+    "name": "pc3000",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 2
+    },
+    "maximumServiceContainers": 1,
+    "emulabConfig": "pc3000"
+  },
+  {
+    "name": "empty",
+    "capacity": {
+      "CPU": 2,
+      "MEMORY": 2
+    },
+    "maximumServiceContainers": 0
+  },
+  {
+    "name": "large",
+    "capacity": {
+      "CPU": 2,
+      "MEMORY": 2
+    },
+    "emulabConfig": "d710",
+    "dcompConfig": "mergexp.machine.memory >= mergexp.unit.gb(4)"
+  }
+]

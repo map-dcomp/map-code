@@ -1,2 +1,4 @@
 build_log.txt
 build_log.txt/
+.gradle
+*.log

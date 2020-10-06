@@ -1,0 +1,7 @@
+[
+  {
+    "name": "large",
+    "emulabConfig": "d710",
+    "dcompConfig": ", mergexp.machine.memory >= mergexp.unit.gb(4),"
+  }
+]

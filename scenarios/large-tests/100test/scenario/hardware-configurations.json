@@ -1,0 +1,29 @@
+[
+  {
+    "name": "simple",
+    "capacity": {
+      "CPU": 4,
+      "MEMORY": 8000000000,
+      "TASK_CONTAINERS": 4
+    },
+    "maximumServiceContainers": 1
+  },
+  {
+    "name": "large",
+    "capacity": {
+      "CPU": 32,
+      "MEMORY": 64000000000,
+      "TASK_CONTAINERS": 32
+    },
+    "maximumServiceContainers": 1
+  },
+  {
+    "name": "inf",
+    "capacity": {
+      "CPU": 4096,
+      "MEMORY": 8192000000000,
+      "TASK_CONTAINERS": 4096
+    },
+    "maximumServiceContainers": 1
+  }
+]

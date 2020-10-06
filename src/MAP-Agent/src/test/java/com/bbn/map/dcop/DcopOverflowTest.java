@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import org.hamcrest.number.OrderingComparison;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.experimental.theories.DataPoints;
@@ -28,13 +29,18 @@ import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
 import com.bbn.map.AgentConfiguration.DcopAlgorithm;
+import com.bbn.map.AgentConfiguration.RlgAlgorithm;
+import com.bbn.map.AgentConfiguration.RlgPriorityPolicy;
+import com.bbn.map.AgentConfiguration.RlgStubChooseNcp;
 import com.bbn.map.Controller;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.simulator.ClientSim;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
+import com.bbn.map.utils.MapLoggingConfigurationFactory;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
@@ -47,13 +53,17 @@ import com.google.common.collect.ImmutableMap;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
- * Test that DCOP is able to send data to another region.
+ * Test that DCOP will overflow to another region.
  * 
  * @author jschewe
  *
  */
 @RunWith(Theories.class)
 public class DcopOverflowTest {
+    // put this first to ensure that the correct logging configuration is used
+    static {
+        System.setProperty("log4j.configurationFactory", MapLoggingConfigurationFactory.class.getName());
+    }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DcopOverflowTest.class);
 
@@ -70,7 +80,7 @@ public class DcopOverflowTest {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
+    public RuleChain chain = TestUtils.getStandardRuleChain()
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     /**
@@ -82,16 +92,21 @@ public class DcopOverflowTest {
     @After
     public void resetAgentConfiguration() {
         AgentConfiguration.resetToDefaults();
+        GlobalNetworkConfiguration.resetToDefaults();
     }
 
     /**
      * Test using the topology test-dcop-overflow. Initially all traffic goes to
      * the single server in region A. There is 1 more request than the server
      * can handle. DCOP should recognize that region A is fully loaded and
-     * distribute some of the traffic to region B. More demand shows up 300
-     * seconds in and some of that load should get sent over to region B.
+     * distribute some of the traffic to region B. More demand shows up later in
+     * the test and some of that load should get sent over to region B.
+     * 
+     * This test ignores the DEFAULT_PLAN algorithm, which always produces
+     * default DCOP plans.
      *
-     * @param algorithm the DCOP algorithm to run the test with 
+     * @param algorithm
+     *            the DCOP algorithm to run the test with
      * @throws IOException
      *             on error reading the test files
      * @throws URISyntaxException
@@ -99,7 +114,14 @@ public class DcopOverflowTest {
      */
     @Theory
     public void test(final DcopAlgorithm algorithm) throws IOException, URISyntaxException {
+        Assume.assumeTrue("DEFAULT_PLAN algorithm does not provide a plan valid for this test",
+                !algorithm.equals(DcopAlgorithm.DEFAULT_PLAN));
+
         AgentConfiguration.getInstance().setDcopAlgorithm(algorithm);
+        // control the RLG algorithm running
+        AgentConfiguration.getInstance().setRlgAlgorithm(RlgAlgorithm.STUB);
+        AgentConfiguration.getInstance().setRlgPriorityPolicy(RlgPriorityPolicy.NO_PRIORITY);
+        AgentConfiguration.getInstance().setRlgStubChooseNcp(RlgStubChooseNcp.MOST_AVAILABLE_CONTAINERS);
 
         LOGGER.info("Running test with algorithm {}", AgentConfiguration.getInstance().getDcopAlgorithm());
 
@@ -133,9 +155,11 @@ public class DcopOverflowTest {
         AgentConfiguration.getInstance().setDcopEstimationWindow(dcopRoundDuration);
         AgentConfiguration.getInstance().setRlgRoundDuration(rlgRoundDuration);
         AgentConfiguration.getInstance().setRlgEstimationWindow(rlgRoundDuration);
+        AgentConfiguration.getInstance().setRlgAlgorithm(RlgAlgorithm.STUB);
+        AgentConfiguration.getInstance().setRlgPriorityPolicy(RlgPriorityPolicy.NO_PRIORITY);
 
-        final int expectedInitialRequests = 3;
-        final int expectedInitialSuccess = 2;
+        final int expectedInitialRequests = 4;
+        final int expectedInitialSuccess = 3;
         final int expectedInitialFailServer = 1;
         final int expectedInitialFailNetwork = 0;
 
@@ -143,15 +167,19 @@ public class DcopOverflowTest {
         final int maxNumPlans = 3;
         final BlockingQueue<RegionPlan> dcopPlans = new LinkedBlockingDeque<>();
         // how many minutes to wait for a plan to be created
-        final int planCreationTimeoutMinutes = 5;
+        final int planCreationTimeoutMinutes = 3;
 
         final VirtualClock clock = new SimpleClock();
         try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
                 AppMgrUtils::getContainerParameters)) {
 
             sim.startSimulation();
-            
+
+            LOGGER.info("Waiting for all nodes to connect to their neighbors for AP");
             sim.waitForAllNodesToConnectToNeighbors();
+            LOGGER.info("All nodes are connected for AP");
+
+            LOGGER.info("Starting clients");
             sim.startClients();
 
             // dcop for region A
@@ -167,7 +195,7 @@ public class DcopOverflowTest {
 
             // check for 1 failed request on the client pool
             final Optional<ClientSim> clientPoolOptional = sim.getClientSimulators().stream()
-                    .filter(csim -> csim.getClientName().equals(clientNodeName)).findFirst();
+                    .filter(csim -> csim.getSimName().equals(clientNodeName)).findFirst();
             Assert.assertTrue(clientPoolOptional.isPresent());
             final ClientSim clientPool = clientPoolOptional.get();
 
@@ -209,7 +237,7 @@ public class DcopOverflowTest {
                         if (null != regionBValue) {
                             if (regionBValue > 0) {
                                 // success
-                                LOGGER.info("Found load to region B: {}", regionBValue);
+                                LOGGER.info("success: Found load to region B: {}", regionBValue);
 
                                 sim.stopSimulation();
 

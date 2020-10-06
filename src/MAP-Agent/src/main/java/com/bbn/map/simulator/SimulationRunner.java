@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -42,7 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -60,9 +59,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
-import com.bbn.map.AgentConfiguration.DcopAlgorithm;
-import com.bbn.map.AgentConfiguration.RlgAlgorithm;
-import com.bbn.map.AgentConfiguration.RlgStubChooseNcp;
 import com.bbn.map.Controller;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.utils.LogExceptionHandler;
@@ -105,24 +101,11 @@ public class SimulationRunner {
     private static final String RUNTIME_OPT = "runtime";
     private static final String OUTPUT_OPT = "output";
     private static final String DUMP_INTERVAL_OPT = "dumpInterval";
-    private static final String DCOP_INTERVAL_OPT = "dcopInterval";
-    private static final String RLG_INTERVAL_OPT = "rlgInterval";
-    private static final String AP_INTERVAL_OPT = "apInterval";
     private static final String HELP_OPT = "help";
     private static final String SLOW_NETWORK_THRESHOLD_OPT = "slowNetworkThreshold";
     private static final String SLOW_SERVER_THRESHOLD_OPT = "slowServerThreshold";
 
-    private static final String DCOP_ITERATION_LIMIT_OPT = "dcopIterationLimit";
-    private static final String DCOP_CAPACITY_THRESHOLD_OPT = "dcopCapacityThreshold";
-    private static final String DCOP_ALGORITHM_OPT = "dcopAlgorithm";
-
-    private static final String RLG_NULL_OVERFLOW_PLAN_OPT = "rlgNullOverflowPlan";
-    private static final String RLG_ALGORITHM_OPT = "rlgAlgorithm";
-    private static final String RLG_STUB_CHOOSE_ALGORITHM_OPT = "rlgStubChooseAlgorithm";
-    private static final String RLG_LOAD_THRESHOLD = "rlgLoadThreshold";
-
-    private static final String LEADER_ELECTION_OPT = "enableLeaderElection";
-    private static final String GLOBAL_LEADER_OPT = "globalLeader";
+    private static final String AGENT_CONFIGURATION_OPT = "agentConfiguration";
 
     /**
      * Parse the option as a duration. First check if it's a number, if so, then
@@ -212,15 +195,6 @@ public class SimulationRunner {
         options.addOption(null, DUMP_INTERVAL_OPT, true,
                 "The number of seconds between dumps of the data to the output directory (default: "
                         + DEFAULT_DUMP_INTERVAL_SECONDS + " seconds)");
-        options.addOption(null, DCOP_INTERVAL_OPT, true,
-                "The amount of time between DCOP rounds, either a number of seconds or a string compatible with Duration.parse. Default is "
-                        + AgentConfiguration.getInstance().getDcopRoundDuration());
-        options.addOption(null, RLG_INTERVAL_OPT, true,
-                "The amount of time between RLG rounds, either a number of seconds or a string compatible with Duration.parse. Default is "
-                        + AgentConfiguration.getInstance().getRlgRoundDuration());
-        options.addOption(null, AP_INTERVAL_OPT, true,
-                "The amount of time between AP rounds, either a number of seconds or a string compatible with Duration.parse. Default is "
-                        + AgentConfiguration.getInstance().getApRoundDuration());
         options.addOption("h", HELP_OPT, false, "Show the help");
 
         options.addOption(null, SLOW_NETWORK_THRESHOLD_OPT, true,
@@ -230,38 +204,7 @@ public class SimulationRunner {
                 "The percentage above which a client request to a server is labeled as slow. Value must be in the range [0, 1]. Default is "
                         + SimulationConfiguration.getInstance().getSlowServerThreshold());
 
-        options.addOption(null, DCOP_ITERATION_LIMIT_OPT, true,
-                "The number of iterations to run DCOP each round. Default is "
-                        + AgentConfiguration.getInstance().getDcopIterationLimit());
-
-        options.addOption(null, DCOP_CAPACITY_THRESHOLD_OPT, true, "The capacity threshold for DCOP. Default is "
-                + AgentConfiguration.getInstance().getDcopCapacityThreshold());
-
-        options.addOption(null, DCOP_ALGORITHM_OPT, true,
-                "The DCOP algorithm to use. Default is "
-                        + AgentConfiguration.getInstance().getDcopAlgorithm().toString() + " Possible values are: "
-                        + Arrays.asList(AgentConfiguration.DcopAlgorithm.values()));
-
-        options.addOption(null, RLG_NULL_OVERFLOW_PLAN_OPT, false,
-                "If set, then RLG will always output a null overflow plan.");
-
-        options.addOption(null, RLG_ALGORITHM_OPT, true,
-                "The RLG algorithm to use. Default is " + AgentConfiguration.getInstance().getRlgAlgorithm().toString()
-                        + " Possible values are: " + Arrays.asList(AgentConfiguration.RlgAlgorithm.values()));
-
-        options.addOption(null, RLG_STUB_CHOOSE_ALGORITHM_OPT, true,
-                "The algorithm for the RLG stub to use to choose new nodes. Default is "
-                        + AgentConfiguration.getInstance().getRlgStubChooseNcp().toString() + " Possible values are: "
-                        + Arrays.asList(AgentConfiguration.RlgStubChooseNcp.values()));
-
-        options.addOption(null, RLG_LOAD_THRESHOLD, true,
-                "The load threshold for RLG. Default is " + AgentConfiguration.getInstance().getRlgLoadThreshold());
-
-        options.addOption(null, LEADER_ELECTION_OPT, false,
-                "If set the leader election algorithm will be used compute the global leader");
-
-        options.addOption(null, GLOBAL_LEADER_OPT, true,
-                "If using leader election, specify the node to be used as the global leader. If not specified, one will be chosen at random.");
+        options.addOption(null, AGENT_CONFIGURATION_OPT, true, "Read the agent configuration from the specified file.");
 
         final CommandLineParser parser = new DefaultParser();
         try {
@@ -282,6 +225,15 @@ public class SimulationRunner {
             if (cmd.hasOption(HELP_OPT)) {
                 printUsage(options);
                 System.exit(0);
+            }
+
+            if (cmd.hasOption(AGENT_CONFIGURATION_OPT)) {
+                final Path path = Paths.get(cmd.getOptionValue(AGENT_CONFIGURATION_OPT));
+                try {
+                    AgentConfiguration.readFromFile(path);
+                } catch (final IOException e) {
+                    LOGGER.error("Error reading agent configuration from {}: {}", path, e.getMessage(), e);
+                }
             }
 
             if (cmd.hasOption(OUTPUT_OPT)) {
@@ -305,48 +257,6 @@ public class SimulationRunner {
                     printUsage(options);
                     System.exit(1);
                 }
-            }
-
-            if (cmd.hasOption(DCOP_INTERVAL_OPT)) {
-                final Duration dur = parseDuration(options, cmd, DCOP_INTERVAL_OPT);
-                if (null == dur) {
-                    printUsage(options);
-                    System.exit(1);
-                }
-
-                // set dcop round and estimation window to the same value until
-                // we decide we want them different
-                AgentConfiguration.getInstance().setDcopRoundDuration(dur);
-                AgentConfiguration.getInstance().setDcopEstimationWindow(dur);
-            }
-
-            if (cmd.hasOption(DCOP_ALGORITHM_OPT)) {
-                final String str = cmd.getOptionValue(DCOP_ALGORITHM_OPT);
-                final DcopAlgorithm algorithm = DcopAlgorithm.valueOf(str);
-                AgentConfiguration.getInstance().setDcopAlgorithm(algorithm);
-            }
-
-            if (cmd.hasOption(RLG_INTERVAL_OPT)) {
-                final Duration dur = parseDuration(options, cmd, RLG_INTERVAL_OPT);
-                if (null == dur) {
-                    printUsage(options);
-                    System.exit(1);
-                }
-
-                // set rlg round and estimation window to the same value until
-                // we decide we want them different
-                AgentConfiguration.getInstance().setRlgRoundDuration(dur);
-                AgentConfiguration.getInstance().setRlgEstimationWindow(dur);
-            }
-
-            if (cmd.hasOption(AP_INTERVAL_OPT)) {
-                final Duration dur = parseDuration(options, cmd, AP_INTERVAL_OPT);
-                if (null == dur) {
-                    printUsage(options);
-                    System.exit(1);
-                }
-
-                AgentConfiguration.getInstance().setApRoundDuration(dur);
             }
 
             if (cmd.hasOption(SLOW_NETWORK_THRESHOLD_OPT)) {
@@ -379,79 +289,6 @@ public class SimulationRunner {
                     printUsage(options);
                     System.exit(1);
                 }
-            }
-
-            if (cmd.hasOption(DCOP_CAPACITY_THRESHOLD_OPT)) {
-                final String str = cmd.getOptionValue(DCOP_CAPACITY_THRESHOLD_OPT);
-                try {
-                    final double value = Double.parseDouble(str);
-                    AgentConfiguration.getInstance().setDcopCapacityThreshold(value);
-                } catch (final NumberFormatException e) {
-                    LOGGER.error("'{}' could not be parsed as a double", str);
-                    printUsage(options);
-                    System.exit(1);
-                } catch (final IllegalArgumentException e) {
-                    LOGGER.error("Illegal value '{}' for dcop capacity threshold", str);
-                    printUsage(options);
-                    System.exit(1);
-                }
-            }
-
-            if (cmd.hasOption(DCOP_ITERATION_LIMIT_OPT)) {
-                final String str = cmd.getOptionValue(DCOP_ITERATION_LIMIT_OPT);
-                try {
-                    final int value = Integer.parseInt(str);
-                    AgentConfiguration.getInstance().setDcopIterationLimit(value);
-                } catch (final NumberFormatException e) {
-                    LOGGER.error("'{}' could not be parsed as an integer", str);
-                    printUsage(options);
-                    System.exit(1);
-                } catch (final IllegalArgumentException e) {
-                    LOGGER.error("Illegal value '{}' for dcop iteration limit", str);
-                    printUsage(options);
-                    System.exit(1);
-                }
-            }
-
-            if (cmd.hasOption(RLG_NULL_OVERFLOW_PLAN_OPT)) {
-                AgentConfiguration.getInstance().setRlgNullOverflowPlan(true);
-            }
-
-            if (cmd.hasOption(RLG_ALGORITHM_OPT)) {
-                final String str = cmd.getOptionValue(RLG_ALGORITHM_OPT);
-                final RlgAlgorithm algorithm = RlgAlgorithm.valueOf(str);
-                AgentConfiguration.getInstance().setRlgAlgorithm(algorithm);
-            }
-
-            if (cmd.hasOption(RLG_STUB_CHOOSE_ALGORITHM_OPT)) {
-                final String str = cmd.getOptionValue(RLG_STUB_CHOOSE_ALGORITHM_OPT);
-                final RlgStubChooseNcp algorithm = RlgStubChooseNcp.valueOf(str);
-                AgentConfiguration.getInstance().setRlgStubChooseNcp(algorithm);
-            }
-
-            if (cmd.hasOption(RLG_LOAD_THRESHOLD)) {
-                final String str = cmd.getOptionValue(RLG_LOAD_THRESHOLD);
-                try {
-                    final double value = Double.parseDouble(str);
-                    AgentConfiguration.getInstance().setRlgLoadThreshold(value);
-                } catch (final NumberFormatException e) {
-                    LOGGER.error("'{}' could not be parsed as a double", str);
-                    printUsage(options);
-                    System.exit(1);
-                } catch (final IllegalArgumentException e) {
-                    LOGGER.error("Illegal value '{}' for RLG loadthreshold", str);
-                    printUsage(options);
-                    System.exit(1);
-                }
-            }
-
-            if (cmd.hasOption(LEADER_ELECTION_OPT)) {
-                AgentConfiguration.getInstance().setUseLeaderElection(true);
-            }
-
-            if (cmd.hasOption(GLOBAL_LEADER_OPT)) {
-                final String str = cmd.getOptionValue(GLOBAL_LEADER_OPT);
-                runner.setGlobalLeaderName(str);
             }
 
             if (null == runner.getDemandPath() && null == runner.getRuntime()) {
@@ -595,16 +432,10 @@ public class SimulationRunner {
         dumpInterval = v;
     }
 
-    // not a parameter in AgentConfiguration because this is specific to the
-    // simulation
-    // if this value is at 10 ms, then things start falling behind and the CPU
-    // usage ramps way up
-    private static final long POLLING_INTERVAL_MS = 500;
-
     /**
      * DNS TTL in seconds.
      */
-    private static final int TTL = 60;
+    public static final int TTL = 1;
 
     /**
      * Create the output directory if needed.
@@ -646,7 +477,8 @@ public class SimulationRunner {
         try {
             final VirtualClock clock = new SimpleClock();
             final Simulation sim = new Simulation(getScenarioPath().toString(), getScenarioPath(), getDemandPath(),
-                    clock, POLLING_INTERVAL_MS, TTL, AppMgrUtils::getContainerParameters);
+                    clock, AgentConfiguration.getInstance().getApRoundDuration().toMillis(), TTL,
+                    AppMgrUtils::getContainerParameters);
 
             // set global leader, this can fail if the node cannot be found
             if (!AgentConfiguration.getInstance().isUseLeaderElection()) {
@@ -695,7 +527,6 @@ public class SimulationRunner {
             final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
             LOGGER.info("Waiting {} AP rounds to ensure that it is stable", numApRoundsToStabilize);
             SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
-
 
             LOGGER.info("Starting clients");
             sim.startClients();
@@ -754,7 +585,7 @@ public class SimulationRunner {
                 for (final ClientSim client : sim.getClientSimulators()) {
                     client.setBaseOutputDirectory(baseOutput);
                     final Path clientFilename = nodeOutputDirectory
-                            .resolve(String.format("client-%s-requests.json", client.getClientName()));
+                            .resolve(String.format("client-%s-requests.json", client.getSimName()));
                     try (BufferedWriter writer = Files.newBufferedWriter(clientFilename, Charset.defaultCharset())) {
                         final ImmutableList<ClientLoad> requests = client.getClientRequests();
                         mapper.writeValue(writer, requests);
@@ -808,7 +639,7 @@ public class SimulationRunner {
             // write out all final client values
             for (final ClientSim client : sim.getClientSimulators()) {
                 final Path clientFilename = nodeOutputDirectory
-                        .resolve(String.format("client-%s-final-state.json", client.getClientName()));
+                        .resolve(String.format("client-%s-final-state.json", client.getSimName()));
                 try (BufferedWriter writer = Files.newBufferedWriter(clientFilename, Charset.defaultCharset())) {
                     mapper.writeValue(writer, client.getSimulationState());
                 }

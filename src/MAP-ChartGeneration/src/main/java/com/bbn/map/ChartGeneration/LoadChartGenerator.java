@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -35,8 +35,12 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.Writer;
+import java.net.InetAddress;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -55,6 +61,7 @@ import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ns2.NS2Parser;
+import com.bbn.protelis.networkresourcemanagement.ns2.Node;
 import com.bbn.protelis.networkresourcemanagement.ns2.Topology;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -71,27 +78,27 @@ public class LoadChartGenerator {
     private static final Logger LOGGER = LogManager.getLogger(LoadChartGenerator.class);
 
     /**
-     * Name of a long resource report. Used for searching for the NCP node
-     * directory and for loading the JSON.
+     * Name of a long resource report. Used for searching for the NCP node directory
+     * and for loading the JSON.
      */
     public static final String RESOURCE_REPORT_LONG_FILENAME = "resourceReport-LONG.json";
 
     private final ObjectMapper mapper;
 
     // time -> node name -> attribute -> value
-    private Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> timeNodeData = new HashMap<>();
-    
-    // service -> time -> node name -> attribute -> value
-    private Map<ServiceIdentifier<?>, Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>>> serviceTimeNodeData = new HashMap<>();
+    private Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> timeNodeData = new HashMap<>();
 
-    private Set<NodeAttribute<?>> attributes = new HashSet<>(); // used to
-                                                                   // keep track
-                                                                   // of
-                                                                   // attributes
-                                                                   // that were
-                                                                   // discovered
-                                                                   // from the
-                                                                   // input data
+    // service -> time -> node name -> attribute -> value
+    private Map<ServiceIdentifier<?>, Map<Long, Map<String, Map<NodeAttribute, LoadValue>>>> serviceTimeNodeData = new HashMap<>();
+
+    private Set<NodeAttribute> attributes = new HashSet<>(); // used to
+                                                             // keep track
+                                                             // of
+                                                             // attributes
+                                                             // that were
+                                                             // discovered
+                                                             // from the
+                                                             // input data
 
     private Map<String, String> nodeToRegionMap = new HashMap<>();
 
@@ -105,23 +112,16 @@ public class LoadChartGenerator {
     /**
      * Processes data for a scenario to produce compute load tables.
      * 
-     * @param scenarioFolder
-     *            the folder containing the scenario configuration
-     * @param inputFolder
-     *            the folder containing the results of the scenario simulation
-     * @param outputFolder
-     *            the folder to output the chart tables to
-     * @param startAtZero
-     *            if true, the center of the first bin will be 0 rather than at
-     *            the first data point in time
-     * @param dataSampleInterval
-     *            the amount of time between consecutive result updates in the
-     *            simulation of the scenario
+     * @param scenarioFolder     the folder containing the scenario configuration
+     * @param inputFolder        the folder containing the results of the scenario
+     *                           simulation
+     * @param outputFolder       the folder to output the chart tables to
+     * @param startAtZero        if true, the center of the first bin will be 0
+     *                           rather than at the first data point in time
+     * @param dataSampleInterval the amount of time between consecutive result
+     *                           updates in the simulation of the scenario
      */
-    public void processScenarioData(File scenarioFolder,
-            File inputFolder,
-            File outputFolder,
-            boolean startAtZero,
+    public void processScenarioData(File scenarioFolder, File inputFolder, File outputFolder, boolean startAtZero,
             long dataSampleInterval) {
         LOGGER.info("Scenario folder: '{}'", scenarioFolder);
         LOGGER.info("Data input folder: '{}'", inputFolder);
@@ -139,38 +139,38 @@ public class LoadChartGenerator {
 
         attributes.clear();
 
-        processScenarioConfiguration(scenarioFolder.getName(), scenarioFolder.toPath());
+        processScenarioConfiguration(scenarioFolder.getName(), scenarioFolder.toPath(), outputFolder.toPath());
 
-        ChartGenerationUtils.visitTimeFolders(inputFolder.toPath(), (nodeName, timeFolder, time) -> {
+        ChartGenerationUtils.visitTimeFolders(inputFolder.toPath(), (nodeName, timeFolder, folderTime) -> {
             final Path resourceReportLongFile = timeFolder.resolve(RESOURCE_REPORT_LONG_FILENAME);
             try (BufferedReader reader = Files.newBufferedReader(resourceReportLongFile)) {
                 final ResourceReport resourceReportLong = mapper.readValue(reader, ResourceReport.class);
                 final String label = nodeName;
 
-                addData(time, label,
-                        combineLoadAndCapacityMaps(getTotalComputeLoad(resourceReportLong.getComputeLoad()),
-                                getTotalComputeLoad(resourceReportLong.getComputeDemand()),
-                                resourceReportLong.getNodeComputeCapacity()));
-                
-                
+                final long reportTime = resourceReportLong.getTimestamp();
+
+                if (reportTime > 0) {
+                    addData(reportTime, label,
+                            combineLoadAndCapacityMaps(getTotalComputeLoad(resourceReportLong.getComputeLoad()),
+                                    getTotalComputeLoad(resourceReportLong.getComputeDemand()),
+                                    resourceReportLong.getNodeComputeCapacity()));
+                } else {
+                    LOGGER.warn("Skipping loading ResourceReport with time 0: {}", resourceReportLong);
+                }
+
                 combineValueAndCapacityMapsByService(getTotalComputeLoadByService(resourceReportLong.getComputeLoad()),
-                        getTotalComputeLoadByService(resourceReportLong.getComputeDemand()), getAllocatedCapacityByService(resourceReportLong))
-                    .forEach((service, serviceLoadValue) -> 
-                    {
-                        if (service != null)
-                        {
-                            addData(service, time, label, serviceLoadValue);
-                        }
-                        else
-                        {
-                            LOGGER.info("ERROR: Found null service at time {} from node '{}'.", time, label);
-                        }
-                    });
-                
-                
+                        getTotalComputeLoadByService(resourceReportLong.getComputeDemand()),
+                        getAllocatedCapacityByService(resourceReportLong)).forEach((service, serviceLoadValue) -> {
+                            if (service != null) {
+                                addData(service, reportTime, label, serviceLoadValue);
+                            } else {
+                                LOGGER.info("ERROR: Found null service at time {} from node '{}'.", reportTime, label);
+                            }
+                        });
+
             } catch (JsonParseException | JsonMappingException e) {
                 LOGGER.error("Error parsing JSON file {}", resourceReportLongFile, e);
-            } catch (FileNotFoundException e) {
+            } catch (NoSuchFileException | FileNotFoundException e) {
                 LOGGER.warn("Could not find resource report file: {}", resourceReportLongFile, e);
             } catch (IOException e) {
                 LOGGER.error(e.getMessage(), e);
@@ -181,82 +181,76 @@ public class LoadChartGenerator {
         LOGGER.info("Output to folder: '{}'", outputFolder);
         LOGGER.debug("Time node data map: {}", timeNodeData);
         ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_load", attributes, v -> v.getLoad(), timeNodeData);
-        
+
         LOGGER.debug("serviceTimeNodeData: {}", serviceTimeNodeData);
-        
-        serviceTimeNodeData.forEach((service, serviceNodeData) ->
-        {
+
+        serviceTimeNodeData.forEach((service, serviceNodeData) -> {
             LOGGER.debug("serviceTimeNodeData: {} -> {}", service, serviceNodeData);
-            
-            String serviceString = ChartGenerationUtils.serviceToFilenameString(service);           
-            
-            Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> binnedServiceNodeData = binNodeData(serviceNodeData, 0, dataSampleInterval);
-            
-            ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_load-" + serviceString, attributes, v -> v.getLoad(), binnedServiceNodeData);
-            ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_demand-" + serviceString, attributes, v -> v.getDemand(), binnedServiceNodeData);
-            ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_allocated_capacity-" + serviceString, attributes, v -> v.getCapacity(), binnedServiceNodeData);
+
+            String serviceString = ChartGenerationUtils.serviceToFilenameString(service);
+
+            Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> binnedServiceNodeData = binNodeData(serviceNodeData,
+                    0, dataSampleInterval);
+
+            ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_load-" + serviceString, attributes,
+                    v -> v.getLoad(), binnedServiceNodeData);
+            ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_demand-" + serviceString, attributes,
+                    v -> v.getDemand(), binnedServiceNodeData);
+            ChartGenerationUtils.outputDataToCSV(outputFolder, "ncp_allocated_capacity-" + serviceString, attributes,
+                    v -> v.getCapacity(), binnedServiceNodeData);
         });
 
         // output chart tables for regions
-        final Map<Long, Map<String, Map<NodeAttribute<?>, Object>>> regionLoadChart = createRegionLoadChart(
-                timeNodeData, nodeToRegionMap, startAtZero, dataSampleInterval);
+        final Map<Long, Map<String, Map<NodeAttribute, Object>>> regionLoadChart = createRegionLoadChart(timeNodeData,
+                nodeToRegionMap, startAtZero, dataSampleInterval);
         LOGGER.debug("Region load chart map: {}", regionLoadChart);
         ChartGenerationUtils.outputDataToCSV(outputFolder, "region_load", attributes, v -> v, regionLoadChart);
     }
-    
-    private Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> binNodeData(Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> data, long firstBinCenter, long binSize)
-    {
-        Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> binnedData = new HashMap<>();
-        
-        data.forEach((time, nodeToDataMap) ->
-        {
+
+    private Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> binNodeData(
+            Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> data, long firstBinCenter, long binSize) {
+        Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> binnedData = new HashMap<>();
+
+        data.forEach((time, nodeToDataMap) -> {
             long binTime = ChartGenerationUtils.getBinForTime(time, firstBinCenter, binSize);
-            Map<String, Map<NodeAttribute<?>, LoadValue>> binnedNodeToDataMap = binnedData.computeIfAbsent(binTime, k -> new HashMap<>());
-            
-            nodeToDataMap.forEach((node, attrValueMap) ->
-            {
-                if (binnedNodeToDataMap.containsKey(node))
-                {
+            Map<String, Map<NodeAttribute, LoadValue>> binnedNodeToDataMap = binnedData.computeIfAbsent(binTime,
+                    k -> new HashMap<>());
+
+            nodeToDataMap.forEach((node, attrValueMap) -> {
+                if (binnedNodeToDataMap.containsKey(node)) {
                     LOGGER.info("WARNING: Node '{}' mapped to time bin '{}' more than once.", node, binTime);
                 }
-                
-                Map<NodeAttribute<?>, LoadValue> binnedAttrValueMap = binnedNodeToDataMap.computeIfAbsent(node, k -> new HashMap<>());
-                
-                attrValueMap.forEach((attr, value) ->
-                {
+
+                Map<NodeAttribute, LoadValue> binnedAttrValueMap = binnedNodeToDataMap.computeIfAbsent(node,
+                        k -> new HashMap<>());
+
+                attrValueMap.forEach((attr, value) -> {
                     binnedAttrValueMap.put(attr, value);
                 });
             });
         });
-        
+
         return binnedData;
     }
 
-    private Map<NodeAttribute<?>, LoadValue> combineLoadAndCapacityMaps(Map<NodeAttribute<?>, Double> loads,
-            Map<NodeAttribute<?>, Double> demands,
-            Map<NodeAttribute<?>, Double> capacities) {
-        Map<NodeAttribute<?>, LoadValue> result = new HashMap<>();
+    private Map<NodeAttribute, LoadValue> combineLoadAndCapacityMaps(Map<NodeAttribute, Double> loads,
+            Map<NodeAttribute, Double> demands, Map<NodeAttribute, Double> capacities) {
+        Map<NodeAttribute, LoadValue> result = new HashMap<>();
 
         capacities.forEach((attr, capacity) -> {
             double load = 0.0;
             double demand = 0.0;
 
-            if (loads.containsKey(attr))
-            {
+            if (loads.containsKey(attr)) {
                 load = loads.get(attr);
-            }
-            else
-            {
+            } else {
                 LOGGER.debug("combineValueAndCapacityMaps: attribute {} has capacity {} and null value.", attr,
                         capacity);
             }
-            
-            if (demands.containsKey(attr))
-            {
+
+            if (demands.containsKey(attr)) {
                 demand = demands.get(attr);
-            }
-            else
-            {
+            } else {
                 LOGGER.debug("combineValueAndCapacityMaps: attribute {} has capacity {} and null value.", attr,
                         capacity);
             }
@@ -266,25 +260,24 @@ public class LoadChartGenerator {
 
         return result;
     }
-    
-    
-    private Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, LoadValue>> combineValueAndCapacityMapsByService(Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> loadValues,
-            Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> demandValues,
-            Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> allocatedCapacities) {
-        Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, LoadValue>> result = new HashMap<>();
 
-        allocatedCapacities.forEach((service, attrCapacities) ->
-        {
-            Map<NodeAttribute<?>, LoadValue> newAttrValues = result.computeIfAbsent(service, k -> new HashMap<>());
-            
-            Map<NodeAttribute<?>, Double> serviceLoadValues = loadValues.computeIfAbsent(service, k -> new HashMap<>());
-            Map<NodeAttribute<?>, Double> serviceDemandValues = demandValues.computeIfAbsent(service, k -> new HashMap<>());
-            
-            attrCapacities.forEach((attr, attrCapacity) ->
-            {
+    private Map<ServiceIdentifier<?>, Map<NodeAttribute, LoadValue>> combineValueAndCapacityMapsByService(
+            Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> loadValues,
+            Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> demandValues,
+            Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> allocatedCapacities) {
+        Map<ServiceIdentifier<?>, Map<NodeAttribute, LoadValue>> result = new HashMap<>();
+
+        allocatedCapacities.forEach((service, attrCapacities) -> {
+            Map<NodeAttribute, LoadValue> newAttrValues = result.computeIfAbsent(service, k -> new HashMap<>());
+
+            Map<NodeAttribute, Double> serviceLoadValues = loadValues.computeIfAbsent(service, k -> new HashMap<>());
+            Map<NodeAttribute, Double> serviceDemandValues = demandValues.computeIfAbsent(service,
+                    k -> new HashMap<>());
+
+            attrCapacities.forEach((attr, attrCapacity) -> {
                 Double attrLoad = serviceLoadValues.computeIfAbsent(attr, k -> 0.0);
                 Double attrDemand = serviceDemandValues.computeIfAbsent(attr, k -> 0.0);
-                
+
                 LoadValue value = new LoadValue(attrLoad, attrDemand, attrCapacity);
                 newAttrValues.put(attr, value);
             });
@@ -293,55 +286,54 @@ public class LoadChartGenerator {
         return result;
     }
 
-    private void addData(long time, String label, Map<NodeAttribute<?>, LoadValue> attributeValues) {
-        if (!timeNodeData.containsKey(time))
-            timeNodeData.put(time, new HashMap<>());
+    private void addData(long time, String label, Map<NodeAttribute, LoadValue> attributeValues) {
 
-        timeNodeData.get(time).put(label, attributeValues);
+        timeNodeData.computeIfAbsent(time, k -> new HashMap<>()).computeIfAbsent(label, k -> attributeValues);
 
         attributeValues.forEach((attribute, value) -> {
-            if (!attributes.contains(attribute))
-                attributes.add(attribute);
+            attributes.add(attribute);
         });
     }
-    
-    private void addData(ServiceIdentifier<?> service, long time, String label, Map<NodeAttribute<?>, LoadValue> attributeValues) {
-        Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> serviceValues = serviceTimeNodeData.computeIfAbsent(service, k -> new HashMap<>());
-        Map<String, Map<NodeAttribute<?>, LoadValue>> serviceTimeValues = serviceValues.computeIfAbsent(time, k -> new HashMap<>());
-        Map<NodeAttribute<?>, LoadValue> serviceTimeLabelValues = serviceTimeValues.computeIfAbsent(label, k -> new HashMap<>());
 
-        attributeValues.forEach((attr, value) ->
-        {
-            if (serviceTimeLabelValues.containsKey(attr))
-            {
-                LOGGER.info("WARNING: Service '{}', time'{}, node '{}', attribute '{}' was found more than once.", service, time, label, attr);
+    private void addData(ServiceIdentifier<?> service, long time, String label,
+            Map<NodeAttribute, LoadValue> attributeValues) {
+        Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> serviceValues = serviceTimeNodeData
+                .computeIfAbsent(service, k -> new HashMap<>());
+        Map<String, Map<NodeAttribute, LoadValue>> serviceTimeValues = serviceValues.computeIfAbsent(time,
+                k -> new HashMap<>());
+        Map<NodeAttribute, LoadValue> serviceTimeLabelValues = serviceTimeValues.computeIfAbsent(label,
+                k -> new HashMap<>());
+
+        attributeValues.forEach((attr, value) -> {
+            if (serviceTimeLabelValues.containsKey(attr)) {
+                LOGGER.info("WARNING: Service '{}', time'{}, node '{}', attribute '{}' was found more than once.",
+                        service, time, label, attr);
             }
-            
-            serviceTimeLabelValues.put(attr, value);
+
+            serviceTimeLabelValues.computeIfAbsent(attr, k -> value);
             attributes.add(attr);
         });
     }
-    
-    private static Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> getAllocatedCapacityByService(ResourceReport report)
-    {
-        Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> allocatedCapacity = new HashMap<>();
-        
-        report.getContainerReports().forEach((container, containerReport) ->
-        {
-            Map<NodeAttribute<?>, Double> serviceAllocatedCapacity = allocatedCapacity.computeIfAbsent(containerReport.getService(), k -> new HashMap<>());
-            
-            containerReport.getComputeCapacity().forEach((attr, value) ->
-            {
+
+    private static Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> getAllocatedCapacityByService(
+            ResourceReport report) {
+        Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> allocatedCapacity = new HashMap<>();
+
+        report.getContainerReports().forEach((container, containerReport) -> {
+            Map<NodeAttribute, Double> serviceAllocatedCapacity = allocatedCapacity
+                    .computeIfAbsent(containerReport.getService(), k -> new HashMap<>());
+
+            containerReport.getComputeCapacity().forEach((attr, value) -> {
                 serviceAllocatedCapacity.merge(attr, value, Double::sum);
             });
         });
-        
+
         return allocatedCapacity;
     }
 
-    private static Map<NodeAttribute<?>, Double> getTotalComputeLoad(
-            ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> load) {
-        Map<NodeAttribute<?>, Double> result = new HashMap<>();
+    private static Map<NodeAttribute, Double> getTotalComputeLoad(
+            ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> load) {
+        Map<NodeAttribute, Double> result = new HashMap<>();
 
         load.forEach((service, loadByNode) -> {
             loadByNode.forEach((node, attrs) -> {
@@ -354,14 +346,14 @@ public class LoadChartGenerator {
 
         return result;
     }
-    
-    private static Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> getTotalComputeLoadByService(
-            ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> load) {
-        Map<ServiceIdentifier<?>, Map<NodeAttribute<?>, Double>> result = new HashMap<>();
+
+    private static Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> getTotalComputeLoadByService(
+            ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> load) {
+        Map<ServiceIdentifier<?>, Map<NodeAttribute, Double>> result = new HashMap<>();
 
         load.forEach((service, loadByNode) -> {
-            Map<NodeAttribute<?>, Double> serviceResult = result.computeIfAbsent(service, k -> new HashMap<>());
-            
+            Map<NodeAttribute, Double> serviceResult = result.computeIfAbsent(service, k -> new HashMap<>());
+
             loadByNode.forEach((node, attrValues) -> {
                 attrValues.forEach((attr, value) -> {
                     serviceResult.merge(attr, value, Double::sum);
@@ -372,32 +364,52 @@ public class LoadChartGenerator {
         return result;
     }
 
-    private void processScenarioConfiguration(String scenarioName, Path scenarioFolder) {
+    private void processScenarioConfiguration(final String scenarioName, final Path scenarioFolder,
+            final Path outputFolder) {
         LOGGER.info("Process scenario configuration for '{}' in folder '{}'.", scenarioName, scenarioFolder);
 
         nodeToRegionMap.clear();
 
-        Topology topology;
-        try {
-            topology = NS2Parser.parse(scenarioName, scenarioFolder);
+        final Path nodeInfo = outputFolder.resolve("node-info.csv");
 
-            topology.getNodes().forEach((name, node) -> {
-                String regionName = NetworkServerProperties.parseRegionName(node.getExtraData());
-                nodeToRegionMap.put(node.getName().toLowerCase(), regionName);
-            });
-        } catch (IOException e) {
-            LOGGER.error("Unable to parse ns2 file: {}", e);
-            e.printStackTrace();
+        final CSVFormat format = CSVFormat.EXCEL.withHeader("ip", "node", "region", "client");
+
+        try {
+            Files.createDirectories(outputFolder);
+
+            try (Writer writer = Files.newBufferedWriter(nodeInfo);
+                    CSVPrinter printer = new CSVPrinter(writer, format)) {
+                final Topology topology = NS2Parser.parse(scenarioName, scenarioFolder);
+
+                for (final Map.Entry<String, Node> entry : topology.getNodes().entrySet()) {
+                    final String name = entry.getKey();
+                    final Node node = entry.getValue();
+
+                    final String regionName = NetworkServerProperties.parseRegionName(node.getExtraData());
+                    nodeToRegionMap.put(node.getName().toLowerCase(), regionName);
+
+                    for (final Map.Entry<?, InetAddress> ipEntry : node.getAllIpAddresses().entrySet()) {
+                        if (ipEntry.getValue() != null) {
+                            final String addr = ipEntry.getValue().getHostAddress();
+                            printer.printRecord(addr, name, regionName, node.isClient());
+                        } else {
+                            LOGGER.warn(
+                                    "Unable to find IP address for node '{}' in ns2 file. You may be using a version of the ns2 file with no IP addresses.",
+                                    ipEntry.getKey());
+                        }
+                    }
+                }
+            } // allocate writer and printer
+        } catch (final IOException e) {
+            throw new RuntimeException("Unable to parse ns2 file or unable to write node information", e);
         }
 
         LOGGER.debug("Node to region map: {}", nodeToRegionMap);
     }
 
-    private static Map<Long, Map<String, Map<NodeAttribute<?>, Object>>> createRegionLoadChart(
-            Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> nodeData,
-            Map<String, String> nodeToRegionMap,
-            boolean startAtZero,
-            long dataTimeInterval) {
+    private static Map<Long, Map<String, Map<NodeAttribute, Object>>> createRegionLoadChart(
+            Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> nodeData, Map<String, String> nodeToRegionMap,
+            boolean startAtZero, long dataTimeInterval) {
         List<Long> times = new ArrayList<>();
         times.addAll(nodeData.keySet());
         Collections.sort(times);
@@ -408,16 +420,16 @@ public class LoadChartGenerator {
 
         // place data in time bins, and within each bin, place data into region
         // groups
-        Map<Long, Map<String, Map<String, Map<NodeAttribute<?>, LoadValue>>>> binnedData = binByLabelGroup(nodeData,
+        Map<Long, Map<String, Map<String, Map<NodeAttribute, LoadValue>>>> binnedData = binByLabelGroup(nodeData,
                 nodeToRegionMap, firstBinCenter, dataTimeInterval);
 
         LOGGER.debug("Binned data: {}", binnedData);
         checkForMissingBinContributions(binnedData, getNodeLabelsFromNodeData(nodeData));
 
         // sum the data for each region group within each bin
-        Map<Long, Map<String, Map<NodeAttribute<?>, SumCount>>> collapsedBinnedData = collapseBins(binnedData);
+        Map<Long, Map<String, Map<NodeAttribute, SumCount>>> collapsedBinnedData = collapseBins(binnedData);
 
-        Map<Long, Map<String, Map<NodeAttribute<?>, Object>>> tableData = new HashMap<>();
+        Map<Long, Map<String, Map<NodeAttribute, Object>>> tableData = new HashMap<>();
 
         collapsedBinnedData.forEach((time, group) -> {
             if (!tableData.containsKey(time))
@@ -453,14 +465,14 @@ public class LoadChartGenerator {
     /**
      * Collapses time, group (region) bins by summing the values in each bin.
      * 
-     * @param binnedAttributeValues
-     *            data that has been binned by time and group in the form (time
-     *            -> groupLabel -> label -> NodeAttribute<?> -> Value)
+     * @param binnedAttributeValues data that has been binned by time and group in
+     *                              the form (time -> groupLabel -> label ->
+     *                              NodeAttribute -> Value)
      * @return a Map with a {@link SumCount} object for each time, group bin
      */
-    protected static Map<Long, Map<String, Map<NodeAttribute<?>, SumCount>>>
-            collapseBins(Map<Long, Map<String, Map<String, Map<NodeAttribute<?>, LoadValue>>>> binnedAttributeValues) {
-        Map<Long, Map<String, Map<NodeAttribute<?>, SumCount>>> result = new HashMap<>();
+    protected static Map<Long, Map<String, Map<NodeAttribute, SumCount>>> collapseBins(
+            Map<Long, Map<String, Map<String, Map<NodeAttribute, LoadValue>>>> binnedAttributeValues) {
+        Map<Long, Map<String, Map<NodeAttribute, SumCount>>> result = new HashMap<>();
 
         binnedAttributeValues.forEach((time, bin) -> {
             // ensure time is in the Map
@@ -468,7 +480,7 @@ public class LoadChartGenerator {
                 result.put(time, new HashMap<>());
 
             bin.forEach((groupLabel, attributeValuesList) -> {
-                Map<NodeAttribute<?>, SumCount> attributeValues = new HashMap<>();
+                Map<NodeAttribute, SumCount> attributeValues = new HashMap<>();
 
                 // sum values for the different attributes for the group label
                 attributeValuesList.forEach((label, av) -> {
@@ -490,7 +502,7 @@ public class LoadChartGenerator {
     // check and log if any of the time bins are missing information for any of
     // the given labels
     private static void checkForMissingBinContributions(
-            Map<Long, Map<String, Map<String, Map<NodeAttribute<?>, LoadValue>>>> timeLabelBins,
+            Map<Long, Map<String, Map<String, Map<NodeAttribute, LoadValue>>>> timeLabelBins,
             Set<String> expectedLabels) {
         LOGGER.debug("checkForMissingBinContributions: Expected labels: {}", expectedLabels);
 
@@ -513,8 +525,8 @@ public class LoadChartGenerator {
         }
     }
 
-    private static Set<String>
-            getNodeLabelsFromNodeData(Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> nodeData) {
+    private static Set<String> getNodeLabelsFromNodeData(
+            Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> nodeData) {
         Set<String> labels = new HashSet<>();
 
         nodeData.forEach((time, labelToAttributesMap) -> {
@@ -527,25 +539,19 @@ public class LoadChartGenerator {
     /**
      * Places data into time bins.
      * 
-     * @param timeLabelData
-     *            data Map in the form (time -> node name -> NodeAttribute<?> ->
-     *            Value)
-     * @param labelToGroupLabelMap
-     *            map from label (node) to group label (region)
-     * @param firstBinCenter
-     *            the center of the first time bin
-     * @param binSize
-     *            the size of each time bin
+     * @param timeLabelData        data Map in the form (time -> node name ->
+     *                             NodeAttribute -> Value)
+     * @param labelToGroupLabelMap map from label (node) to group label (region)
+     * @param firstBinCenter       the center of the first time bin
+     * @param binSize              the size of each time bin
      * @return data that has been binned by time and group in the form (time ->
-     *         groupLabel -> label -> NodeAttribute<?> -> Value)
+     *         groupLabel -> label -> NodeAttribute -> Value)
      */
-    protected static Map<Long, Map<String, Map<String, Map<NodeAttribute<?>, LoadValue>>>> binByLabelGroup(
-            Map<Long, Map<String, Map<NodeAttribute<?>, LoadValue>>> timeLabelData,
-            Map<String, String> labelToGroupLabelMap,
-            long firstBinCenter,
-            long binSize) {
+    protected static Map<Long, Map<String, Map<String, Map<NodeAttribute, LoadValue>>>> binByLabelGroup(
+            Map<Long, Map<String, Map<NodeAttribute, LoadValue>>> timeLabelData,
+            Map<String, String> labelToGroupLabelMap, long firstBinCenter, long binSize) {
         // time -> group label -> contributing label -> attribute values
-        Map<Long, Map<String, Map<String, Map<NodeAttribute<?>, LoadValue>>>> timeLabelBins = new HashMap<>();
+        Map<Long, Map<String, Map<String, Map<NodeAttribute, LoadValue>>>> timeLabelBins = new HashMap<>();
 
         timeLabelData.forEach((time, labelGroupData) -> {
             Long bin = ChartGenerationUtils.getBinForTime(time, firstBinCenter, binSize);
@@ -581,5 +587,13 @@ public class LoadChartGenerator {
         });
 
         return timeLabelBins;
+    }
+
+    /**
+     * 
+     * @return the set of services with load data
+     */
+    public Set<ServiceIdentifier<?>> getLoadServices() {
+        return serviceTimeNodeData.keySet();
     }
 }

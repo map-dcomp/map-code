@@ -1,0 +1,178 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app1",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app2",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app3",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app4",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app5",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app6",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app7",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app8",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app9",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app10",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app11",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app12",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app13",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app14",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app15",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    },
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app16",
+	    "version": "1.0"
+	},
+	"startType": "JAVA_CLASS",
+	"startArguments": [ 	    "com.bbn.map.hifi.client.FakeLoadClient" ],
+	"stopType": "KILL_PROCESS",
+	"stopArguments": []
+    }
+]

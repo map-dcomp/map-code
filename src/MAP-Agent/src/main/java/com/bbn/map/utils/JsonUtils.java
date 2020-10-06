@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,6 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map.utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -59,6 +60,10 @@ public final class JsonUtils {
                 .registerModule(new ParameterNamesModule()) //
                 .registerModule(new Jdk8Module())//
                 .registerModule(new JavaTimeModule())//
-                .registerModule(new MapModule()); // custom MAP JSON module;
+                // custom MAP JSON module
+                .registerModule(new MapModule()) //
+                // write dates as dates
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS) //
+        ;
     }
 }

@@ -1,0 +1,5 @@
+generated_*
+*.log
+output/
+
+output_*/

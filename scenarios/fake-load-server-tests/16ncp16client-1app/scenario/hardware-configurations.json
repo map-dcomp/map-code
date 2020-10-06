@@ -1,0 +1,11 @@
+[
+  {
+    "name": "pc3000",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 1,
+      "TASK_CONTAINERS": 1
+    },
+    "maximumServiceContainers": 1
+  }
+]

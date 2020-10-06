@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,7 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.net.UnknownHostException;
@@ -40,21 +39,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
 import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
 
-import org.protelis.lang.datatype.DeviceUID;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,15 +68,16 @@ import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.ApplicationManagerApi;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.dns.DNSUpdateService;
 import com.bbn.map.dns.DelegateRecord;
 import com.bbn.map.dns.DnsRecord;
 import com.bbn.map.dns.NameRecord;
 import com.bbn.map.dns.PlanTranslator;
-import com.bbn.map.utils.JsonUtils;
+import com.bbn.map.ta2.OverlayTopology;
+import com.bbn.map.ta2.TA2Interface;
+import com.bbn.map.utils.MapUtils;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
-import com.bbn.protelis.networkresourcemanagement.DelegateRegionLookup;
+import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
@@ -97,10 +99,7 @@ import com.bbn.protelis.networkresourcemanagement.testbed.Scenario;
 import com.bbn.protelis.networkresourcemanagement.testbed.ScenarioRunner;
 import com.bbn.protelis.utils.VirtualClock;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -108,16 +107,13 @@ import com.google.common.collect.ImmutableSet;
 import edu.uci.ics.jung.algorithms.shortestpath.DijkstraShortestPath;
 import edu.uci.ics.jung.algorithms.shortestpath.DistanceStatistics;
 import edu.uci.ics.jung.graph.Graph;
-import edu.uci.ics.jung.graph.SparseMultigraph;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java8.util.Objects;
 
 /**
  * Simulate client demand for a network. A {@link ScenarioRunner} should not be
  * used when this class is used as it does the same work (and more).
  * 
  */
-public class Simulation implements NetworkServices, AutoCloseable, RegionLookupService {
+public class Simulation implements NetworkServices, AutoCloseable, RegionLookupService, TA2Interface {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Simulation.class);
 
@@ -128,13 +124,6 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     public static final String TIME_DIR_FORMAT = String.format("%%0%dd", MAX_NUM_CHARACTERS_IN_TIMESTAMP);
 
     private static final int BASE_AP_COM_PORT = 20000;
-
-    /**
-     * Name of the file to read inside the scenario for hardware configuration
-     * information. If more than 1 hardware configuration has the same name, the
-     * last one is used.
-     */
-    public static final String HARDWARE_CONFIG_FILENAME = "hardware-configurations.json";
 
     /**
      * Name of the file to read inside the scenario for service configuration
@@ -148,7 +137,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      */
     public static final String SERVICE_DEPENDENCIES_FILENAME = "service-dependencies.json";
 
-    private Graph<NetworkNode, NetworkLink> graph = new SparseMultigraph<>();
+    private final Graph<NetworkNode, NetworkLink> graph;
 
     private final Scenario<Controller, NetworkLink, NetworkClient> scenario;
 
@@ -163,14 +152,15 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
 
     private final Map<NodeIdentifier, Controller> controllerCache = new HashMap<>();
     private final Map<NodeIdentifier, NetworkClient> clientCache = new HashMap<>();
-    private final ImmutableList<ClientSim> clientSimulators;
+    private final Collection<ClientSim> clientSimulators = new LinkedList<>();
+    private final BackgroundTrafficSim backgroundTrafficSim;
 
     /**
      * 
      * @return the simulators, used for display purposes
      */
     public ImmutableList<ClientSim> getClientSimulators() {
-        return clientSimulators;
+        return ImmutableList.copyOf(clientSimulators);
     }
 
     private final DijkstraShortestPath<NetworkNode, NetworkLink> pathFinder;
@@ -276,7 +266,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      * @param enableDcop
      *            false if DCOP should be disabled, this is for testing
      * @param enableRlg
-     *            false if RLG shoudl be disabled, this is for testing
+     *            false if RLG should be disabled, this is for testing
      * @param serviceContainerParmeterLookup
      *            function to map from services to the container parameters to
      *            run the service. This is used for starting the initial
@@ -297,29 +287,17 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
             throws IOException {
         this.managerFactory = new SimResourceManagerFactory(this, pollingInterval);
         this.clock = clock;
-        this.globalDNS = new DNSSim(this, "GLOBAL");
-        this.graph = new SparseMultigraph<>();
         this.allowDnsChanges = allowDnsChanges;
         this.enableDcop = enableDcop;
         this.enableRlg = enableRlg;
-        this.hardwareConfigs = parseHardwareConfigurations(scenarioDirectory);
+        this.hardwareConfigs = HardwareConfiguration
+                .parseHardwareConfigurations(scenarioDirectory.resolve(HardwareConfiguration.HARDWARE_CONFIG_FILENAME));
 
-        this.scenario = parseScenario(name, scenarioDirectory, managerFactory);
-
-        // setup regional DNS and servers in the graph
-        for (final Map.Entry<DeviceUID, Controller> entry : scenario.getServers().entrySet()) {
-            final Controller controller = entry.getValue();
-            graph.addVertex(controller);
-            controllerCache.put(controller.getNodeIdentifier(), controller);
-
-            ensureRegionalDNSExists(controller.getRegionIdentifier());
-        }
-
-        // setup links
-        scenario.getLinks().forEach(link -> {
-            final LinkResourceManager lmgr = new LinkResourceManager(link);
-            addLinkResMgr(lmgr);
-        });
+        final ImmutablePair<Scenario<Controller, NetworkLink, NetworkClient>, Graph<NetworkNode, NetworkLink>> parsed = parseScenario(
+                name, scenarioDirectory, managerFactory, demandPath);
+        scenario = parsed.getLeft();
+        graph = parsed.getRight();
+        validateTopology();
 
         checkDnsUpdateHandlers();
 
@@ -332,38 +310,35 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
 
         planTranslator = new PlanTranslator(ttl);
 
-        // setup clients
-        final ImmutableList.Builder<ClientSim> clientSimBuilder = ImmutableList.builder();
-        for (final Map.Entry<DeviceUID, NetworkClient> entry : scenario.getClients().entrySet()) {
-            final NetworkClient client = entry.getValue();
-            graph.addVertex(client);
-            clientCache.put(client.getNodeIdentifier(), entry.getValue());
-
-            final ClientSim sim = new ClientSim(this, entry.getValue(), demandPath);
-            clientSimBuilder.add(sim);
-
-            ensureRegionalDNSExists(client.getRegionIdentifier());
-        }
-        clientSimulators = clientSimBuilder.build();
-
-        // setup links
-        for (final NetworkLink l : scenario.getLinks()) {
-            graph.addEdge(l, l.getLeft(), l.getRight());
-        }
-
         final Path nodeFailuresPath = scenarioDirectory.resolve(NODE_FAILURES_FILENAME);
-        nodeFailures = loadNodeFailures(nodeFailuresPath);
+        nodeFailures = NodeFailure.loadNodeFailures(nodeFailuresPath);
         if (!verifyNodeFailures()) {
-            // cannot execute, failures were logged by the verify function
             throw new IllegalArgumentException(
                     "There were errors with the node failures. See previous log messages for the details.");
+        }
+
+        if (!verifyClientRequests(appManager)) {
+            throw new IllegalArgumentException(
+                    "There were errors with the client requests. See previous log messages for the details.");
+        }
+
+        final Path backgroundTrafficPath;
+        if (null != demandPath) {
+            backgroundTrafficPath = demandPath.resolve(BACKGROUND_TRAFFIC_FILENAME);
+        } else {
+            backgroundTrafficPath = null;
+        }
+        backgroundTrafficSim = new BackgroundTrafficSim(this, backgroundTrafficPath);
+        if (!verifyBackgroundTraffic()) {
+            throw new IllegalArgumentException(
+                    "There were errors with the background traffic requests. See previous log messages for the details.");
         }
 
         // start initial services
         final Map<ApplicationCoordinates, Set<RegionIdentifier>> serviceDefaultRegions = new HashMap<>();
         serviceConfigurations.forEach((service, config) -> {
             LOGGER.debug("Processing service: {} config: {}", service, config);
-            
+
             final ApplicationSpecification appSpec = appManager.getApplicationSpecification(service);
 
             final ImmutableMap<NodeIdentifier, Integer> defaultNodes = config.getDefaultNodes();
@@ -410,21 +385,34 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
             }
         });
 
-        // setup delegate records for all service default regions in the global
-        // DNS
-        serviceDefaultRegions.forEach((service, regions) -> {
-            final ApplicationSpecification appSpec = appManager.getApplicationSpecification(service);
-            if (null == appSpec) {
-                throw new RuntimeException("Unable to find application specification configuration for " + service);
-            }
+        pathFinder = new DijkstraShortestPath<>(graph);
 
-            regions.forEach(region -> {
-                final DnsRecord record = new DelegateRecord(null, ttl, service, region);
-                getGlobalDNS().addRecord(record, 1D);
+        if (!enableRlg) {
+            setupServiceDelegation(serviceConfigurations, appManager, ttl);
+        }
+    }
+
+    /**
+     * When not running RLG we need the default delegations setup in all of the
+     * regional DNS servers.
+     */
+    private void setupServiceDelegation(
+            final ImmutableMap<ApplicationCoordinates, ServiceConfiguration> serviceConfigurations,
+            final ApplicationManagerApi appManager,
+            final int ttl) {
+        serviceConfigurations.forEach((service, config) -> {
+            LOGGER.debug("Processing service: {} config: {}", service, config);
+
+            final ApplicationSpecification appSpec = appManager.getApplicationSpecification(service);
+
+            final RegionIdentifier serviceDefaultRegion = appSpec.getServiceDefaultRegion();
+            final DelegateRecord dnsRecord = new DelegateRecord(null, ttl, service, serviceDefaultRegion);
+            regionalDNS.forEach((region, dns) -> {
+                if (!Objects.equals(region, serviceDefaultRegion)) {
+                    dns.addRecord(dnsRecord, 1D);
+                }
             });
         });
-
-        pathFinder = new DijkstraShortestPath<>(graph);
 
     }
 
@@ -448,27 +436,6 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         });
     }
 
-    private static ImmutableMap<String, HardwareConfiguration> parseHardwareConfigurations(
-            @Nonnull final Path scenarioPath) throws IOException {
-        final Path path = scenarioPath.resolve(HARDWARE_CONFIG_FILENAME);
-        if (!Files.exists(path)) {
-            // no hardware configs
-            return ImmutableMap.of();
-        }
-
-        final ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper().registerModule(new GuavaModule());
-
-        try (BufferedReader reader = Files.newBufferedReader(path)) {
-            final ImmutableList<HardwareConfiguration> list = mapper.readValue(reader,
-                    new TypeReference<ImmutableList<HardwareConfiguration>>() {
-                    });
-            final ImmutableMap.Builder<String, HardwareConfiguration> map = ImmutableMap.builder();
-            list.forEach(config -> map.put(config.getName(), config));
-
-            return map.build();
-        }
-    }
-
     /**
      * @param name
      *            the name of the hardware configuration to find
@@ -484,24 +451,115 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      * @return
      * @throws IOException
      */
-    private Scenario<Controller, NetworkLink, NetworkClient> parseScenario(@Nonnull final String scenarioName,
+    private ImmutablePair<Scenario<Controller, NetworkLink, NetworkClient>, Graph<NetworkNode, NetworkLink>> parseScenario(
+            @Nonnull final String scenarioName,
             @Nonnull final Path baseDirectory,
-            @Nonnull final SimResourceManagerFactory managerFactory) throws IOException {
+            @Nonnull final SimResourceManagerFactory managerFactory,
+            final Path demandPath) throws IOException {
 
-        final DelegateRegionLookup regionLookupService = new DelegateRegionLookup();
         final NodeLookupService nodeLookupService = new LocalNodeLookupService(BASE_AP_COM_PORT);
 
-        final MapNetworkFactory factory = new MapNetworkFactory(nodeLookupService, regionLookupService, managerFactory,
+        final MapNetworkFactory factory = new MapNetworkFactory(nodeLookupService, this, managerFactory,
                 AgentConfiguration.getInstance().getApProgram(),
-                AgentConfiguration.getInstance().isApProgramAnonymous(), this, allowDnsChanges, enableDcop, enableRlg);
+                AgentConfiguration.getInstance().isApProgramAnonymous(), this, allowDnsChanges, enableDcop, enableRlg,
+                DnsNameIdentifier::new);
 
         final Topology topology = NS2Parser.parse(scenarioName, baseDirectory);
-        final Scenario<Controller, NetworkLink, NetworkClient> scenario = new Scenario<>(topology, factory,
-                name -> new DnsNameIdentifier(name));
+        final Graph<NetworkNode, NetworkLink> graph = MapUtils.parseTopology(topology, factory);
 
-        regionLookupService.setDelegate(this);
+        final Scenario<Controller, NetworkLink, NetworkClient> scenario = processGraph(topology.getName(), graph,
+                demandPath);
 
+        return ImmutablePair.of(scenario, graph);
+    }
+
+    private Scenario<Controller, NetworkLink, NetworkClient> processGraph(final String name,
+            final Graph<NetworkNode, NetworkLink> graph,
+            final Path demandPath) {
+        final Collection<Controller> servers = new LinkedList<>();
+        final Collection<NetworkClient> clients = new LinkedList<>();
+        final Collection<NetworkLink> links = new LinkedList<>();
+
+        graph.getVertices().stream().forEach(node -> {
+            if (node instanceof NetworkClient) {
+                final NetworkClient client = (NetworkClient) node;
+                clientCache.put(client.getNodeIdentifier(), client);
+
+                final ClientSim sim = new ClientSim(this, client, demandPath);
+                clientSimulators.add(sim);
+
+                ensureRegionalDNSExists(client.getRegionIdentifier());
+
+                clients.add(client);
+            } else if (node instanceof Controller) {
+                final Controller controller = (Controller) node;
+                controllerCache.put(controller.getNodeIdentifier(), controller);
+                ensureRegionalDNSExists(controller.getRegionIdentifier());
+
+                servers.add(controller);
+            } else {
+                throw new RuntimeException("Unexpected NetworkDevice type: " + node);
+            }
+        });
+
+        graph.getEdges().stream().forEach(link -> {
+            final LinkResourceManager lmgr = new LinkResourceManager(link);
+            addLinkResMgr(lmgr);
+
+            links.add(link);
+        });
+
+        final Scenario<Controller, NetworkLink, NetworkClient> scenario = new Scenario<>(name, servers, links, clients);
         return scenario;
+    }
+
+    private void validateTopology() {
+        final Set<RegionIdentifier> regions = this.getAllControllers().stream().map(NetworkServer::getRegionIdentifier)
+                .distinct().collect(Collectors.toSet());
+
+        regions.stream().forEach(region -> {
+            final Set<Controller> dcop = new HashSet<>();
+            final Set<Controller> rlg = new HashSet<>();
+            final Set<Controller> dns = new HashSet<>();
+
+            // foreach node in the region
+            this.getAllControllers().stream().filter(c -> c.getRegionIdentifier().equals(region)).forEach(c -> {
+                if (c.isRunDCOP()) {
+                    dcop.add(c);
+                }
+                if (c.isRunRLG()) {
+                    rlg.add(c);
+                }
+                if (c.isHandleDnsChanges()) {
+                    dns.add(c);
+                }
+            });
+
+            if (enableDcop) {
+                if (dcop.size() > 1) {
+                    throw new IllegalArgumentException("Region " + region + " has more than one DCOP: " + dcop);
+                } else if (dcop.isEmpty()) {
+                    throw new IllegalArgumentException("Region " + region + " has no DCOP");
+                }
+            }
+
+            if (enableRlg) {
+                if (rlg.size() > 1) {
+                    throw new IllegalArgumentException("Region " + region + " has more than one RLG: " + rlg);
+                } else if (rlg.isEmpty()) {
+                    throw new IllegalArgumentException("Region " + region + " has no RLG");
+                }
+            }
+
+            if (allowDnsChanges) {
+                if (dns.size() > 1) {
+                    throw new IllegalArgumentException("Region " + region + " has more than one DNS: " + dns);
+                } else if (dns.isEmpty()) {
+                    throw new IllegalArgumentException("Region " + region + " has no dns");
+                }
+            }
+
+        });
     }
 
     /**
@@ -519,8 +577,16 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
             if (!graph.containsVertex(source) || !graph.containsVertex(dest)) {
                 return Collections.emptyList();
             } else {
-                final List<NetworkLink> path = pathFinder.getPath(source, dest);
-                return path;
+                try {
+                    final List<NetworkLink> path = pathFinder.getPath(source, dest);
+                    return path;
+                } catch (final IllegalArgumentException e) {
+                    LOGGER.debug("One of the nodes is not in the graph", e);
+                    return Collections.emptyList();
+                } catch (final NullPointerException e) {
+                    LOGGER.debug("The two nodes are not connected to each other", e);
+                    return Collections.emptyList();
+                }
             }
         }
     }
@@ -536,17 +602,6 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         }
     }
 
-    private final DNSSim globalDNS;
-
-    /**
-     * Public for visualization only.
-     * 
-     * @return the global DNS
-     */
-    public DNSSim getGlobalDNS() {
-        return globalDNS;
-    }
-
     private final Map<RegionIdentifier, DNSSim> regionalDNS = new HashMap<>();
 
     /**
@@ -558,7 +613,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      *            the region to make sure a DNS exists for.
      */
     /* package */ void ensureRegionalDNSExists(final RegionIdentifier region) {
-        regionalDNS.computeIfAbsent(region, k -> new DNSSim(this, region.getName(), getGlobalDNS()));
+        regionalDNS.computeIfAbsent(region, k -> new DNSSim(this, region.getName()));
     }
 
     /**
@@ -607,23 +662,19 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         final DNSSim dns = getRegionalDNS(clientRegion);
 
         final NodeIdentifier containerName = dns.resolveService(clientId.getName(), service);
+        LOGGER.trace("Container for service {} is {}", service, containerName);
         if (null == containerName) {
-            LOGGER.error("Unable to find '" + service + "' in dns: " + dns);
+            LOGGER.error("Unable to find '{}' in dns: {} records {}", service, dns, dns.recordsToString());
             throw new UnknownHostException("Host '" + service + "' is not found in the DNS");
         }
 
-        synchronized (controllerCache) {
-            for (final Map.Entry<?, Controller> entry : controllerCache.entrySet()) {
-                final SimResourceManager resMgr = getResourceManager(entry.getValue());
-                final ContainerSim container = resMgr.getContainerById(containerName);
-                if (null != container) {
-                    return container;
-                }
-            }
+        final ContainerSim container = getContainerById(containerName);
+        if (null == container) {
+            throw new UnknownHostException("Service '" + service + "' was found in DNS to point to " + containerName
+                    + ", but that container cannot be found. Known containers are: " + containers.keySet());
+        } else {
+            return container;
         }
-
-        throw new UnknownHostException("Service '" + service + "' was found in DNS to point to " + containerName
-                + ", but that container cannot be found");
     }
 
     /**
@@ -643,7 +694,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      * Find a particular client by it's ID.
      * 
      * @param name
-     *            the clinet ID to look for
+     *            the client ID to look for
      * @return the client or null if not found
      */
     public NetworkClient getClientById(@Nonnull final NodeIdentifier name) {
@@ -678,7 +729,6 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      */
     public void startSimulation() {
         if (running.compareAndSet(false, true)) {
-
             synchronized (controllerCache) {
                 // make sure there is a global leader, if there isn't, pick one
                 final Optional<Controller> globalLeaderSet = controllerCache.entrySet().stream()
@@ -706,6 +756,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      */
     public void startClients() {
         clientSimulators.forEach((sim) -> sim.startSimulator());
+        backgroundTrafficSim.startSimulator();
     }
 
     /**
@@ -724,6 +775,8 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
             controllerCache.forEach((k, controller) -> getResourceManager(controller).stopSimulation());
         }
 
+        backgroundTrafficSim.shutdownSimulator();
+
         clientSimulators.forEach((sim) -> sim.shutdownSimulator());
 
         // shutdown AP communication
@@ -731,7 +784,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
             LOGGER.info(
                     "Stopping AP execution on all NetworkServers. Errors about streams being closed after this point can be safely ignored.");
         }
-        scenario.getServers().forEach((k, server) -> server.stopExecuting());
+        getAllControllers().parallelStream().forEach(e -> e.stopExecuting());
 
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Waiting for all daemons to stop");
@@ -747,7 +800,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
             }
         }
 
-        scenario.getServers().forEach((k, server) -> server.accessNetworkManager().stop());
+        getAllControllers().forEach(server -> server.accessNetworkManager().stop());
 
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Stopped AP communication");
@@ -755,14 +808,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     }
 
     private boolean daemonsQuiescent() {
-        boolean alldead = true;
-        for (final Map.Entry<DeviceUID, ? extends NetworkServer> entry : scenario.getServers().entrySet()) {
-            if (entry.getValue().isExecuting()) {
-                alldead = false;
-                break;
-            }
-        }
-        return alldead;
+        return !getAllControllers().parallelStream().anyMatch(s -> s.isExecuting());
     }
 
     // NetworkServices interface
@@ -778,6 +824,12 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     @Nonnull
     public DNSUpdateService getDnsUpdateService(@Nonnull final RegionIdentifier region) {
         return getRegionalDNS(region);
+    }
+
+    @Override
+    @Nonnull
+    public TA2Interface getTA2Interface() {
+        return this;
     }
     // end NetworkServices interface
 
@@ -795,11 +847,6 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     public void dumpCurrentState(@Nonnull final Path outputDir, @Nonnull final ObjectWriter mapper) throws IOException {
 
         // DNS state
-        final Path globalDnsFilename = outputDir.resolve(String.format("dns-%s.json", "GLOBAL"));
-        try (BufferedWriter writer = Files.newBufferedWriter(globalDnsFilename, Charset.defaultCharset())) {
-            final DnsState state = new DnsState(getGlobalDNS());
-            mapper.writeValue(writer, state);
-        }
         for (final Map.Entry<RegionIdentifier, DNSSim> entry : regionalDNS.entrySet()) {
             final RegionIdentifier region = entry.getKey();
             final DNSSim dns = entry.getValue();
@@ -813,7 +860,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
 
         // client state
         for (final ClientSim client : getClientSimulators()) {
-            final Path dnsFilename = outputDir.resolve(String.format("client-%s.json", client.getClientName()));
+            final Path dnsFilename = outputDir.resolve(String.format("client-%s.json", client.getSimName()));
             try (BufferedWriter writer = Files.newBufferedWriter(dnsFilename, Charset.defaultCharset())) {
                 mapper.writeValue(writer, client.getSimulationState());
             }
@@ -858,8 +905,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         private final ImmutableList<DnsRecord> entries;
 
         /**
-         * @return see
-         *         {@link DNSSim#foreachRecord(com.bbn.map.simulator.DNSSim.RecordVisitor)}
+         * @return the DNS records
          */
         public ImmutableList<DnsRecord> getEntries() {
             return entries;
@@ -898,14 +944,14 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      * @return the capacity of the specified node. This is based on the hardware
      *         configuration of the node.
      */
-    public ImmutableMap<NodeAttribute<?>, Double> getServerCapacity(final Controller node) {
+    public ImmutableMap<NodeAttribute, Double> getServerCapacity(final Controller node) {
         final String serverHardware = node.getHardware();
         final HardwareConfiguration hardwareConfig = getHardwareConfiguration(serverHardware);
         if (null == hardwareConfig) {
             return ImmutableMap.of();
         } else {
 
-            final ImmutableMap.Builder<NodeAttribute<?>, Double> builder = ImmutableMap.builder();
+            final ImmutableMap.Builder<NodeAttribute, Double> builder = ImmutableMap.builder();
             hardwareConfig.getCapacity().forEach((k, v) -> builder.put(k, v));
 
             return builder.build();
@@ -921,7 +967,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      *            the attribute to compute the capacity of
      * @return the capacity
      */
-    public double getRegionCapacity(@Nonnull final RegionIdentifier region, @Nonnull final NodeMetricName attribute) {
+    public double getRegionCapacity(@Nonnull final RegionIdentifier region, @Nonnull final NodeAttribute attribute) {
         synchronized (controllerCache) {
             final double capacity = controllerCache.entrySet().stream().map(Map.Entry::getValue)
                     .filter(c -> c.getRegionIdentifier().equals(region))
@@ -939,7 +985,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      *            the attribute to compute the load of
      * @return the load
      */
-    public double computeRegionLoad(@Nonnull final RegionIdentifier region, @Nonnull final NodeMetricName attribute) {
+    public double computeRegionLoad(@Nonnull final RegionIdentifier region, @Nonnull final NodeAttribute attribute) {
         synchronized (controllerCache) {
             // complicated bit of streaming logic, but this will sum all load
             // values
@@ -949,7 +995,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                     .filter(c -> region.equals(c.getRegionIdentifier()));
             final Stream<ResourceReport> reportStream = regionControllersStream
                     .map(c -> c.getResourceReport(EstimationWindow.SHORT));
-            final Stream<ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>>> serverLoadStream = reportStream
+            final Stream<ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>>> serverLoadStream = reportStream
                     .map(r -> r.getComputeLoad());
             final double load = serverLoadStream
                     .mapToDouble(
@@ -974,7 +1020,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      *         and 1)
      */
     public Map<RegionIdentifier, Double> computeRegionLoadPercentageBySource(@Nonnull final RegionIdentifier region,
-            @Nonnull final NodeMetricName attribute) {
+            @Nonnull final NodeAttribute attribute) {
         double totalLoad = 0;
 
         final Map<RegionIdentifier, Double> load = new HashMap<>();
@@ -983,13 +1029,13 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                 final Controller controller = controllerEntry.getValue();
                 if (region.equals(controller.getRegionIdentifier())) {
                     final ResourceReport report = controller.getResourceReport(EstimationWindow.SHORT);
-                    final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> serverLoad = report
+                    final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> serverLoad = report
                             .getComputeLoad();
-                    for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> serviceEntry : serverLoad
+                    for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> serviceEntry : serverLoad
                             .entrySet()) {
-                        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> serviceLoad = serviceEntry
+                        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> serviceLoad = serviceEntry
                                 .getValue();
-                        for (Map.Entry<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> srcRegionEntry : serviceLoad
+                        for (Map.Entry<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> srcRegionEntry : serviceLoad
                                 .entrySet()) {
                             final NodeIdentifier srcNode = srcRegionEntry.getKey();
                             final RegionIdentifier srcRegion;
@@ -1138,6 +1184,13 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     }
 
     /**
+     * Keep track of stopped containers and the regions that they were in so
+     * that we can still convert resource summaries after the containers are
+     * stopped.
+     */
+    private final Map<NodeIdentifier, RegionIdentifier> stoppedContainerToRegion = new HashMap<>();
+
+    /**
      * Inverse of {@link #registerContainer(NodeIdentifier, ContainerSim)}.
      * 
      * @param containerId
@@ -1146,7 +1199,8 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     public void unregisterContainer(@Nonnull final NodeIdentifier containerId) {
         synchronized (containers) {
             LOGGER.trace("unregisterContainer '{}'", containerId);
-            containers.remove(containerId);
+            final ContainerSim containerSim = containers.remove(containerId);
+            stoppedContainerToRegion.put(containerId, containerSim.getParentNode().getRegionIdentifier());
         }
     }
 
@@ -1160,7 +1214,6 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         // Note: this assumes that ensureRegionalDNSExists() is never called
         // outside the constructor in a normal run
 
-        globalDNS.setBaseOutputDirectory(outputDirectory);
         regionalDNS.forEach((k, sim) -> {
             sim.setBaseOutputDirectory(outputDirectory);
         });
@@ -1187,15 +1240,40 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
     // RegionLookupService
     @Override
     public RegionIdentifier getRegionForNode(@Nonnull final NodeIdentifier nodeId) {
-        // check if it's a container first
-        final ContainerSim container = getContainerById(nodeId);
-        if (null != container) {
-            return container.getParentNode().getRegionIdentifier();
+        if (NodeIdentifier.UNKNOWN.equals(nodeId)) {
+            return RegionIdentifier.UNKNOWN;
         } else {
-            return scenario.getRegionForNode(nodeId);
+            // check if it's a container first
+            final ContainerSim container = getContainerById(nodeId);
+            if (null != container) {
+                return container.getParentNode().getRegionIdentifier();
+            } else if (stoppedContainerToRegion.containsKey(nodeId)) {
+                return stoppedContainerToRegion.get(nodeId);
+            } else {
+                return scenario.getRegionForNode(nodeId);
+            }
         }
     }
     // end RegionLookupService
+
+    /**
+     * Simulate failure of a node.
+     * 
+     * @param controller
+     *            the node to shutdown
+     */
+    /* package */ void shutdownNode(@Nonnull final Controller controller) {
+        LOGGER.info("Stopping node {}", controller.getNodeIdentifier());
+        getResourceManager(controller).stopSimulation();
+        controller.stopExecuting();
+        synchronized (graph) {
+            graph.removeVertex(controller);
+        }
+        synchronized (controllerCache) {
+            controllerCache.remove(controller.getNodeIdentifier());
+        }
+        LOGGER.info("Finished stopping node {}", controller.getNodeIdentifier());
+    }
 
     private void simulateFailures() {
         for (final NodeFailure failure : nodeFailures) {
@@ -1207,130 +1285,279 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                 return;
             }
 
-            final DnsNameIdentifier nodeId = new DnsNameIdentifier(failure.node);
-            final Controller controller = getControllerById(nodeId);
-            if (null != controller) {
-                LOGGER.info("Stopping node {}", failure.node);
-                getResourceManager(controller).stopSimulation();
-                controller.stopExecuting();
-                synchronized (graph) {
-                    graph.removeVertex(controller);
-                }
-                synchronized (controllerCache) {
-                    controllerCache.remove(nodeId);
-                }
-                LOGGER.info("Finished stopping node {}", failure.node);
+            if (failure.nodes.isEmpty()) {
+                LOGGER.warn("Found node failure at " + failure.time + " with no nodes, skipping");
+                continue;
+            }
+
+            final NodeIdentifier nodeId = chooseNodeToFail(failure);
+            if (null == nodeId) {
+                LOGGER.error("Unable to find a node to fail out of {}", failure.nodes);
             } else {
-                LOGGER.info("Stopping container {}", failure.node);
-                synchronized (containers) {
-                    containers.remove(nodeId);
-                    unregisterContainer(nodeId);
+                final Controller controller = getControllerById(nodeId);
+                if (null != controller) {
+                    shutdownNode(controller);
+                } else {
+                    LOGGER.error("Unable to find {} as a running node or a running container", nodeId);
                 }
-                LOGGER.info("Finished stopping container {}", failure.node);
-            }
 
-            if (!running.get()) {
-                LOGGER.debug("Exiting failure thread due to simulation shutdown");
-                return;
+                if (!running.get()) {
+                    LOGGER.debug("Exiting failure thread due to simulation shutdown");
+                    return;
+                }
             }
         }
     }
 
-    private static final String NODE_FAILURES_FILENAME = "node-failures.json";
-
-    @Nonnull
-    private List<NodeFailure> loadNodeFailures(@Nonnull final Path path) throws IOException {
-        if (!Files.exists(path)) {
-            return Collections.emptyList();
-        }
-
-        final ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper();
-
-        try (BufferedReader reader = Files.newBufferedReader(path)) {
-            final List<NodeFailure> list = mapper.readValue(reader, new TypeReference<List<NodeFailure>>() {
-            });
-
-            Collections.sort(list, NodeFailureTimeCompare.INSTANCE);
-            return list;
+    private NodeIdentifier chooseNodeToFail(final NodeFailure failure) {
+        if (null == failure.nodes || failure.nodes.isEmpty()) {
+            LOGGER.error("Node failure object has null or empty nodes list");
+            return null;
+        } else if (failure.nodes.size() == 1) {
+            return new DnsNameIdentifier(failure.nodes.stream().findFirst().get());
+        } else {
+            final Collection<NodeIdentifier> ids = failure.nodes.stream().map(DnsNameIdentifier::new)
+                    .collect(Collectors.toList());
+            final Collection<Controller> controllerOptions = ids.stream().map(id -> controllerCache.get(id))
+                    .filter(Objects::nonNull).collect(Collectors.toList());
+            final Collection<ContainerSim> containerOptions = ids.stream().map(id -> containers.get(id))
+                    .filter(Objects::nonNull).collect(Collectors.toList());
+            if (controllerOptions.isEmpty() && containerOptions.isEmpty()) {
+                LOGGER.error("Cannot find any running nodes or containers in {} to fail", failure.nodes);
+                return null;
+            } else if (controllerOptions.isEmpty() && 1 == containerOptions.size()) {
+                return containerOptions.stream().findFirst().get().getIdentifier();
+            } else if (1 == controllerOptions.size() && containerOptions.isEmpty()) {
+                return controllerOptions.stream().findFirst().get().getNodeIdentifier();
+            } else {
+                switch (failure.chooseAlgorithm) {
+                case MOST_LOADED:
+                    return chooseMostLoaded(failure.nodeMetric, controllerOptions, containerOptions);
+                default:
+                    throw new IllegalArgumentException(
+                            "Unknown node failure choose algorithm: " + failure.chooseAlgorithm);
+                }
+            }
         }
     }
+
+    private NodeIdentifier chooseMostLoaded(final NodeAttribute nodeAttr,
+            final Collection<Controller> controllerOptions,
+            final Collection<ContainerSim> containerOptions) {
+        Objects.requireNonNull(nodeAttr,
+                "The node attribute for a node failure cannot be null when looking for the most loaded node");
+
+        double max = Double.NEGATIVE_INFINITY;
+        NodeIdentifier maxNode = null;
+        for (final Controller controller : controllerOptions) {
+            final double loadPercentage = computeLoadPercentage(nodeAttr, controller);
+            LOGGER.trace("Load percentage on node {} is {}", controller.getNodeIdentifier(), loadPercentage);
+            if (null == maxNode) {
+                max = loadPercentage;
+                maxNode = controller.getNodeIdentifier();
+            } else if (Double.isNaN(max) && !Double.isNaN(loadPercentage)) {
+                max = loadPercentage;
+                maxNode = controller.getNodeIdentifier();
+            } else if (loadPercentage > max) {
+                max = loadPercentage;
+                maxNode = controller.getNodeIdentifier();
+            }
+        }
+
+        for (final ContainerSim container : containerOptions) {
+            final double loadPercentage = computeLoadPercentage(nodeAttr, container);
+            LOGGER.trace("Load percentage on container {} is {}", container.getIdentifier(), loadPercentage);
+            if (null == maxNode) {
+                max = loadPercentage;
+                maxNode = container.getIdentifier();
+            } else if (Double.isNaN(max) && !Double.isNaN(loadPercentage)) {
+                max = loadPercentage;
+                maxNode = container.getIdentifier();
+            } else if (loadPercentage > max) {
+                max = loadPercentage;
+                maxNode = container.getIdentifier();
+            }
+        }
+
+        return maxNode;
+    }
+
+    private double computeLoadPercentage(final NodeAttribute attr, final Controller node) {
+        // looking at load only, so estimation window doesn't matter
+        final ResourceReport report = node.getResourceReport(EstimationWindow.SHORT);
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> allLoad = report
+                .getComputeLoad();
+
+        final Stream<ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> s1 = allLoad.entrySet().stream()
+                .map(Map.Entry::getValue);
+        final Stream<Map.Entry<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> s2 = s1
+                .flatMap(m -> m.entrySet().stream());
+        final Stream<ImmutableMap<NodeAttribute, Double>> s3 = s2.map(Map.Entry::getValue);
+        final DoubleStream s4 = s3.mapToDouble(m -> m.getOrDefault(attr, 0D));
+        final double load = s4.sum();
+
+        final double allocatedCapacity = computeAllocatedCapacity(attr, report);
+
+        final double loadPercentage = load / allocatedCapacity;
+        return loadPercentage;
+    }
+
+    private double computeLoadPercentage(final NodeAttribute attr, final ContainerSim container) {
+        // looking at load only, so estimation window doesn't matter
+        final ContainerResourceReport report = container.getContainerResourceReport(EstimationWindow.SHORT);
+        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> allLoad = report.getComputeDemand();
+        final Stream<ImmutableMap<NodeAttribute, Double>> s1 = allLoad.entrySet().stream().map(Map.Entry::getValue);
+        final DoubleStream s2 = s1.mapToDouble(m -> m.getOrDefault(attr, 0D));
+        final double load = s2.sum();
+        final double allocatedCapacity = computeAllocatedCapacity(attr, report);
+        final double loadPercentage = load / allocatedCapacity;
+        return loadPercentage;
+    }
+
+    private double computeAllocatedCapacity(final NodeAttribute attr, final ResourceReport report) {
+        final double capacity = report.getContainerReports().entrySet().stream().map(Map.Entry::getValue)
+                .mapToDouble(creport -> computeAllocatedCapacity(attr, creport)).sum();
+        return capacity;
+    }
+
+    private double computeAllocatedCapacity(final NodeAttribute attr, final ContainerResourceReport report) {
+        final double capacity = report.getComputeCapacity().getOrDefault(attr, 0D);
+        return capacity;
+    }
+
+    /**
+     * Name of node failures file in the scenario directory.
+     */
+    public static final String NODE_FAILURES_FILENAME = "node-failures.json";
+
+    /**
+     * Name of file containing the background traffic. This is found relative to
+     * the demand directory.
+     */
+    public static final String BACKGROUND_TRAFFIC_FILENAME = "background-traffic.json";
 
     /**
      * Check that the node failures are sane.
      */
     private boolean verifyNodeFailures() {
         boolean retval = true;
-        final Set<String> seen = new HashSet<>();
         for (final NodeFailure failure : nodeFailures) {
-            if (seen.contains(failure.node)) {
-                LOGGER.error("The node {} shows up multiple times in the failures list", failure.node);
+            if (failure.nodes.size() > 1 && (null == failure.chooseAlgorithm || null == failure.nodeMetric)) {
+                LOGGER.error(
+                        "The failure at {} with nodes {} has a null choose algorithm or node metric. The node to fail cannot be determined in this case",
+                        failure.time, failure.nodes);
                 retval = false;
             }
 
-            final DnsNameIdentifier nodeId = new DnsNameIdentifier(failure.node);
-            final Controller controller = getControllerById(nodeId);
-            if (null == controller) {
-                final ContainerSim container = getContainerById(nodeId);
-                if (null == container) {
-                    LOGGER.error("The node {} is not known to the simulation. Checked both node and container.",
-                            failure.node);
+            for (final String node : failure.nodes) {
+                final DnsNameIdentifier nodeId = new DnsNameIdentifier(node);
+                final Controller controller = getControllerById(nodeId);
+                if (null == controller) {
+                    LOGGER.error("The node {} is not known to the simulation.", node);
+                    retval = false;
+                } else if (controller.isRunDCOP()) {
+                    // can be removed later on when we have a way to handle
+                    // failure
+                    // of our leaders
+                    LOGGER.error("The node {} is running DCOP, it cannot be marked as a failure.", node);
+                    retval = false;
+                } else if (controller.isRunRLG()) {
+                    // can be removed later on when we have a way to handle
+                    // failure
+                    // of our leaders
+                    LOGGER.error("The node {} is running RLG, it cannot be marked as a failure.", node);
+                    retval = false;
+                } else if (controller.isHandleDnsChanges()) {
+                    // can be removed later on when we have a way to handle
+                    // failure
+                    // of our leaders
+                    LOGGER.error("The node {} is running DNS, it cannot be marked as a failure.", node);
+                    retval = false;
+                } else if (controller.isGlobalLeader() && !AgentConfiguration.getInstance().isUseLeaderElection()) {
+                    LOGGER.error(
+                            "The node {} is running the global leader and leader election is not enabled. Therefore it cannot be marked as a failure.",
+                            node);
                     retval = false;
                 }
-            } else if (controller.isRunDCOP()) {
-                // can be removed later on when we have a way to handle failure
-                // of our leaders
-                LOGGER.error("The node {} is running DCOP, it cannot be marked as a failure.", failure.node);
-                retval = false;
-            } else if (controller.isRunRLG()) {
-                // can be removed later on when we have a way to handle failure
-                // of our leaders
-                LOGGER.error("The node {} is running RLG, it cannot be marked as a failure.", failure.node);
-                retval = false;
-            } else if (controller.isHandleDnsChanges()) {
-                // can be removed later on when we have a way to handle failure
-                // of our leaders
-                LOGGER.error("The node {} is running DNS, it cannot be marked as a failure.", failure.node);
-                retval = false;
-            } else if (controller.isGlobalLeader() && !AgentConfiguration.getInstance().isUseLeaderElection()) {
-                LOGGER.error(
-                        "The node {} is running the global leader and leader election is not enabled. Therefore it cannot be marked as a failure.",
-                        failure.node);
-                retval = false;
-            }
-
-            seen.add(failure.node);
-        }
+            } // foreach node
+        } // foreach failure
 
         return retval;
     }
 
-    private static final class NodeFailureTimeCompare implements Comparator<NodeFailure> {
-        public static final NodeFailureTimeCompare INSTANCE = new NodeFailureTimeCompare();
+    private boolean verifyClientRequests(final ApplicationManagerApi appManager) {
+        for (final ClientSim sim : clientSimulators) {
+            for (final ClientLoad req : sim.getClientRequests()) {
+                final ApplicationCoordinates service = req.getService();
+                final ApplicationSpecification appSpec = appManager.getApplicationSpecification(service);
+                if (null == appSpec) {
+                    LOGGER.error("Unable to find application specification configuration for " + service);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
-        @Override
-        public int compare(final NodeFailure o1, final NodeFailure o2) {
-            return Long.compare(o1.time, o2.time);
+    /**
+     * 
+     * @param id
+     *            identifier of a client or NCP
+     * @return is <code>id</code> a valid node in the network, does not consider
+     *         containers
+     */
+    private boolean isValidNodeId(final NodeIdentifier id) {
+        final NetworkNode server = getControllerById(id);
+        if (null == server) {
+            final NetworkNode client = getClientById(id);
+            return null != client;
+        } else {
+            return true;
         }
 
     }
 
-    // CHECKSTYLE:OFF JSON serialized value class
-    /**
-     * A simulated node failure.
-     * 
-     * @author jschewe
-     *
-     */
-    @SuppressFBWarnings(value = "UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD", justification = "Written by JSON parser")
-    private static final class NodeFailure {
-        /**
-         * When should the node fail.
-         */
-        public long time;
-        /**
-         * Which node or container to make fail.
-         */
-        public String node;
+    private boolean verifyBackgroundTraffic() {
+        for (final BackgroundNetworkLoad req : backgroundTrafficSim.getRequests()) {
+            if (!isValidNodeId(new DnsNameIdentifier(req.getClient()))) {
+                LOGGER.error("{} is not a known node in the network", req.getClient());
+                return false;
+            }
+
+            if (!isValidNodeId(new DnsNameIdentifier(req.getServer()))) {
+                LOGGER.error("{} is not a known node in the network", req.getServer());
+                return false;
+            }
+        }
+        return true;
     }
-    // CHECKSTYLE:ON
+
+    @Override
+    @Nonnull
+    public OverlayTopology getOverlay(@Nonnull final RegionIdentifier region) {
+        final Set<NetworkLink> links = new HashSet<>();
+        final Set<NodeIdentifier> ta2Nodes = new HashSet<>();
+
+        synchronized (graph) {
+            graph.getVertices().stream().filter(v -> region.equals(v.getRegionIdentifier())).forEach(node -> {
+                ta2Nodes.add(node.getNodeIdentifier());
+
+                // should be able to get get in or out edges, but getting both
+                // to be
+                // sure that we get all edges
+                Stream.concat(graph.getInEdges(node).stream(), graph.getOutEdges(node).stream()).forEach(edge -> {
+                    ta2Nodes.add(edge.getLeft().getNodeIdentifier());
+                    ta2Nodes.add(edge.getRight().getNodeIdentifier());
+                    links.add(edge);
+                });
+            });
+        }
+
+        final Collection<ImmutablePair<NodeIdentifier, NodeIdentifier>> ta2Links = links.stream()
+                .map(link -> ImmutablePair.of(link.getLeft().getNodeIdentifier(), link.getRight().getNodeIdentifier()))
+                .collect(Collectors.toSet());
+
+        return new OverlayTopology(ta2Nodes, ta2Links);
+    }
+
 }

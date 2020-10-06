@@ -1,0 +1,10 @@
+{
+    "DCOP": true,
+    "RLG": true,
+    "client": false,
+    "dns": true,
+    "hardware": "pc3000",
+    "name": "NC01",
+    "region": "region",
+    "underlay": false
+}

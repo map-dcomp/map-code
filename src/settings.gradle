@@ -1,0 +1,6 @@
+rootProject.name = 'MAP'
+include 'P2Protelis'
+include 'MAP-Agent'
+include 'MAP-ChartGeneration'
+include 'MAP-Visualization'
+include 'MAP-DemandGenerationGUI'

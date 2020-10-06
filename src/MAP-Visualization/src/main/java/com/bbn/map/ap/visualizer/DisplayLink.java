@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -34,15 +34,16 @@ package com.bbn.map.ap.visualizer;
 import java.text.NumberFormat;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.DoubleStream;
 import java.util.stream.Stream;
 
 import com.bbn.map.Controller;
-import com.bbn.map.common.value.LinkMetricName;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NetworkNode;
-import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.visualizer.DisplayEdge;
@@ -100,16 +101,17 @@ public class DisplayLink extends DisplayEdge {
             // computed for the short time interval
             final ResourceReport report = controller.getResourceReport(ResourceReport.EstimationWindow.SHORT);
 
-            final ImmutableMap<NodeIdentifier, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> networkLoad = report
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = report
                     .getNetworkLoad();
-            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkLoad = networkLoad
-                    .get(neighbor.getNodeIdentifier());
-            if (null != linkLoad) {
+            final Optional<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoad = networkLoad
+                    .entrySet().stream().filter(e -> e.getKey().getNeighbors().contains(neighbor.getNodeIdentifier()))
+                    .map(Map.Entry::getValue).findAny();
+            if (linkLoad.isPresent()) {
 
-                final double loadTx = aggregateLinkData(linkLoad, LinkMetricName.DATARATE_TX);
+                final double loadTx = aggregateLinkData(linkLoad.get(), LinkAttribute.DATARATE_TX);
                 final double percentageUsedTx = loadTx / getLink().getBandwidth();
 
-                final double loadRx = aggregateLinkData(linkLoad, LinkMetricName.DATARATE_RX);
+                final double loadRx = aggregateLinkData(linkLoad.get(), LinkAttribute.DATARATE_RX);
                 final double percentageUsedRx = loadRx / getLink().getBandwidth();
 
                 // choose largest no-NaN value
@@ -150,14 +152,14 @@ public class DisplayLink extends DisplayEdge {
     }
 
     private double aggregateLinkData(
-            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkData,
-            final LinkMetricName linkAttribute) {
+            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkData,
+            final LinkAttribute linkAttribute) {
         // aggregate across all of the data down to the value. The streams are
         // all separated out to make it clear how the operations work.
-        final Stream<ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> s1 = linkData.values()
+        final Stream<ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> s1 = linkData.values()
                 .stream();
-        final Stream<Collection<ImmutableMap<LinkAttribute<?>, Double>>> s2 = s1.map(Map::values);
-        final Stream<ImmutableMap<LinkAttribute<?>, Double>> s3 = s2.flatMap(Collection::stream);
+        final Stream<Collection<ImmutableMap<LinkAttribute, Double>>> s2 = s1.map(Map::values);
+        final Stream<ImmutableMap<LinkAttribute, Double>> s3 = s2.flatMap(Collection::stream);
         final Stream<Double> s4 = s3.map(map -> map.getOrDefault(linkAttribute, 0D));
         final DoubleStream s5 = s4.mapToDouble(Double::doubleValue);
         final double sum = s5.sum();

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -33,7 +33,8 @@ package com.bbn.map.simulator;
 
 import javax.annotation.Nonnull;
 
-import org.apache.logging.log4j.ThreadContext;
+import org.junit.AssumptionViolatedException;
+import org.junit.rules.RuleChain;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
@@ -41,10 +42,12 @@ import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
+import com.bbn.map.AgentConfiguration;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NetworkResourceTestUtils;
+import com.bbn.protelis.networkresourcemanagement.NetworkResourceTestUtils.AddTestNameToLogContext;
+import com.bbn.protelis.networkresourcemanagement.NetworkResourceTestUtils.ResetGlobalNetworkConfig;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
@@ -82,23 +85,6 @@ public final class TestUtils {
     }
 
     /**
-     * Add the test name to the logging {@link ThreadContext}.
-     */
-    public static class AddTestNameToLogContext extends TestWatcher {
-        @Override
-        protected void starting(final Description description) {
-            ThreadContext.push(description.getMethodName());
-            LOGGER.info("Starting test {} in {}", description.getMethodName(), description.getClassName());
-        }
-
-        @Override
-        protected void finished(final Description description) {
-            LOGGER.info("Finished test {} in {}", description.getMethodName(), description.getClassName());
-            ThreadContext.pop();
-        }
-    }
-
-    /**
      * JUnit test rule that reruns failed tests some number of times.
      * 
      * @author jschewe
@@ -127,10 +113,16 @@ public final class TestUtils {
                     for (int i = 0; i < retryCount; i++) {
                         try {
                             base.evaluate();
+                            LOGGER.info("run {} succeeded", (i + 1));
                             return;
+                        } catch (final AssumptionViolatedException ae) {
+                            // don't retry assumption violations
+                            LOGGER.info("Assumption violated: {}", ae.getMessage());
+                            throw ae;
                         } catch (final Throwable t) {
                             caughtThrowable = t;
-                            LOGGER.error(description.getDisplayName() + ": run " + (i + 1) + " failed");
+                            LOGGER.error(
+                                    description.getDisplayName() + ": run " + (i + 1) + " failed: " + t.getMessage());
                         }
                     }
                     LOGGER.error(description.getDisplayName() + ": giving up after " + retryCount + " failures");
@@ -159,18 +151,43 @@ public final class TestUtils {
      * @return the dummy container parameters
      * @see #DEFAULT_CONTAINER_CAPACITY
      * @see #DEFAULT_LINK_DATARATE
-     * @see LinkMetricName#DATARATE_RX
-     * @see LinkMetricName#DATARATE_RX
+     * @see LinkAttribute#DATARATE_RX
+     * @see LinkAttribute#DATARATE_RX
      */
     public static ContainerParameters dummyContainerParameters(@Nonnull final ServiceIdentifier<?> service) {
-        final ImmutableMap.Builder<NodeAttribute<?>, Double> computeCapacity = ImmutableMap.builder();
-        computeCapacity.put(NodeMetricName.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
+        final ImmutableMap.Builder<NodeAttribute, Double> computeCapacity = ImmutableMap.builder();
+        computeCapacity.put(NodeAttribute.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
 
-        final ImmutableMap.Builder<LinkAttribute<?>, Double> networkCapacity = ImmutableMap.builder();
-        networkCapacity.put(LinkMetricName.DATARATE_TX, DEFAULT_LINK_DATARATE);
-        networkCapacity.put(LinkMetricName.DATARATE_RX, DEFAULT_LINK_DATARATE);
+        final ImmutableMap.Builder<LinkAttribute, Double> networkCapacity = ImmutableMap.builder();
+        networkCapacity.put(LinkAttribute.DATARATE_TX, DEFAULT_LINK_DATARATE);
+        networkCapacity.put(LinkAttribute.DATARATE_RX, DEFAULT_LINK_DATARATE);
 
         return new ContainerParameters(computeCapacity.build(), networkCapacity.build());
+    }
+
+    /**
+     * Reset {@link AgentConfiguration} before and after each test.
+     */
+    public static class ResetAgentConfig extends TestWatcher {
+        @Override
+        protected void starting(final Description description) {
+            AgentConfiguration.resetToDefaults();
+        }
+
+        @Override
+        protected void finished(final Description description) {
+            AgentConfiguration.resetToDefaults();
+        }
+    }
+
+    /**
+     * 
+     * @return standard rule chain for tests
+     * @see AddTestNameToLogContext
+     * @see ResetGlobalNetworkConfig
+     */
+    public static RuleChain getStandardRuleChain() {
+        return NetworkResourceTestUtils.getStandardRuleChain().around(new ResetAgentConfig());
     }
 
 }

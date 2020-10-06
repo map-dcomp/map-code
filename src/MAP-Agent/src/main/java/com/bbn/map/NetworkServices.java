@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -35,6 +35,7 @@ import javax.annotation.Nonnull;
 
 import com.bbn.map.dns.DNSUpdateService;
 import com.bbn.map.dns.PlanTranslator;
+import com.bbn.map.ta2.TA2Interface;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 
 /**
@@ -58,5 +59,12 @@ public interface NetworkServices {
      */
     @Nonnull
     DNSUpdateService getDnsUpdateService(@Nonnull RegionIdentifier region);
-    
+
+    /**
+     * 
+     * @return provide access to the TA2 services
+     */
+    @Nonnull
+    TA2Interface getTA2Interface();
+
 }

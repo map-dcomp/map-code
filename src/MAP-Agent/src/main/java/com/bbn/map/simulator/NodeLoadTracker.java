@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -47,29 +47,35 @@ import com.google.common.collect.ImmutableMap;
  */
 /* package */ final class NodeLoadTracker extends LoadTracker<NodeLoadEntry> {
 
-    private final Map<NodeAttribute<?>, Double> currentTotalLoad = new HashMap<>();
-    private final Map<NodeIdentifier, Map<NodeAttribute<?>, Double>> currentLoadPerClient = new HashMap<>();
+    private final Map<NodeAttribute, Double> currentTotalLoad = new HashMap<>();
+    private final Map<NodeIdentifier, Map<NodeAttribute, Double>> currentLoadPerClient = new HashMap<>();
 
-    private transient ImmutableMap<NodeAttribute<?>, Double> currentLoadImmutable = null;
+    private transient ImmutableMap<NodeAttribute, Double> currentLoadImmutable = null;
 
     /**
      * @return the current total load
      */
-    public ImmutableMap<NodeAttribute<?>, Double> getTotalCurrentLoad() {
+    public ImmutableMap<NodeAttribute, Double> getTotalCurrentLoad() {
         if (null == currentLoadImmutable) {
             currentLoadImmutable = ImmutableMap.copyOf(currentTotalLoad);
         }
         return currentLoadImmutable;
     }
 
-    private transient ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> currentLoadPerClientImmutable = null;
+    private transient ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> currentLoadPerClientImmutable = null;
 
     /**
      * 
      * @return current load per client
      */
-    public ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>> getCurrentLoadPerClient() {
+    public ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> getCurrentLoadPerClient() {
         if (null == currentLoadPerClientImmutable) {
+            // Add queue length
+            // ticket:86 can't allocate compute load to a particular client
+            // should eventually be entry.getClient()
+            currentLoadPerClient.computeIfAbsent(NodeIdentifier.UNKNOWN, k -> new HashMap<>())
+                    .put(NodeAttribute.QUEUE_LENGTH, (double) getNumActiveRequests());
+
             currentLoadPerClientImmutable = ImmutableUtils.makeImmutableMap2(currentLoadPerClient);
         }
         return currentLoadPerClientImmutable;
@@ -78,20 +84,35 @@ import com.google.common.collect.ImmutableMap;
     @Override
     protected void postAddLoad(final NodeLoadEntry entry) {
         commonPost(entry, 1);
+        ++activeRequests;
     }
 
     @Override
     protected void postRemoveLoad(final NodeLoadEntry entry) {
         commonPost(entry, -1);
+        --activeRequests;
     }
 
     private void commonPost(final NodeLoadEntry entry, final double multiplier) {
         entry.getRequest().getNodeLoad().forEach((attr, value) -> {
             currentTotalLoad.merge(attr, multiplier * value, Double::sum);
-            currentLoadPerClient.computeIfAbsent(entry.getClient(), k -> new HashMap<>()).merge(attr,
+            // ticket:86 can't allocate compute load to a particular client
+            // should eventually be entry.getClient()
+            currentLoadPerClient.computeIfAbsent(NodeIdentifier.UNKNOWN, k -> new HashMap<>()).merge(attr,
                     multiplier * value, Double::sum);
         });
         currentLoadImmutable = null;
         currentLoadPerClientImmutable = null;
     }
+
+    private int activeRequests = 0;
+
+    /**
+     * 
+     * @return the number of client requests that are currently active
+     */
+    public int getNumActiveRequests() {
+        return activeRequests;
+    }
+
 }

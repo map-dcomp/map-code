@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -36,6 +36,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.util.Objects;
 
 import javax.annotation.Nonnull;
 import javax.swing.BorderFactory;
@@ -49,8 +50,6 @@ import javax.swing.table.TableColumnModel;
 
 import com.bbn.map.simulator.ClientSim;
 import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
-
-import java8.util.Objects;
 
 /**
  * Display information about a {@link ClientSim} object.
@@ -217,7 +216,7 @@ import java8.util.Objects;
 
         resizeColumnWidth(table);
 
-        final ExpandablePanel expand = new ExpandablePanel(client.getClientName(), detailPanel);
+        final ExpandablePanel expand = new ExpandablePanel(client.getSimName(), detailPanel);
         add(expand, BorderLayout.CENTER);
 
         updateTimer = new Timer(ScenarioVisualizer.REFRESH_RATE, e -> update());

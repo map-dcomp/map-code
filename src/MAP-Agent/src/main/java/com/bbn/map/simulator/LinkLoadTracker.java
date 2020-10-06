@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -34,10 +34,9 @@ package com.bbn.map.simulator;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.bbn.map.common.value.LinkMetricName;
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.ImmutableUtils;
 import com.google.common.collect.ImmutableMap;
@@ -50,29 +49,29 @@ import com.google.common.collect.ImmutableMap;
  */
 /* package */ final class LinkLoadTracker extends LoadTracker<LinkLoadEntry> {
 
-    private final Map<LinkAttribute<?>, Double> currentTotalLoad = new HashMap<>();
-    private transient ImmutableMap<LinkAttribute<?>, Double> currentTotalLoadImmutable = null;
+    private final Map<LinkAttribute, Double> currentTotalLoad = new HashMap<>();
+    private transient ImmutableMap<LinkAttribute, Double> currentTotalLoadImmutable = null;
 
     /**
      * @return the current load
      */
-    public ImmutableMap<LinkAttribute<?>, Double> getCurrentTotalLoad() {
+    public ImmutableMap<LinkAttribute, Double> getCurrentTotalLoad() {
         if (null == currentTotalLoadImmutable) {
             currentTotalLoadImmutable = ImmutableMap.copyOf(currentTotalLoad);
         }
         return currentTotalLoadImmutable;
     }
 
-    private final Map<NodeIdentifier, Map<ServiceIdentifier<?>, Map<LinkAttribute<?>, Double>>> currentLoad = new HashMap<>();
-    private transient ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> currentLoadImmutable = null;
+    private final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> currentLoad = new HashMap<>();
+    private transient ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> currentLoadImmutable = null;
 
-    private final Map<NodeIdentifier, Map<ServiceIdentifier<?>, Map<LinkAttribute<?>, Double>>> currentLoadFlipped = new HashMap<>();
-    private transient ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> currentLoadFlippedImmutable = null;
+    private final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> currentLoadFlipped = new HashMap<>();
+    private transient ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> currentLoadFlippedImmutable = null;
 
     /**
      * @return current load for use in {@link ContainerResourceReport}
      */
-    public ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> getCurrentLoad() {
+    public ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> getCurrentLoad() {
         if (null == currentLoadImmutable) {
             currentLoadImmutable = ImmutableUtils.makeImmutableMap3(currentLoad);
         }
@@ -84,7 +83,7 @@ import com.google.common.collect.ImmutableMap;
      * 
      * @return current load for use in {@link ContainerResourceReport}
      */
-    public ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> getCurrentLoadFlipped() {
+    public ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> getCurrentLoadFlipped() {
         if (null == currentLoadFlippedImmutable) {
             currentLoadFlippedImmutable = ImmutableUtils.makeImmutableMap3(currentLoadFlipped);
         }
@@ -105,20 +104,22 @@ import com.google.common.collect.ImmutableMap;
         entry.getNetworkLoad().forEach((attr, value) -> {
             currentTotalLoad.merge(attr, value, Double::sum);
 
-            final LinkAttribute<?> flippedAttr;
-            if (LinkMetricName.DATARATE_RX.equals(attr)) {
-                flippedAttr = LinkMetricName.DATARATE_TX;
-            } else if (LinkMetricName.DATARATE_TX.equals(attr)) {
-                flippedAttr = LinkMetricName.DATARATE_RX;
+            currentLoad.computeIfAbsent(entry.getFlow(), k -> new HashMap<>())
+                    .computeIfAbsent(entry.getService(), k -> new HashMap<>())
+                    .merge(attr, multiplier * value, Double::sum);
+
+            final NodeNetworkFlow flowFlipped = new NodeNetworkFlow(entry.getFlow().getDestination(),
+                    entry.getFlow().getSource(), entry.getFlow().getServer());
+            final LinkAttribute flippedAttr;
+            if (LinkAttribute.DATARATE_RX.equals(attr)) {
+                flippedAttr = LinkAttribute.DATARATE_TX;
+            } else if (LinkAttribute.DATARATE_TX.equals(attr)) {
+                flippedAttr = LinkAttribute.DATARATE_RX;
             } else {
                 flippedAttr = attr;
             }
 
-            currentLoad.computeIfAbsent(entry.getClient(), k -> new HashMap<>())
-                    .computeIfAbsent(entry.getService(), k -> new HashMap<>())
-                    .merge(attr, multiplier * value, Double::sum);
-
-            currentLoadFlipped.computeIfAbsent(entry.getClient(), k -> new HashMap<>())
+            currentLoadFlipped.computeIfAbsent(flowFlipped, k -> new HashMap<>())
                     .computeIfAbsent(entry.getService(), k -> new HashMap<>())
                     .merge(flippedAttr, multiplier * value, Double::sum);
 

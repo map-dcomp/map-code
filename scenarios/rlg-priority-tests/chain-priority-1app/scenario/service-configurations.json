@@ -1,0 +1,24 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "app2",
+	    "version": "1.0"
+	},
+	"hostname": "app2.map.dcomp",
+	"defaultNode": "serverX2",
+	"defaultNodeRegion": "X",
+	"initialInstances": "1",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 8080,
+	"imageName": "/v2/simple_webserver",
+	"priority": 1
+    }    
+]

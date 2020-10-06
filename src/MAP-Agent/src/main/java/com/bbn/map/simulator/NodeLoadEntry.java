@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -96,8 +96,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
     private final long startTime;
 
     /**
-     * This may not be the start time of the {@link ClientLoad} object if the
-     * request is processed after it has been scheduled.
+     * This may not be the start time of the {@link BaseNetworkLoad} object if
+     * the request is processed after it has been scheduled.
      * 
      * @return when the entry started
      */

@@ -1,0 +1,20 @@
+[
+    {
+        "startTime": 120000,
+        "serverDuration": 1800000,
+        "networkDuration": 1800000,
+        "numClients": 3,
+        "service": {
+            "group": "com.bbn",
+            "artifact": "app1",
+            "version": "1"
+        },
+        "nodeLoad": {
+            "TASK_CONTAINERS": 0.3
+        },
+        "networkLoad": {
+            "DATARATE_TX": 0.2,
+            "DATARATE_RX": 0.01
+        }
+    }
+]

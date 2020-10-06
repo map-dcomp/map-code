@@ -1,0 +1,31 @@
+.* -> All
+.*FATAL.* -> Level FATAL
+.*ERROR.* -> Level ERROR
+.*INFO.* -> Level INFO
+.*WARN.* -> Level WARN
+.*DEBUG.* -> Level DEBUG
+.*TRACE.* -> Level TRACE
+
+.*SimulationRunner.* -> SimulationRunner
+
+.*DCOPService.* -> DCOP
+.*DCOPService.*Iteration \d* Region .* -> DCOP Iteration Region : | 
+.*RLGService.* -> RLG
+
+.*ClientSim.*request for .* goes to .* -> Request
+.*ClientSim.*Applying client request.* -> Applying Request
+.*ClientSim.*Request failed for server load.* -> Request Failed (Server)
+.*ClientSim.*Request failed for network load.* -> Request Failed (Network)
+
+.*ClientSim.*Request for.*app1.*succeeded.* -> Request Succeeded - app1
+.*ClientSim.*Request for.*app2.*succeeded.* -> Request Succeeded - app2
+
+.*Exiting thread.* -> Exiting thread
+.*Exiting Protelis.* -> Exiting Protelis
+
+.*Exception.* -> Exceptions : |
+.*SocketException.* -> SocketException
+.*InterruptedException.* -> InterruptedException
+.*EOFException.* -> EOFException
+.*OptionalDataException.* -> OptionalDataException
+.*NullPointerException.* -> NullPointerException

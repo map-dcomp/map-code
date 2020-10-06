@@ -1,6 +1,6 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-# To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
 # Dispersed Computing (DCOMP)
@@ -45,7 +45,6 @@ mydir=$(cd "$(dirname "$0")" && pwd -L) || fatal "Unable to determine script dir
 scenarios_folder="${dir_scenario}"
 rlg_algorithms_to_run_file="${test_config}"
 output_folder="${dir_output}"
-time_limit_kill=2m
 has_errors=0
 error_list=""
 
@@ -102,29 +101,9 @@ while read algo_line ; do
 
       start_time=$(date +%s)
 
-      timeout -k "${time_limit_kill}" "${time_limit_per_run}" ./_one_run.sh "${scenarios_folder}/${scenario}" "${rlg_algorithm}" "${stub_algo}" "${run_dir}" > "${log_file}" 2>&1
-      exit_code=$?
-			
-      end_time=$(date +%s)
-
-      if [ $exit_code -eq 0 ]; then
-        log "Finished in $((end_time - start_time)) seconds with 0 exit code."
-      else 
-        if [ -f map.log ]; then
-		mv map.log "${run_dir}"
-	fi
-
-        # XXX double check the return codes for the do_run script. 
-	# what happens if chart gen fails?
-	# what happens if sim fails?
-	has_errors=$((${has_errors}+1))
-	error_list="${error_list}, ${rlg_algorithm} ${stub_algo} ${run_dir}"
-	if [ $exit_code -eq 124 ] ; then
-	  error "Timed out after a duration of $((end_time - start_time)) seconds."
-	else 
-	  error "Run exited with non-zero (${exit_code}) code."
-	fi
-      fi
+      #timeout -k "${time_limit_kill}" "${time_limit_per_run}" ./_one_run.sh "${scenarios_folder}/${scenario}" "${rlg_algorithm}" "${stub_algo}" "${run_dir}" > "${log_file}" 2>&1
+      ./_one_run.sh "${scenarios_folder}/${scenario}" "${rlg_algorithm}" "${stub_algo}" "${run_dir}" > "${log_file}" 2>&1		
+      
     done
   done
 done < ${rlg_algorithms_to_run_file}

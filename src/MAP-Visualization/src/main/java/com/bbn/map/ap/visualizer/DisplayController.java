@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -90,15 +90,15 @@ public class DisplayController extends DisplayNode {
             // computed for the short time interval
             final ResourceReport report = controller.getResourceReport(ResourceReport.EstimationWindow.SHORT);
 
-            final ImmutableMap<NodeAttribute<?>, Double> serverCapacity = report.getAllocatedComputeCapacity();
-            final Map<NodeAttribute<?>, Double> serverLoad = new HashMap<>();
-            final ImmutableMap<?, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> allServerLoad = report
+            final ImmutableMap<NodeAttribute, Double> serverCapacity = report.getAllocatedComputeCapacity();
+            final Map<NodeAttribute, Double> serverLoad = new HashMap<>();
+            final ImmutableMap<?, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> allServerLoad = report
                     .getComputeLoad();
-            for (final Map.Entry<?, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute<?>, Double>>> entry : allServerLoad
+            for (final Map.Entry<?, ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>>> entry : allServerLoad
                     .entrySet()) {
-                for (final Map.Entry<?, ImmutableMap<NodeAttribute<?>, Double>> innerEntry : entry.getValue()
+                for (final Map.Entry<?, ImmutableMap<NodeAttribute, Double>> innerEntry : entry.getValue()
                         .entrySet()) {
-                    final ImmutableMap<NodeAttribute<?>, Double> serviceServerLoad = innerEntry.getValue();
+                    final ImmutableMap<NodeAttribute, Double> serviceServerLoad = innerEntry.getValue();
                     serviceServerLoad.forEach((k, v) -> serverLoad.merge(k, v, Double::sum));
                 }
             }
@@ -118,8 +118,8 @@ public class DisplayController extends DisplayNode {
             if (columnWidth > 0) {
 
                 int x = borderWidth;
-                for (final Map.Entry<NodeAttribute<?>, Double> serverLoadEntry : serverLoad.entrySet()) {
-                    final NodeAttribute<?> attr = serverLoadEntry.getKey();
+                for (final Map.Entry<NodeAttribute, Double> serverLoadEntry : serverLoad.entrySet()) {
+                    final NodeAttribute attr = serverLoadEntry.getKey();
                     final double load = serverLoadEntry.getValue();
                     if (serverCapacity.containsKey(attr) && serverLoad.containsKey(attr)) {
                         final double capacity = serverCapacity.get(attr);
@@ -177,6 +177,9 @@ public class DisplayController extends DisplayNode {
             final NetworkServer server = (NetworkServer) node;
             final String valueStr = Objects.toString(server.getVM().getCurrentValue());
             builder.append("<br><hr>" + valueStr);
+            
+            final String debugValue = String.valueOf(server.getEnvironment().get("debug"));
+            builder.append("<br><hr>" + debugValue);
         }
 
         builder.append("</html>");

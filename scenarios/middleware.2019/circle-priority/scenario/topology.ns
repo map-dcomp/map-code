@@ -1,0 +1,134 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# Clients
+set client1Pool1 [$ns node]
+tb-set-node-os $client1Pool1 XEN46-64-STD
+set client1Pool2 [$ns node]
+tb-set-node-os $client1Pool2 XEN46-64-STD
+set client1Pool3 [$ns node]
+tb-set-node-os $client1Pool3 XEN46-64-STD
+set client1Pool4 [$ns node]
+tb-set-node-os $client1Pool4 XEN46-64-STD
+set client1Pool5 [$ns node]
+tb-set-node-os $client1Pool5 XEN46-64-STD
+set client1Pool6 [$ns node]
+tb-set-node-os $client1Pool6 XEN46-64-STD
+
+
+set client2Pool1 [$ns node]
+tb-set-node-os $client2Pool1 XEN46-64-STD
+set client2Pool2 [$ns node]
+tb-set-node-os $client2Pool2 XEN46-64-STD
+set client2Pool3 [$ns node]
+tb-set-node-os $client2Pool3 XEN46-64-STD
+set client2Pool4 [$ns node]
+tb-set-node-os $client2Pool4 XEN46-64-STD
+set client2Pool5 [$ns node]
+tb-set-node-os $client2Pool5 XEN46-64-STD
+set client2Pool6 [$ns node]
+tb-set-node-os $client2Pool6 XEN46-64-STD
+
+# NCPs
+set nodeA0 [$ns node]
+tb-set-node-os $nodeA0 XEN46-64-STD
+tb-set-hardware $nodeA0 zero
+
+set nodeA1 [$ns node]
+tb-set-node-os $nodeA1 XEN46-64-STD
+tb-set-hardware $nodeA1 zero
+
+set nodeA2 [$ns node]
+tb-set-node-os $nodeA2 XEN46-64-STD
+tb-set-hardware $nodeA2 zero
+
+set nodeA3 [$ns node]
+tb-set-node-os $nodeA3 XEN46-64-STD
+tb-set-hardware $nodeA3 one
+
+set nodeB0 [$ns node]
+tb-set-node-os $nodeB0 XEN46-64-STD
+tb-set-hardware $nodeB0 pc3000
+
+set nodeB1 [$ns node]
+tb-set-node-os $nodeB1 XEN46-64-STD
+tb-set-hardware $nodeB1 pc3000
+
+set nodeB2 [$ns node]
+tb-set-node-os $nodeB2 XEN46-64-STD
+tb-set-hardware $nodeB2 pc3000
+
+set nodeB3 [$ns node]
+tb-set-node-os $nodeB3 XEN46-64-STD
+tb-set-hardware $nodeB3 pc3000
+
+set nodeC0 [$ns node]
+tb-set-node-os $nodeC0 XEN46-64-STD
+tb-set-hardware $nodeC0 zero
+
+set nodeC1 [$ns node]
+tb-set-node-os $nodeC1 XEN46-64-STD
+tb-set-hardware $nodeC1 zero
+
+set nodeC2 [$ns node]
+tb-set-node-os $nodeC2 XEN46-64-STD
+tb-set-hardware $nodeC2 zero
+
+set nodeC3 [$ns node]
+tb-set-node-os $nodeC3 XEN46-64-STD
+tb-set-hardware $nodeC3 one
+
+set nodeD0 [$ns node]
+tb-set-node-os $nodeD0 XEN46-64-STD
+tb-set-hardware $nodeD0 zero
+
+set nodeD1 [$ns node]
+tb-set-node-os $nodeD1 XEN46-64-STD
+tb-set-hardware $nodeD1 zero
+
+set nodeD2 [$ns node]
+tb-set-node-os $nodeD2 XEN46-64-STD
+tb-set-hardware $nodeD2 zero
+
+set nodeD3 [$ns node]
+tb-set-node-os $nodeD3 XEN46-64-STD
+tb-set-hardware $nodeD3 one
+
+set serverX1 [$ns node]
+tb-set-node-os $serverX1 XEN46-64-STD
+tb-set-hardware $serverX1 pc3000
+
+set serverX2 [$ns node]
+tb-set-node-os $serverX2 XEN46-64-STD
+tb-set-hardware $serverX2 pc3000
+
+set serverX3 [$ns node]
+tb-set-node-os $serverX3 XEN46-64-STD
+tb-set-hardware $serverX3 pc3000
+
+set serverX4 [$ns node]
+tb-set-node-os $serverX4 XEN46-64-STD
+tb-set-hardware $serverX4 pc3000
+
+# Links
+set lanA [$ns make-lan "$nodeA0 $nodeA1 $nodeA2 $nodeA3" 100Mb 0ms]
+
+set lanB [$ns make-lan "$nodeB0 $nodeB1 $nodeB2 $nodeB3" 100Mb 0ms]
+
+set lanC [$ns make-lan "$nodeC0 $nodeC1 $nodeC2 $nodeC3" 100Mb 0ms]
+
+set lanD [$ns make-lan "$nodeD0 $nodeD1 $nodeD2 $nodeD3" 100Mb 0ms]
+
+set lanX [$ns make-lan "$nodeA0 $serverX1 $serverX2 $serverX3 $serverX4" 100Mb 0ms]
+
+set lanClient1 [$ns make-lan "$nodeC3 $client1Pool1 $client1Pool2 $client1Pool3 $client1Pool4 $client1Pool5 $client1Pool6" 100Mb 0ms]
+set lanClient2 [$ns make-lan "$nodeC2 $client2Pool1 $client2Pool2 $client2Pool3 $client2Pool4 $client2Pool5 $client2Pool6" 100Mb 0ms]
+
+set linkAB  [$ns duplex-link $nodeA1 $nodeB0 100Mb 0.0ms DropTail]
+set linkBC  [$ns duplex-link $nodeB1 $nodeC0 1Mb 0.0ms DropTail] 
+set linkCD  [$ns duplex-link $nodeC1 $nodeD0 100Mb 0.0ms DropTail] 
+
+set linkXD [$ns duplex-link $nodeD1 $serverX1 100Mb 0.0ms DropTail]
+
+$ns rtproto Manual
+$ns run

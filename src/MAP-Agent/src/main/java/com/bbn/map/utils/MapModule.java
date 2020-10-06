@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,25 +32,33 @@ BBN_LICENSE_END*/
 package com.bbn.map.utils;
 
 import java.io.IOException;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.Triple;
 
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.dns.DelegateRecord;
 import com.bbn.map.dns.DnsRecord;
 import com.bbn.map.dns.NameRecord;
+import com.bbn.map.simulator.BackgroundNetworkLoad;
+import com.bbn.map.simulator.BaseNetworkLoad;
+import com.bbn.map.simulator.ClientLoad;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringServiceIdentifier;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.ObjectCodec;
@@ -63,6 +71,7 @@ import com.fasterxml.jackson.databind.KeyDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.google.common.collect.ImmutableSet;
 
 /**
  * Provides JSON deserializers and some custom serializers for types in the MAP
@@ -92,17 +101,28 @@ public class MapModule extends SimpleModule {
         addKeyDeserializer(ServiceIdentifier.class, new ServiceIdentifierKeyDeserializer());
 
         // Add Metrics deserializers
-        addKeyDeserializer(NodeMetricName.class, new NodeMetricNameKeyDeserializer());
-        addKeyDeserializer(NodeAttribute.class, new NodeMetricNameKeyDeserializer());
-        addKeyDeserializer(LinkMetricName.class, new LinkMetricNameKeyDeserializer());
-        addKeyDeserializer(LinkAttribute.class, new LinkMetricNameKeyDeserializer());
+        addKeyDeserializer(NodeAttribute.class, new NodeAttributeKeyDeserializer());
+        addKeyDeserializer(LinkAttribute.class, new LinkAttributeKeyDeserializer());
+
+        // flow key deserializers
+        addKeyDeserializer(NodeNetworkFlow.class, new NodeNetworkFlowKeyDeserializer());
+        addKeyDeserializer(RegionNetworkFlow.class, new RegionNetworkFlowKeyDeserializer());
 
         // Add DNS deserializers
         addDeserializer(DnsRecord.class, new DnsRecordDeserializer());
 
+        addDeserializer(BaseNetworkLoad.class, new BaseNetworkLoadDeserializer());
+
         // ------------------ Custom Serializers ------------------
-        addKeySerializer(NodeMetricName.class, new NodeMetricNameKeySerializer());
-        addKeySerializer(LinkMetricName.class, new LinkMetricNameKeySerializer());
+        addKeySerializer(NodeAttribute.class, new NodeAttributeKeySerializer());
+        addKeySerializer(LinkAttribute.class, new LinkAttributeKeySerializer());
+        addKeySerializer(NodeNetworkFlow.class, new NodeNetworkFlowSerializer());
+        addKeySerializer(RegionNetworkFlow.class, new RegionNetworkFlowSerializer());
+
+        // InterfaceIdentifier
+        addKeySerializer(InterfaceIdentifier.class, new InterfaceIdentifierKeySerializer());
+        addKeyDeserializer(InterfaceIdentifier.class, new InterfaceIdentifierKeyDeserializer());
+
     }
 
     // ------------------ Deserializers ------------------
@@ -184,7 +204,7 @@ public class MapModule extends SimpleModule {
      */
     private static final class ServiceIdentifierDeserializer extends JsonDeserializer<ServiceIdentifier<?>> {
         @Override
-        public ServiceIdentifier<?> deserialize(JsonParser jp, DeserializationContext ctxt)
+        public ServiceIdentifier<?> deserialize(final JsonParser jp, final DeserializationContext ctxt)
                 throws IOException, JsonProcessingException {
             final ObjectCodec oc = jp.getCodec();
             final JsonNode node = oc.readTree(jp);
@@ -201,6 +221,9 @@ public class MapModule extends SimpleModule {
         }
     }
 
+    private static final Pattern APPLICATION_COORDINATES_KEY_REGEXP = Pattern
+            .compile("AppCoordinates \\{([^,]+), ([^,]+), ([^}]+)\\}");
+
     /**
      * Used to deserialize a ServiceIdentifier found in a JSON key.
      * 
@@ -209,9 +232,18 @@ public class MapModule extends SimpleModule {
      */
     private static final class ServiceIdentifierKeyDeserializer extends KeyDeserializer {
         @Override
-        public Object deserializeKey(String key, DeserializationContext ctxt)
+        public Object deserializeKey(final String key, final DeserializationContext ctxt)
                 throws IOException, JsonProcessingException {
-            return new StringServiceIdentifier(key);
+            // "AppCoordinates {com.bbn, database-query, 1}"
+            final Matcher match = APPLICATION_COORDINATES_KEY_REGEXP.matcher(key);
+            if (match.matches()) {
+                final String group = match.group(1);
+                final String artifact = match.group(2);
+                final String version = match.group(3);
+                return new ApplicationCoordinates(group, artifact, version);
+            } else {
+                return new StringServiceIdentifier(key);
+            }
         }
     }
 
@@ -232,12 +264,12 @@ public class MapModule extends SimpleModule {
     }
 
     /**
-     * Used to deserialize a NodeMetricName found in a JSON key.
+     * Used to deserialize a NodeAttribute found in a JSON key.
      * 
      * @author awald
      *
      */
-    private static final class NodeMetricNameKeyDeserializer extends KeyDeserializer {
+    private static final class NodeAttributeKeyDeserializer extends KeyDeserializer {
 
         @Override
         public Object deserializeKey(final String key, final DeserializationContext ctxt)
@@ -247,17 +279,17 @@ public class MapModule extends SimpleModule {
             final String name = parsed.getLeft();
             final boolean applicationSpecific = parsed.getRight();
 
-            return new NodeMetricName(name, applicationSpecific);
+            return new NodeAttribute(name, applicationSpecific);
         }
     }
 
     /**
-     * Used to deserialize a LinkMetricName found in a JSON key.
+     * Used to deserialize a LinkAttribute found in a JSON key.
      * 
      * @author awald
      *
      */
-    private static final class LinkMetricNameKeyDeserializer extends KeyDeserializer {
+    private static final class LinkAttributeKeyDeserializer extends KeyDeserializer {
 
         @Override
         public Object deserializeKey(final String key, final DeserializationContext ctxt)
@@ -267,7 +299,43 @@ public class MapModule extends SimpleModule {
             final String name = parsed.getLeft();
             final boolean applicationSpecific = parsed.getRight();
 
-            return new LinkMetricName(name, applicationSpecific);
+            return new LinkAttribute(name, applicationSpecific);
+        }
+    }
+
+    private static Triple<String, String, String> parseFlowNames(final String key) {
+        final Pattern pattern = Pattern.compile("^\\(\\s*([^,]+)\\s*,\\s*([^,]+),\\s*([^,]+)\\s*\\)$");
+        final Matcher matcher = pattern.matcher(key);
+
+        if (matcher.matches()) {
+            final String source = matcher.group(1);
+            final String dest = matcher.group(2);
+            final String server = matcher.group(3);
+            return Triple.of(source, dest, server);
+        } else {
+            return Triple.of(key, key, key);
+        }
+    }
+
+    private static final class NodeNetworkFlowKeyDeserializer extends KeyDeserializer {
+        @Override
+        public Object deserializeKey(final String key, final DeserializationContext ctxt)
+                throws IOException, JsonProcessingException {
+            final Triple<String, String, String> parsed = parseFlowNames(key);
+
+            return new NodeNetworkFlow(new DnsNameIdentifier(parsed.getLeft()),
+                    new DnsNameIdentifier(parsed.getMiddle()), new DnsNameIdentifier(parsed.getRight()));
+        }
+    }
+
+    private static final class RegionNetworkFlowKeyDeserializer extends KeyDeserializer {
+        @Override
+        public Object deserializeKey(final String key, final DeserializationContext ctxt)
+                throws IOException, JsonProcessingException {
+            final Triple<String, String, String> parsed = parseFlowNames(key);
+
+            return new RegionNetworkFlow(new StringRegionIdentifier(parsed.getLeft()),
+                    new StringRegionIdentifier(parsed.getMiddle()), new StringRegionIdentifier(parsed.getRight()));
         }
     }
 
@@ -298,17 +366,38 @@ public class MapModule extends SimpleModule {
         }
     }
 
+    private static final class BaseNetworkLoadDeserializer extends JsonDeserializer<BaseNetworkLoad> {
+
+        @Override
+        public BaseNetworkLoad deserialize(final JsonParser jp, final DeserializationContext ctxt)
+                throws IOException, JsonProcessingException {
+            final ObjectCodec oc = jp.getCodec();
+            final JsonNode node = oc.readTree(jp);
+
+            final ObjectMapper mapper = (ObjectMapper) jp.getCodec();
+
+            if (node.has("numClients")) {
+                return mapper.treeToValue(node, ClientLoad.class);
+            } else if (node.has("server")) {
+                return mapper.treeToValue(node, BackgroundNetworkLoad.class);
+            } else {
+                throw new JsonMappingException(jp, "Cannot determine type of BaseNetworkLoad from: " + node);
+            }
+        }
+
+    }
+
     // ------------------ Custom Serializers ------------------
 
     /**
-     * Class to serialize a NodeMetricName as key in Map.
+     * Class to serialize a NodeAttribute as key in Map.
      * 
      * @author awald
      *
      */
-    private static final class NodeMetricNameKeySerializer extends JsonSerializer<NodeMetricName> {
+    private static final class NodeAttributeKeySerializer extends JsonSerializer<NodeAttribute> {
         @Override
-        public void serialize(final NodeMetricName value, final JsonGenerator gen, final SerializerProvider serializers)
+        public void serialize(final NodeAttribute value, final JsonGenerator gen, final SerializerProvider serializers)
                 throws IOException, JsonProcessingException {
             gen.writeFieldName(value.getName());
         }
@@ -320,12 +409,73 @@ public class MapModule extends SimpleModule {
      * @author awald
      *
      */
-    private static final class LinkMetricNameKeySerializer extends JsonSerializer<LinkMetricName> {
+    private static final class LinkAttributeKeySerializer extends JsonSerializer<LinkAttribute> {
         @Override
-        public void serialize(final LinkMetricName value, final JsonGenerator gen, final SerializerProvider serializers)
+        public void serialize(final LinkAttribute value, final JsonGenerator gen, final SerializerProvider serializers)
                 throws IOException, JsonProcessingException {
             gen.writeFieldName(value.getName());
         }
     }
-    
+
+    private static final class NodeNetworkFlowSerializer extends JsonSerializer<NodeNetworkFlow> {
+        @Override
+        public void serialize(final NodeNetworkFlow value,
+                final JsonGenerator gen,
+                final SerializerProvider serializers) throws IOException, JsonProcessingException {
+            gen.writeFieldName("(" + value.getSource().getName() + ", " + value.getDestination().getName() + ", "
+                    + value.getServer().getName() + ")");
+        }
+    }
+
+    private static final class RegionNetworkFlowSerializer extends JsonSerializer<RegionNetworkFlow> {
+        @Override
+        public void serialize(final RegionNetworkFlow value,
+                final JsonGenerator gen,
+                final SerializerProvider serializers) throws IOException, JsonProcessingException {
+            gen.writeFieldName("(" + value.getSource().getName() + ", " + value.getDestination().getName() + ", "
+                    + value.getServer().getName() + ")");
+        }
+    }
+
+    private static final class InterfaceIdentifierKeyDeserializer extends KeyDeserializer {
+        @Override
+        public Object deserializeKey(final String key, final DeserializationContext ctxt)
+                throws IOException, JsonProcessingException {
+            // ifce-name ( neighbor1, neighbor2, ... )
+            final int openParen = key.indexOf('(');
+            final int closeParen = key.indexOf(')');
+            if (-1 == openParen || -1 == closeParen) {
+                throw new JsonParseException(ctxt.getParser(), "Cannot find open or close paren in '" + key + "'");
+            } else {
+                final String name = key.substring(0, openParen).trim();
+                final String neighborsStr = key.substring(openParen + 1, closeParen);
+                final String[] tokens = neighborsStr.split(",");
+                final ImmutableSet.Builder<NodeIdentifier> neighbors = ImmutableSet.builder();
+                for (final String n : tokens) {
+                    final NodeIdentifier node = new DnsNameIdentifier(n.trim());
+                    neighbors.add(node);
+                }
+
+                final InterfaceIdentifier ii = new InterfaceIdentifier(name, neighbors.build());
+                return ii;
+            }
+        }
+    }
+
+    private static final class InterfaceIdentifierKeySerializer extends JsonSerializer<InterfaceIdentifier> {
+        @Override
+        public void serialize(final InterfaceIdentifier value,
+                final JsonGenerator gen,
+                final SerializerProvider serializers) throws IOException, JsonProcessingException {
+            final StringBuffer output = new StringBuffer();
+            output.append(value.getName());
+            output.append(" ( ");
+            output.append(value.getNeighbors().stream().map(n -> n.getName()).collect(Collectors.joining(",")));
+            output.append(" )");
+
+            gen.writeFieldName(output.toString());
+
+        }
+    }
+
 }

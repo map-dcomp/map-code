@@ -1,0 +1,234 @@
+<html>
+<header><title></title></header>
+<script src="js/d3.v5.min.js"></script>
+<link href = "css/jquery-ui.css"
+         rel = "stylesheet">
+<script src="js/jquery-3.4.1.js"></script>
+<script src="js/jquery-ui.js"></script>
+<style>
+
+.graph {
+	background: lightgrey;
+}
+.line {
+    fill: none;
+    stroke: #ffd700;
+    stroke-width: 3;
+}
+.short {
+    stroke: #0000FF;
+    stroke-width: 1;
+}
+.med {
+    stroke: #228b22;
+    stroke-width: 1;
+}
+.long {
+    stroke: #ffd700;
+    stroke-width: 1;
+}
+.overlay {
+  fill: none;
+  pointer-events: all;
+}
+
+.link {
+  stroke: #aaa;
+}
+
+.node text {
+stroke:#333;
+cursos:pointer;
+}
+
+div.tooltip {	
+    position: absolute;			
+    text-align: left;			
+    width: 220px;					
+    height: 70px;					
+    padding: 10px;				
+    font: 15px arial;		
+    background: lightsteelblue;	
+    border: 0px;		
+    border-radius: 8px;			
+    pointer-events: none;			
+}
+
+.button rect {
+  stroke: #999faa; /* navy 40% */
+  stroke-width: 2px;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+table, th, td {
+  border: 1px solid black;
+}
+
+span.closer {
+	position: absolute;
+	height: 25px;
+	width: 25px;
+	top: 0px;
+	right: 0px;
+	border: 2px solid #CA3433;
+	background-color: #CA3433;
+	border-radius:5px;
+	cursor:pointer;
+}
+
+.sliderCS{
+	display: inline-block;
+ 	width: 500px;
+}
+
+th, td {
+  padding: 10px;
+  text-align: left;
+}
+
+#popup {
+  position: absolute;
+  z-index: 9;
+  background-color: #f1f1f1;
+  border: 1px solid #d3d3d3;
+  text-align: center;
+	
+}
+
+#popup2 {
+  position: absolute;
+  z-index: 9;
+  background-color: #f1f1f1;
+  border: 1px solid #d3d3d3;
+  text-align: center;
+	
+}
+
+#ctxMenu{
+    display:none;
+    z-index:100;
+}
+
+menu {
+    position:absolute;
+    display:block;
+    left:0px;
+    top:0px;
+    height:20px;
+    width:20px;
+    padding:0;
+    margin:0;
+    border:1px solid;
+    background-color:white;
+    font-weight:normal;
+    white-space:nowrap;
+}
+menu:hover{
+    background-color:#eef;
+    font-weight:bold;
+}
+menu:hover > menu{
+    display:block;
+}
+menu > menu{
+    display:none;
+    position:relative;
+    top:-20px;
+    left:100%;
+    width:125px;
+}
+menu[title]:before{
+    content:attr(title);
+}
+menu:not([title]):before{
+    content:"\2630";
+}
+
+</style>
+
+<body>
+
+<!--<label for="name">New Node Name</label>
+<input name="name">-->
+<div id="popup">
+  	<!-- Include a header DIV with the same name as the draggable DIV, followed by "header" -->
+  	<div id="popupheader" style="width:780px; height:29px; background-color:#204395">
+		<span id="popTitle"><font color="white" size="5">Node Name</font></span>
+		<span class=closer id="closer"><font size="5">X</font></span>
+	</div>
+	
+</div>
+
+<div id="popup2">
+  <!-- Include a header DIV with the same name as the draggable DIV, followed by "header" -->
+  <div id="popupheader2" style="width:780px; height:29px; background-color:#204395">
+  <span id="popTitle"><font color="white" size="5">Node Name</font></span>
+  <span class=closer id="closer"><font size="5">X</font></span>
+</div>
+
+</div>
+
+<menu id="ctxMenu">
+	<menu title="Save Layout" id="saveLayout"></menu>
+	<menu title="Load Flows" id="loadFlows"></menu>
+	<menu title="Replay" id="replay"></menu>
+	<menu title="Set Detail" id="setDetail"></menu>
+	<menu title="Swap" id="swap"></menu>
+	<menu title="Move" id="move"></menu>
+	<menu title="Apply Filters">
+		<menu title="Filter by Size">
+		    	<menu title="Include" id="includeSize"></menu>
+			<menu title="Exclude" id="excludeSize"></menu>
+		</menu>
+		<menu title="Filter by Port">
+		    	<menu title="Include" id="includePort"></menu>
+			<menu title="Exclude" id="excludePort"></menu>
+		</menu>
+		<menu title="Remove Filters" id="removeFilters"></menu>
+	</menu>
+</menu>
+
+<div id="main">
+</div>
+
+
+<br>
+<!--<button id="addNode"> </button>
+<button id="addLink"> </button>-->
+<div id="buttons">
+	<button id="pause"> </button>
+	<label for="time">Time range:</label>
+	<input type="text" id="time" readonly style="border:0; color:black; font-weight:bold; font-size:15; width: 200px">
+	
+	<div id="slider" class="sliderCS">
+		
+	</div>&nbsp;&nbsp;&nbsp;
+        <span id='current_time'></span><span>Minutes from start</span>
+        <div>Selected Link: <span id='selected_link'</span</div>
+</div>
+
+
+
+<br>
+<div id="visRow0">
+	<span id="slot0"></span>
+	
+	<span id="slot1"></span>
+</div>
+<div id="visRow1">
+	<span id="slot2"></span>
+	
+	<span id="slot3"></span>
+</div>
+<br>
+<div id="graphRow"></div>
+<br>
+<div id="graphRow2"></div>
+<div id="piePopup" style="width:100px; height:50px; padding:10; background-color:lightgrey; opacity:0; display:none; z-index: 200"></div>
+
+</body>
+<script language="javascript" src="js/main.js"></script>
+</html>

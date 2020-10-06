@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -51,8 +51,6 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.common.value.Dependency;
 import com.bbn.map.common.value.DependencyDemandFunction;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.simulator.TestUtils;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
@@ -70,19 +68,18 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 public class ApplicationProfileTest {
 
     /**
-     * Add test name to logging and use the application manager.
+     * Test rule chain.
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext())
-            .around(new ExternalResource() {
-                @Override
-                public void before() {
-                    final MutableApplicationManagerApi appManager = AppMgrUtils.getMutableApplicationManager();
-                    final ApplicationSpecification service1Spec = new ApplicationSpecification(service1);
-                    appManager.save(service1Spec);
-                }
-            });
+    public RuleChain chain = TestUtils.getStandardRuleChain().around(new ExternalResource() {
+        @Override
+        public void before() {
+            final MutableApplicationManagerApi appManager = AppMgrUtils.getMutableApplicationManager();
+            final ApplicationSpecification service1Spec = new ApplicationSpecification(service1);
+            appManager.save(service1Spec);
+        }
+    });
 
     private final ApplicationCoordinates service1 = new ApplicationCoordinates("test.com.bbn", "service1", "1");
 
@@ -107,10 +104,9 @@ public class ApplicationProfileTest {
         final MutableApplicationManagerApi applicationManager = AppMgrUtils.getMutableApplicationManager();
         final ApplicationSpecification service1Spec = applicationManager.getApplicationSpecification(service1);
 
-        final ImmutableMap<NodeAttribute<?>, Double> computeCapacity = ImmutableMap.of(NodeMetricName.TASK_CONTAINERS,
-                1D);
-        final ImmutableMap<LinkAttribute<?>, Double> networkCapacity = ImmutableMap.of(LinkMetricName.DATARATE_TX, 100D,
-                LinkMetricName.DATARATE_RX, 100D);
+        final ImmutableMap<NodeAttribute, Double> computeCapacity = ImmutableMap.of(NodeAttribute.TASK_CONTAINERS, 1D);
+        final ImmutableMap<LinkAttribute, Double> networkCapacity = ImmutableMap.of(LinkAttribute.DATARATE_TX, 100D,
+                LinkAttribute.DATARATE_RX, 100D);
         final ContainerParameters containerParams = new ContainerParameters(computeCapacity, networkCapacity);
 
         service1Spec.setContainerParameters(containerParams);
@@ -149,7 +145,7 @@ public class ApplicationProfileTest {
         dep1to2.setDependentApplication(service2Spec);
 
         final DependencyDemandFunction func = new DependencyDemandFunction();
-        func.setNodeAttributeMultiplier(Collections.singletonMap(NodeMetricName.CPU, 2D));
+        func.setNodeAttributeMultiplier(Collections.singletonMap(NodeAttribute.CPU, 2D));
         dep1to2.setDemandFunction(func);
 
         service1Spec.setDependencies(Collections.singleton(dep1to2));

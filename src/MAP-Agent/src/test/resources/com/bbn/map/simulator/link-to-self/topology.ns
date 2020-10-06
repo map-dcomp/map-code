@@ -1,0 +1,262 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+set rtrnc [$ns node]
+tb-set-node-os $rtrnc UBUNTU16-64-MAP
+tb-set-hardware $rtrnc empty
+
+set NC01 [$ns node]
+tb-set-node-os $NC01 UBUNTU16-64-MAP
+tb-set-hardware $NC01 pc3000
+
+set NC02 [$ns node]
+tb-set-node-os $NC02 UBUNTU16-64-MAP
+tb-set-hardware $NC02 pc3000
+
+set NC03 [$ns node]
+tb-set-node-os $NC03 UBUNTU16-64-MAP
+tb-set-hardware $NC03 pc3000
+
+set NC04 [$ns node]
+tb-set-node-os $NC04 UBUNTU16-64-MAP
+tb-set-hardware $NC04 pc3000
+
+set NC05 [$ns node]
+tb-set-node-os $NC05 UBUNTU16-64-MAP
+tb-set-hardware $NC05 pc3000
+
+set rtrNML [$ns node]
+tb-set-node-os $rtrNML UBUNTU16-64-MAP
+tb-set-hardware $rtrNML empty
+
+set NML01 [$ns node]
+tb-set-node-os $NML01 UBUNTU16-64-MAP
+tb-set-hardware $NML01 pc3000
+
+set NML02 [$ns node]
+tb-set-node-os $NML02 UBUNTU16-64-MAP
+tb-set-hardware $NML02 pc3000
+
+set NML03 [$ns node]
+tb-set-node-os $NML03 UBUNTU16-64-MAP
+tb-set-hardware $NML03 pc3000
+
+set NML04 [$ns node]
+tb-set-node-os $NML04 UBUNTU16-64-MAP
+tb-set-hardware $NML04 pc3000
+
+set NML05 [$ns node]
+tb-set-node-os $NML05 UBUNTU16-64-MAP
+tb-set-hardware $NML05 pc3000
+
+set NML06 [$ns node]
+tb-set-node-os $NML06 UBUNTU16-64-MAP
+tb-set-hardware $NML06 pc3000
+
+set NML07 [$ns node]
+tb-set-node-os $NML07 UBUNTU16-64-MAP
+tb-set-hardware $NML07 pc3000
+
+set NML08 [$ns node]
+tb-set-node-os $NML08 UBUNTU16-64-MAP
+tb-set-hardware $NML08 pc3000
+
+set NML09 [$ns node]
+tb-set-node-os $NML09 UBUNTU16-64-MAP
+tb-set-hardware $NML09 pc3000
+
+set NML10 [$ns node]
+tb-set-node-os $NML10 UBUNTU16-64-MAP
+tb-set-hardware $NML10 pc3000
+
+set NML11 [$ns node]
+tb-set-node-os $NML11 UBUNTU16-64-MAP
+tb-set-hardware $NML11 pc3000
+
+set NML12 [$ns node]
+tb-set-node-os $NML12 UBUNTU16-64-MAP
+tb-set-hardware $NML12 pc3000
+
+set NML13 [$ns node]
+tb-set-node-os $NML13 UBUNTU16-64-MAP
+tb-set-hardware $NML13 pc3000
+
+set NML14 [$ns node]
+tb-set-node-os $NML14 UBUNTU16-64-MAP
+tb-set-hardware $NML14 pc3000
+
+set NML15 [$ns node]
+tb-set-node-os $NML15 UBUNTU16-64-MAP
+tb-set-hardware $NML15 pc3000
+
+set NML16 [$ns node]
+tb-set-node-os $NML16 UBUNTU16-64-MAP
+tb-set-hardware $NML16 pc3000
+
+set NML17 [$ns node]
+tb-set-node-os $NML17 UBUNTU16-64-MAP
+tb-set-hardware $NML17 pc3000
+
+set NML18 [$ns node]
+tb-set-node-os $NML18 UBUNTU16-64-MAP
+tb-set-hardware $NML18 pc3000
+
+set NML19 [$ns node]
+tb-set-node-os $NML19 UBUNTU16-64-MAP
+tb-set-hardware $NML19 pc3000
+
+set NML20 [$ns node]
+tb-set-node-os $NML20 UBUNTU16-64-MAP
+tb-set-hardware $NML20 pc3000
+
+set NML21 [$ns node]
+tb-set-node-os $NML21 UBUNTU16-64-MAP
+tb-set-hardware $NML21 pc3000
+
+set g1rtr [$ns node]
+tb-set-node-os $g1rtr UBUNTU16-64-MAP
+tb-set-hardware $g1rtr empty
+
+set g1NEC01 [$ns node]
+tb-set-node-os $g1NEC01 UBUNTU16-64-MAP
+tb-set-hardware $g1NEC01 pc3000
+
+set g1NEC02 [$ns node]
+tb-set-node-os $g1NEC02 UBUNTU16-64-MAP
+tb-set-hardware $g1NEC02 pc3000
+
+set g1NEC03 [$ns node]
+tb-set-node-os $g1NEC03 UBUNTU16-64-MAP
+tb-set-hardware $g1NEC03 pc3000
+
+set g1NEC04 [$ns node]
+tb-set-node-os $g1NEC04 UBUNTU16-64-MAP
+tb-set-hardware $g1NEC04 pc3000
+
+set g1NEC05 [$ns node]
+tb-set-node-os $g1NEC05 UBUNTU16-64-MAP
+tb-set-hardware $g1NEC05 pc3000
+
+set g1NEC06 [$ns node]
+tb-set-node-os $g1NEC06 UBUNTU16-64-MAP
+tb-set-hardware $g1NEC06 pc3000
+
+set g1client01 [$ns node]
+tb-set-node-os $g1client01 UBUNTU16-64-MAP
+tb-set-hardware $g1client01 pc3000
+
+set g2rtr [$ns node]
+tb-set-node-os $g2rtr UBUNTU16-64-MAP
+tb-set-hardware $g2rtr empty
+
+set g2NEC01 [$ns node]
+tb-set-node-os $g2NEC01 UBUNTU16-64-MAP
+tb-set-hardware $g2NEC01 pc3000
+
+set g2NEC02 [$ns node]
+tb-set-node-os $g2NEC02 UBUNTU16-64-MAP
+tb-set-hardware $g2NEC02 pc3000
+
+set g2NEC03 [$ns node]
+tb-set-node-os $g2NEC03 UBUNTU16-64-MAP
+tb-set-hardware $g2NEC03 pc3000
+
+set g2NEC04 [$ns node]
+tb-set-node-os $g2NEC04 UBUNTU16-64-MAP
+tb-set-hardware $g2NEC04 pc3000
+
+set g2NEC05 [$ns node]
+tb-set-node-os $g2NEC05 UBUNTU16-64-MAP
+tb-set-hardware $g2NEC05 pc3000
+
+set g2NEC06 [$ns node]
+tb-set-node-os $g2NEC06 UBUNTU16-64-MAP
+tb-set-hardware $g2NEC06 pc3000
+
+set g2client01 [$ns node]
+tb-set-node-os $g2client01 UBUNTU16-64-MAP
+tb-set-hardware $g2client01 pc3000
+
+set g3rtr [$ns node]
+tb-set-node-os $g3rtr UBUNTU16-64-MAP
+tb-set-hardware $g3rtr empty
+
+set g3NEC01 [$ns node]
+tb-set-node-os $g3NEC01 UBUNTU16-64-MAP
+tb-set-hardware $g3NEC01 pc3000
+
+set g3NEC02 [$ns node]
+tb-set-node-os $g3NEC02 UBUNTU16-64-MAP
+tb-set-hardware $g3NEC02 pc3000
+
+set g3NEC03 [$ns node]
+tb-set-node-os $g3NEC03 UBUNTU16-64-MAP
+tb-set-hardware $g3NEC03 pc3000
+
+set g3NEC04 [$ns node]
+tb-set-node-os $g3NEC04 UBUNTU16-64-MAP
+tb-set-hardware $g3NEC04 pc3000
+
+set g3NEC05 [$ns node]
+tb-set-node-os $g3NEC05 UBUNTU16-64-MAP
+tb-set-hardware $g3NEC05 pc3000
+
+set g3NEC06 [$ns node]
+tb-set-node-os $g3NEC06 UBUNTU16-64-MAP
+tb-set-hardware $g3NEC06 pc3000
+
+set g3client01 [$ns node]
+tb-set-node-os $g3client01 UBUNTU16-64-MAP
+tb-set-hardware $g3client01 pc3000
+
+set g4rtr [$ns node]
+tb-set-node-os $g4rtr UBUNTU16-64-MAP
+tb-set-hardware $g4rtr empty
+
+set g4NEC01 [$ns node]
+tb-set-node-os $g4NEC01 UBUNTU16-64-MAP
+tb-set-hardware $g4NEC01 pc3000
+
+set g4NEC02 [$ns node]
+tb-set-node-os $g4NEC02 UBUNTU16-64-MAP
+tb-set-hardware $g4NEC02 pc3000
+
+set g4NEC03 [$ns node]
+tb-set-node-os $g4NEC03 UBUNTU16-64-MAP
+tb-set-hardware $g4NEC03 pc3000
+
+set g4NEC04 [$ns node]
+tb-set-node-os $g4NEC04 UBUNTU16-64-MAP
+tb-set-hardware $g4NEC04 pc3000
+
+set g4NEC05 [$ns node]
+tb-set-node-os $g4NEC05 UBUNTU16-64-MAP
+tb-set-hardware $g4NEC05 pc3000
+
+set g4NEC06 [$ns node]
+tb-set-node-os $g4NEC06 UBUNTU16-64-MAP
+tb-set-hardware $g4NEC06 pc3000
+
+set g4client01 [$ns node]
+tb-set-node-os $g4client01 UBUNTU16-64-MAP
+tb-set-hardware $g4client01 pc3000
+
+
+set cloudCO [$ns duplex-link $rtrnc $rtrNML 100Mb 0.0ms DropTail]
+set g1client01link [$ns duplex-link $g1rtr $g1client01 100Mb 0.0ms DropTail]
+set COg1 [$ns duplex-link $rtrNML $g1rtr 100Mb 0.0ms DropTail]
+set g2client01link [$ns duplex-link $g2rtr $g2client01 100Mb 0.0ms DropTail]
+set COg2 [$ns duplex-link $rtrNML $g2rtr 100Mb 0.0ms DropTail]
+set g3client01link [$ns duplex-link $g3rtr $g3client01 100Mb 0.0ms DropTail]
+set g4client01link [$ns duplex-link $g4rtr $g4client01 100Mb 0.0ms DropTail]
+
+set swnc [$ns make-lan "rtrnc NC01 NC02 NC03 NC04 NC05" 100Mb 0.0ms]
+set swNML [$ns make-lan "rtrNML NML01 NML02 NML03 NML04 NML05 NML06 NML07 NML08 NML09 NML10 NML11 NML12 NML13 NML14 NML15 NML16 NML17 NML18 NML19 NML20 NML21" 100Mb 0.0ms]
+set meshSw [$ns make-lan "g1rtr g2rtr g3rtr g4rtr" 100Mb 0.0ms]
+set g1sw [$ns make-lan "g1rtr g1NEC01 g1NEC02 g1NEC03 g1NEC04 g1NEC05 g1NEC06" 100Mb 0.0ms]
+set g2sw [$ns make-lan "g2rtr g2NEC01 g2NEC02 g2NEC03 g2NEC04 g2NEC05 g2NEC06" 100Mb 0.0ms]
+set g3sw [$ns make-lan "g3rtr g3NEC01 g3NEC02 g3NEC03 g3NEC04 g3NEC05 g3NEC06" 100Mb 0.0ms]
+set g4sw [$ns make-lan "g4rtr g4NEC01 g4NEC02 g4NEC03 g4NEC04 g4NEC05 g4NEC06" 100Mb 0.0ms]
+
+$ns rtproto Manual
+$ns run

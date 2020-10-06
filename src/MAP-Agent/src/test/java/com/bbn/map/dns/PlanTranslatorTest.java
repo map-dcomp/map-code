@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -33,37 +33,49 @@ package com.bbn.map.dns;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.Matchers.closeTo;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.bbn.map.ServiceConfiguration;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.map.simulator.TestUtils;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
+import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.ContainerInfo;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlanBuilder;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNodeState;
 import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceState;
+import com.bbn.protelis.networkresourcemanagement.ServiceStatus;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
@@ -78,17 +90,20 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  *
  */
 public class PlanTranslatorTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlanTranslatorTest.class);
 
     /**
      * Add test name to logging.
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext());
-    
+    public RuleChain chain = TestUtils.getStandardRuleChain();
+
     private ImmutableMap<ApplicationCoordinates, ServiceConfiguration> serviceConfigurations;
     private static final int NUM_TEST_SERVICES = 5;
     private static final int TTL = 100;
+
+    private static final double DOUBLE_COMPARE_TOLERANCE = 0.0001;
 
     private ApplicationCoordinates generateSerivceName(final int serviceIndex) {
         return new ApplicationCoordinates("test", "service" + serviceIndex, "1");
@@ -115,12 +130,12 @@ public class PlanTranslatorTest {
     public void setup() {
         final RegionIdentifier defaultRegion = new StringRegionIdentifier("defaultRegion");
 
-        final ImmutableMap.Builder<NodeAttribute<?>, Double> computeCapacity = ImmutableMap.builder();
-        computeCapacity.put(NodeMetricName.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
+        final ImmutableMap.Builder<NodeAttribute, Double> computeCapacity = ImmutableMap.builder();
+        computeCapacity.put(NodeAttribute.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
 
-        final ImmutableMap.Builder<LinkAttribute<?>, Double> networkCapacity = ImmutableMap.builder();
-        networkCapacity.put(LinkMetricName.DATARATE_TX, DEFAULT_LINK_DATARATE);
-        networkCapacity.put(LinkMetricName.DATARATE_RX, DEFAULT_LINK_DATARATE);
+        final ImmutableMap.Builder<LinkAttribute, Double> networkCapacity = ImmutableMap.builder();
+        networkCapacity.put(LinkAttribute.DATARATE_TX, DEFAULT_LINK_DATARATE);
+        networkCapacity.put(LinkAttribute.DATARATE_RX, DEFAULT_LINK_DATARATE);
 
         final ContainerParameters containerParameters = new ContainerParameters(computeCapacity.build(),
                 networkCapacity.build());
@@ -135,8 +150,7 @@ public class PlanTranslatorTest {
 
             final ServiceConfiguration config = new ServiceConfiguration(serviceName, hostname,
                     ImmutableMap.of(defaultNode, 1), defaultRegion, containerParameters,
-                    ApplicationSpecification.DEFAULT_PRIORITY, true, null,
-                    ApplicationSpecification.ServiceTrafficType.TX_GREATER);
+                    ApplicationSpecification.DEFAULT_PRIORITY, true, null, 0);
             serviceBuilder.put(serviceName, config);
         }
 
@@ -187,21 +201,21 @@ public class PlanTranslatorTest {
         servicePlanBuilder.addService(nodeA1, service1, 1);
         servicePlanBuilder.addService(nodeA2, service1, 1);
 
-        final LoadBalancerPlan loadBalancerPlan = servicePlanBuilder
-                .toLoadBalancerPlan(new RegionServiceState(region, ImmutableSet.of()), ImmutableMap.of());
+        final LoadBalancerPlan loadBalancerPlan = servicePlanBuilder.toLoadBalancerPlan(ImmutableSet.of(),
+                ImmutableMap.of());
 
         final ImmutableSet.Builder<ServiceReport> serviceReports = ImmutableSet.builder();
 
         final ImmutableMap.Builder<NodeIdentifier, ServiceState> nodeA1ServiceState = ImmutableMap.builder();
-        nodeA1ServiceState.put(nodeA1container0, new ServiceState(service1, ServiceState.Status.RUNNING));
+        nodeA1ServiceState.put(nodeA1container0, new ServiceState(service1, ServiceStatus.RUNNING));
 
-        final ServiceReport service1NodeA1 = new ServiceReport(nodeA1, nodeA1ServiceState.build());
+        final ServiceReport service1NodeA1 = new ServiceReport(nodeA1, 0, nodeA1ServiceState.build());
         serviceReports.add(service1NodeA1);
 
         final ImmutableMap.Builder<NodeIdentifier, ServiceState> nodeA2ServiceState = ImmutableMap.builder();
-        nodeA2ServiceState.put(nodeA2container0, new ServiceState(service1, ServiceState.Status.RUNNING));
+        nodeA2ServiceState.put(nodeA2container0, new ServiceState(service1, ServiceStatus.RUNNING));
 
-        final ServiceReport service1NodeA2 = new ServiceReport(nodeA2, nodeA2ServiceState.build());
+        final ServiceReport service1NodeA2 = new ServiceReport(nodeA2, 0, nodeA2ServiceState.build());
         serviceReports.add(service1NodeA2);
 
         final RegionServiceState regionServiceState = new RegionServiceState(region, serviceReports.build());
@@ -305,6 +319,73 @@ public class PlanTranslatorTest {
         assertThat("region B", regionBactualWeight / totalActualWeight, closeTo(regionBWeight, weightTolerance));
         assertThat("region C", regionCactualWeight / totalActualWeight, closeTo(regionCWeight, weightTolerance));
 
+    }
+
+    /**
+     * Test RLG plan with with varied container weights.
+     */
+    @Test
+    public void testWeightedContainerPlan() {
+        Random rand = new Random();
+
+        final RegionIdentifier region = new StringRegionIdentifier("test");
+
+        final List<ServiceIdentifier<?>> services = new ArrayList<>();
+        for (int s = 0; s < 1; s++) {
+            services.add(generateSerivceName(s));
+        }
+
+        final NodeIdentifier node = new DnsNameIdentifier("nodeA0");
+        final Set<ContainerInfo> infos = new HashSet<>();
+        final Map<NodeIdentifier, ServiceState> serviceStates = new HashMap<>();
+        final Map<ServiceIdentifier<?>, Double> serviceWeightTotals = new HashMap<>();
+        final Map<NodeIdentifier, ServiceIdentifier<?>> nodeServices = new HashMap<>();
+
+        for (int n = 0; n < 10; n++) {
+            NodeIdentifier containerId = new DnsNameIdentifier("nodeA0_c0" + n);
+            ServiceIdentifier<?> service = services.get(rand.nextInt(services.size()));
+            double weight = rand.nextDouble();
+
+            infos.add(new ContainerInfo(containerId, service, weight, false, false));
+            serviceWeightTotals.merge(service, weight, Double::sum);
+            nodeServices.put(node, service);
+
+            serviceStates.put(containerId, new ServiceState(service, ServiceStatus.RUNNING));
+        }
+
+        final ImmutableMap<NodeIdentifier, ImmutableCollection<ContainerInfo>> nodeInfos = ImmutableMap.of(node,
+                ImmutableSet.copyOf(infos));
+        final LoadBalancerPlan loadBalancerPlan = new LoadBalancerPlan(region, nodeInfos, ImmutableMap.of());
+
+        final ServiceReport serviceReport = new ServiceReport(node, 0, ImmutableMap.copyOf(serviceStates));
+        final ImmutableSet<ServiceReport> serviceReports = ImmutableSet.of(serviceReport);
+        final RegionServiceState regionServiceState = new RegionServiceState(region, serviceReports);
+
+        final PlanTranslator translator = new PlanTranslator(TTL);
+        ImmutableCollection<Pair<DnsRecord, Double>> dns = translator.convertToDns(loadBalancerPlan,
+                regionServiceState);
+
+        Map<NodeIdentifier, Double> expectedWeights = new HashMap<>();
+        Map<NodeIdentifier, Double> actualWeights = new HashMap<>();
+
+        for (ContainerInfo info : infos) {
+            nodeServices.put(info.getId(), info.getService());
+            expectedWeights.put(info.getId(), info.getWeight());
+        }
+
+        for (Pair<DnsRecord, Double> dnsRecord : dns) {
+            if (dnsRecord.getLeft() instanceof NameRecord) {
+                NameRecord record = (NameRecord) dnsRecord.getLeft();
+                actualWeights.put(record.getNode(), dnsRecord.getRight());
+                expectedWeights.compute(record.getNode(), (n, w) -> w / serviceWeightTotals.get(nodeServices.get(n)));
+            }
+        }
+
+        LOGGER.info("expectedWeights: {}, actualWeights: {}", expectedWeights, actualWeights);
+
+        for (Entry<NodeIdentifier, Double> entry : expectedWeights.entrySet()) {
+            assertEquals(entry.getValue(), actualWeights.get(entry.getKey()), DOUBLE_COMPARE_TOLERANCE);
+        }
     }
 
 }

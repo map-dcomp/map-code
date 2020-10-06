@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": true,
+    "dns": false,
+    "hardware": "pc3000",
+    "name": "g2client02",
+    "region": "region",
+    "underlay": false
+}

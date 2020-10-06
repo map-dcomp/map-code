@@ -1,0 +1,63 @@
+#!/bin/sh
+
+debug() { ! "${log_debug-false}" || log "DEBUG: $*" >&2; }
+log() { printf '%s\n' "$*"; }
+warn() { log "WARNING: $*" >&2; }
+error() { log "ERROR: $*" >&2; }
+fatal() { error "$*"; exit 1; }
+try() { "$@" || fatal "'$@' failed"; }
+
+mydir=$(cd "$(dirname "$0")" && pwd -L) || fatal "Unable to determine script directory"
+
+cleanup() {
+    debug "In cleanup"
+}
+trap 'cleanup' INT TERM EXIT
+
+experiment=chain-priority
+
+# ensure that we don't get stuck at prompts
+DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND
+
+# use common virtual env to save space
+
+log "Setting up ansible environment"
+try sudo apt update
+try sudo apt install -y python3-venv python3-dev libffi-dev xz-utils
+try python3 -m venv "${mydir}"/venv
+. "${mydir}"/venv/bin/activate || fatal "Unable to source virtual environment"
+
+
+base_output=/proj/a3/map/scenario-outputs/${USER}
+for i in $(seq 1 5) ; do
+
+    date_folder=${experiment}_$(date +%m%d%y_%H%M)-${i}
+    try mkdir -p ${base_output}/${date_folder}
+
+    for demand in \
+        demand.flat \
+        ; do
+        for rlg_algorithm in STUB BIN-PACKING; do
+            scenario_name=$(echo "${experiment}_${demand}_${rlg_algorithm}" | tr '/' '_')
+
+            log "Executing ${demand} using ${rlg_algorithm}"
+            try "${mydir}"/generated_${scenario_name}*/execute-scenario.sh 2>&1 | tee /proj/a3/map/scenario-outputs/${USER}/${scenario_name}.execute.log
+            
+	    try mv ${base_output}/${experiment}.${scenario_name}.tar.xz ${base_output}/${date_folder}
+	    try mv ${base_output}/${scenario_name}.execute.log ${base_output}/${date_folder}
+            
+        done
+        
+        scenario_name=$(echo "${experiment}_${demand}_NO-MAP" | tr '/' '_')
+        try "${mydir}"/generated_${scenario_name}*/execute-scenario.sh 2>&1 | tee /proj/a3/map/scenario-outputs/${USER}/${scenario_name}.execute.log
+        
+	try mv ${base_output}/${experiment}.${scenario_name}.tar.xz ${base_output}/${date_folder}
+	try mv ${base_output}/${scenario_name}.execute.log ${base_output}/${date_folder}
+    done
+done
+
+
+log "Executing swap out"
+wrapper=$(/bin/ls "${mydir}"/generated_*/emulab-scripts/script_wrapper.py | tail -1)
+python2 ${wrapper} swapexp -e a3,${experiment} out

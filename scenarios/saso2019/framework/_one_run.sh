@@ -1,6 +1,6 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-# To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
 # Dispersed Computing (DCOMP)
@@ -75,42 +75,78 @@ dcopx="DISTRIBUTED_CONSTRAINT_DIFFUSION"
 	     #--rlgNullOverflowPlan \
 
 if [ "$rlg_algorithm" != "STUB" ] || [ "$rlg_stub_choose_algorithm" = "" ] ; then
-	try java -jar ${agent_jar} \
-	     --dcopAlgorithm "${dcopx}" \
-	     --dcopCapacityThreshold .5 \
-	     --rlgAlgorithm "${rlg_algorithm}" \
-	     --scenario "${scenario_dir}" \
-	     --demand "${demand_dir}" \
-	     --output "${sim_output}" > /dev/null 2>&1
+	timeout -k "${time_limit_kill}" "${time_limit_per_run}" try java -jar ${agent_jar} \
+								     --dcopAlgorithm "${dcopx}" \
+								     --dcopCapacityThreshold .5 \
+								     --rlgAlgorithm "${rlg_algorithm}" \
+								     --scenario "${scenario_dir}" \
+								     --demand "${demand_dir}" \
+								     --output "${sim_output}" > /dev/null 2>&1
 else
-	try java -jar ${agent_jar} \
-	     --dcopAlgorithm "${dcopx}" \
-	     --dcopCapacityThreshold .5 \
-	     --rlgAlgorithm "${rlg_algorithm}" \
-	     --rlgStubChooseAlgorithm "${rlg_stub_choose_algorithm}" \
-	     --scenario "${scenario_dir}" \
-	     --demand "${demand_dir}" \
-	     --output "${sim_output}" > /dev/null 2>&1
+	timeout -k "${time_limit_kill}" "${time_limit_per_run}" try java -jar ${agent_jar} \
+								     --dcopAlgorithm "${dcopx}" \
+								     --dcopCapacityThreshold .5 \
+								     --rlgAlgorithm "${rlg_algorithm}" \
+								     --rlgStubChooseAlgorithm "${rlg_stub_choose_algorithm}" \
+								     --scenario "${scenario_dir}" \
+								     --demand "${demand_dir}" \
+								     --output "${sim_output}" > /dev/null 2>&1
 fi
+
+exit_code=$?
+end_time=$(date +%s)
+
+if [ $exit_code -eq 0 ]; then
+	log "Finished in $((end_time - start_time)) seconds with 0 exit code."
+fi
+
+# XXX double check the return codes for the do_run script. 
+# what happens if chart gen fails?
+# what happens if sim fails?
+has_errors=$((${has_errors}+1))
+error_list="${error_list}, ${rlg_algorithm} ${stub_algo} ${run_dir}"
+if [ $exit_code -eq 124 ] ; then
+  error "Timed out after a duration of $((end_time - start_time)) seconds."
+else 
+  error "Run exited with non-zero (${exit_code}) code."
+fi
+
+
 
 try mv map.log "${4}/map-sim.log"
 rm -f map.log
 
-log "Start chart gen"
+
+log "Start log analysis"
 
 # generate chart tables
 try java -jar ${chart_generation_jar} \
-     all \
-     "${scenario_dir}" \
-     "${demand_dir}" \
-     "${sim_output}" \
-     "${chart_output}" \
-    10000
+     "log_analysis" \
+     "${log_message_matchers_file}" \
+     "${4}/map-sim.log" \
+     "${4}" \
+     10000
 
-try mv map.log "${4}/map-chart-gen.log"
+
+run_result = $(head -n 1 "${4}/results_summary.txt")
+
+if [ run_results -eq "SUCCESS" ] ; then
+	log "Start chart gen"
+
+	# generate chart tables
+	try java -jar ${chart_generation_jar} \
+	     all \
+	     "${scenario_dir}" \
+	     "${demand_dir}" \
+	     "${sim_output}" \
+	     "${chart_output}" \
+	     10000
+
+	try mv map.log "${4}/map-chart-gen.log"
+fi
 
 # rename the directory to indicate that the simulation and chart generation finished without interruption
-mv "${4}" "${4}-finished"
+try mv "${4}" "${4}-finished"
 
 log "Finished"
 

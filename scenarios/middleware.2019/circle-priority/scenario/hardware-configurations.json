@@ -1,0 +1,29 @@
+[
+  {
+    "name": "pc3000",
+    "capacity": {
+      "CPU": 2,
+      "MEMORY": 2,
+      "TASK_CONTAINERS": 2
+    },
+    "maximumServiceContainers": 2
+  },
+  {
+    "name": "one",
+    "capacity": {
+      "CPU": 2,
+      "MEMORY": 2,
+      "TASK_CONTAINERS": 1
+    },
+    "maximumServiceContainers": 1
+  },
+  {
+    "name": "zero",
+    "capacity": {
+      "CPU": 2,
+      "MEMORY": 2,
+      "TASK_CONTAINERS": 0
+    },
+    "maximumServiceContainers": 0
+  }
+]

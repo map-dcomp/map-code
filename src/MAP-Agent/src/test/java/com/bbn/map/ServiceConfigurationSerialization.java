@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -41,13 +41,18 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.RuleChain;
 
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
+import com.bbn.map.simulator.TestUtils;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.google.common.collect.ImmutableMap;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Tests for JSON serialization and deserialization of
@@ -57,6 +62,13 @@ import com.google.common.collect.ImmutableMap;
  *
  */
 public class ServiceConfigurationSerialization {
+
+    /**
+     * Rules for running tests.
+     */
+    @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
+    @Rule
+    public RuleChain chain = TestUtils.getStandardRuleChain();
 
     /**
      * Make sure there aren't any exceptions parsing the single default node and

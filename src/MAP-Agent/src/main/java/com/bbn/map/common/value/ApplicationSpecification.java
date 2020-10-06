@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -56,30 +56,6 @@ public class ApplicationSpecification implements Serializable {
     private static final Logger LOGGER = LoggerFactory.getLogger(ApplicationSpecification.class);
 
     private static final long serialVersionUID = 6441635210042977099L;
-
-    /**
-     * Categories the type of traffic for a service.
-     * 
-     * @author jschewe
-     *
-     */
-    public enum ServiceTrafficType {
-        /**
-         * The service receives large amounts of data and sends back small
-         * amounts of data. An HTTP POST is an example of this.
-         */
-        RX_GREATER,
-        /**
-         * The service receives a small amount of data and sends back a large
-         * amount of data. An example of this is an HTTP GET.
-         */
-        TX_GREATER,
-        /**
-         * The relationship between request and response is unknow. It may be
-         * the case that both are equal.
-         */
-        UNKNOWN;
-    }
 
     /**
      * 
@@ -269,25 +245,23 @@ public class ApplicationSpecification implements Serializable {
         this.imageName = v;
     }
 
-    private ServiceTrafficType trafficType = ServiceTrafficType.UNKNOWN;
+    private int serverPort = 0;
 
     /**
      * 
-     * @return the type of traffic to the service, default is
-     *         {@link ServiceTrafficType#UNKNOWN}.
+     * @return the type of traffic to the service, default is 0 (unknown).
      */
-    @Nonnull
-    public ServiceTrafficType getTrafficType() {
-        return trafficType;
+    public int getServerPort() {
+        return serverPort;
     }
 
     /**
      * 
      * @param v
-     *            see {@link #getTrafficType()}
+     *            see {@link #getServerPort()}
      */
-    public void setTrafficType(@Nonnull final ServiceTrafficType v) {
-        this.trafficType = v;
+    public void setServerPort(final int v) {
+        this.serverPort = v;
     }
 
     @Override
@@ -312,6 +286,7 @@ public class ApplicationSpecification implements Serializable {
                     && Objects.equals(getContainerParameters(), other.getContainerParameters()) //
                     && Objects.equals(isReplicable(), other.isReplicable()) //
                     && Objects.equals(getImageName(), other.getImageName()) //
+                    && getServerPort() == other.getServerPort() //
             ;
         }
     }
@@ -329,6 +304,9 @@ public class ApplicationSpecification implements Serializable {
 
         builder.append(", serviceDefaultRegion=");
         builder.append(getServiceDefaultRegion());
+
+        builder.append(", serverPort=");
+        builder.append(getServerPort());
 
         builder.append("]");
         return builder.toString();

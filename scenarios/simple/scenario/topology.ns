@@ -1,0 +1,39 @@
+# CP Paper
+
+set ns [new Simulator]
+source tb_compact.tcl
+
+# Clients
+set clientPoolD [$ns node]
+tb-set-node-os $clientPoolD XEN46-64-STD
+
+# NCPs
+set nodeA [$ns node]
+tb-set-node-os $nodeA XEN46-64-STD
+tb-set-hardware $nodeA simple
+
+set nodeB [$ns node]
+tb-set-node-os $nodeB XEN46-64-STD
+tb-set-hardware $nodeB simple
+
+set nodeC [$ns node]
+tb-set-node-os $nodeC XEN46-64-STD
+tb-set-hardware $nodeC simple
+
+set nodeD [$ns node]
+tb-set-node-os $nodeD XEN46-64-STD
+tb-set-hardware $nodeD simple
+
+set nodeServer [$ns node]
+tb-set-node-os $nodeServer XEN46-64-STD
+tb-set-hardware $nodeServer large
+
+# Links
+set linkServerA [$ns duplex-link $nodeServer $nodeA 10000000.0kb 0.0ms DropTail]
+set linkAB [$ns duplex-link $nodeA $nodeB 10000000.0kb 0.0ms DropTail]
+set linkBC [$ns duplex-link $nodeB $nodeC 10000000.0kb 0.0ms DropTail]
+set linkCD [$ns duplex-link $nodeC $nodeD 900000.0kb 0.0ms DropTail]
+set linkClientD [$ns duplex-link $clientPoolD $nodeD 10000000.0kb 0.0ms DropTail]
+
+$ns rtproto Static
+$ns run

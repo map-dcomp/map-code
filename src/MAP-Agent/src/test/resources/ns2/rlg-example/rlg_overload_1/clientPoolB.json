@@ -6,7 +6,7 @@
     "numClients": 4,
     "service": {
       "group": "com.bbn",
-      "artifact": "image-recognition-med",
+      "artifact": "image-recognition-high",
       "version": "1"
     },
     "nodeLoad": {

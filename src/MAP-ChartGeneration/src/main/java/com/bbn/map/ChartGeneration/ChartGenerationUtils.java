@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,6 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.ChartGeneration;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -52,11 +53,13 @@ import org.apache.commons.csv.CSVPrinter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.bbn.map.ServiceConfiguration;
 import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.NodeMetricName;
+import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringServiceIdentifier;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Class containing utility functions for producing chart tables.
@@ -69,6 +72,7 @@ public final class ChartGenerationUtils {
 
     /**
      * File extension to use for CSV output files.
+     * Includes the dot.
      */
     public static final String CSV_FILE_EXTENSION = ".csv";
 
@@ -76,11 +80,6 @@ public final class ChartGenerationUtils {
      * Column header for timestamp.
      */
     public static final String CSV_TIME_COLUMN_LABEL = "time";
-
-    /**
-     * Column header for timestamp.
-     */
-    public static final String CSV_HEADER_TIMESTAMP = "timestamp";
 
     /**
      * Value to use for empty data cells in CSV output.
@@ -91,12 +90,34 @@ public final class ChartGenerationUtils {
      * The name of the simulation folder in low fidelity test bed output.
      */
     public static final String SCENARIO_SIMULATION_FOLDER_NAME = "simulation";
-
-    private ChartGenerationUtils() {
-    }
+    
+    /**
+     * The default bin size to use for binning.
+     */
+    public static final long DEFAULT_BIN_SIZE = 10000;
+    
+    /**
+     * The default sample interval, usually the same as bin size.
+     */
+    public static final long DEFAULT_SAMPLE_INTERVAL = 10000;
+    
+    /**
+     * The default first bin center to use for binning.
+     */
+    public static final long DEFAULT_FIRST_BIN_CENTER = 0;
+    
+    /**
+     * The suffix for domain names of nodes, containers, or services in the MAP system.
+     */
+    public static final String MAP_DOMAIN_NAME_SUFFIX = ".map.dcomp";
+    
+    
+    
+    
+    private ChartGenerationUtils() {}
 
     /**
-     * Outputs the given table information to a CSV file for all NodeMetricName
+     * Outputs the given table information to a CSV file for all NodeAttribute
      * attributes in the given table.
      * 
      * @param <V>
@@ -113,15 +134,15 @@ public final class ChartGenerationUtils {
     public static <V> void outputDataToCSV(File outputFolder,
             String filenamePrefix,
             ValueExtractor<V> extractor, 
-            Map<Long, Map<String, Map<NodeAttribute<?>, V>>> table) {
-        Set<NodeAttribute<?>> attributes = new HashSet<>();
+            Map<Long, Map<String, Map<NodeAttribute, V>>> table) {
+        Set<NodeAttribute> attributes = new HashSet<>();
         attributes.addAll(getAttributesFromTableMap(table));
 
         outputDataToCSV(outputFolder, filenamePrefix, attributes, extractor, table);
     }
 
     /**
-     * Outputs the given table information to a CSV file for each NodeMetricName
+     * Outputs the given table information to a CSV file for each NodeAttribute
      * attribute.
      * 
      * @param <V>
@@ -139,22 +160,20 @@ public final class ChartGenerationUtils {
      */
     public static <V> void outputDataToCSV(File outputFolder,
             String filenamePrefix,
-            Set<NodeAttribute<?>> attributes,
+            Set<NodeAttribute> attributes,
             ValueExtractor<V> extractor,
-            Map<Long, Map<String, Map<NodeAttribute<?>, V>>> table) {
+            Map<Long, Map<String, Map<NodeAttribute, V>>> table) {
         if (!outputFolder.exists()) {
             if (!outputFolder.mkdirs()) {
                 throw new RuntimeException("Unable to create " + outputFolder);
             }
         }
 
-        for (NodeAttribute<?> attr : attributes) {
-            if (attr instanceof NodeMetricName) {
-                final String filename = outputFolder.getPath() + File.separator + filenamePrefix + "-"
-                        + ((NodeMetricName) attr).getName() + ".csv";
-                final File file = new File(filename);
-                outputDataToCSV(file, attr, extractor, table);
-            }
+        for (NodeAttribute attr : attributes) {
+            final String filename = outputFolder.getPath() + File.separator + filenamePrefix + "-"
+                    + ((NodeAttribute) attr).getName() + ".csv";
+            final File file = new File(filename);
+            outputDataToCSV(file, attr, extractor, table);
         }
     }
 
@@ -607,7 +626,7 @@ public final class ChartGenerationUtils {
             Collections.sort(nodeNames);
 
             String[] headers = new String[nodeNames.size() + 1];
-            headers[0] = CSV_HEADER_TIMESTAMP;
+            headers[0] = CSV_TIME_COLUMN_LABEL;
 
             for (int n = 1; n < headers.length; n++)
                 headers[n] = nodeNames.get(n - 1);
@@ -679,5 +698,36 @@ public final class ChartGenerationUtils {
         }
         
         return service;
+    }
+    
+    /**
+     * Reads the service configurations file for a scenario to find the services.
+     * 
+     * @param scenarioFolder
+     *          the folder containing the scenario configuration
+     * @return the set of services in the scenario
+     */
+    public static Set<ServiceIdentifier<?>> getScenarioServices(File scenarioFolder)
+    {
+        Set<ServiceIdentifier<?>> services = new HashSet<>();
+        Path serviceConfigurationsPath = scenarioFolder.toPath().resolve("service-configurations.json");
+        
+        ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper();
+        
+        try (BufferedReader reader = Files.newBufferedReader(serviceConfigurationsPath)) {
+            final ServiceConfiguration[] serviceConfigurations = mapper.readValue(reader, ServiceConfiguration[].class);
+            
+            for (ServiceConfiguration sc : serviceConfigurations)
+            {
+                services.add(sc.getService());
+            }
+            
+            return services;
+        } catch (IOException e)
+        {
+            LOGGER.error("Error reading service configurations for scenario.", e);
+        }
+        
+        return null;
     }
 }

@@ -1,0 +1,18 @@
+[ {
+  "startTime" : 0,
+  "serverDuration" : 10000,
+  "networkDuration" : 10000,
+  "numClients" : 100,
+  "service" : {
+    "group" : "com.bbn.map",
+    "artifact" : "image-recognition-high",
+    "version" : "1.0"
+  },
+  "nodeLoad" : {
+    "TASK_CONTAINERS" : 0.01
+  },
+  "networkLoad" : {
+    "DATARATE_TX" : 0.01,
+    "DATARATE_RX" : 0.01
+  }
+} ]

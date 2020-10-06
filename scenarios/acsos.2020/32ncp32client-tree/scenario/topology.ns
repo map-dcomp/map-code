@@ -1,0 +1,282 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+### include
+set arm1region1node1 [$ns node]
+tb-set-node-os $arm1region1node1 XEN46-64-STD
+tb-set-hardware $arm1region1node1 pc3000
+
+set arm1region1node2 [$ns node]
+tb-set-node-os $arm1region1node2 XEN46-64-STD
+tb-set-hardware $arm1region1node2 pc3000
+
+set lanarm1region1 [$ns make-lan "$arm1region1node1 $arm1region1node2" 100Mb 0ms]
+set arm1region2node1 [$ns node]
+tb-set-node-os $arm1region2node1 XEN46-64-STD
+tb-set-hardware $arm1region2node1 pc3000
+
+set arm1region2node2 [$ns node]
+tb-set-node-os $arm1region2node2 XEN46-64-STD
+tb-set-hardware $arm1region2node2 pc3000
+
+set lanarm1region2 [$ns make-lan "$arm1region2node1 $arm1region2node2" 100Mb 0ms]
+set arm1region2client1 [$ns node]
+tb-set-node-os $arm1region2client1 XEN46-64-STD
+
+set arm1region2client2 [$ns node]
+tb-set-node-os $arm1region2client2 XEN46-64-STD
+
+set lanarm1region2Client [$ns make-lan "$arm1region2node1 $arm1region2client1 $arm1region2client2" 100Mb 0ms]
+set arm1region3node1 [$ns node]
+tb-set-node-os $arm1region3node1 XEN46-64-STD
+tb-set-hardware $arm1region3node1 pc3000
+
+set arm1region3client1 [$ns node]
+tb-set-node-os $arm1region3client1 XEN46-64-STD
+
+set arm1region3client2 [$ns node]
+tb-set-node-os $arm1region3client2 XEN46-64-STD
+
+set lanarm1region3Client [$ns make-lan "$arm1region3node1 $arm1region3client1 $arm1region3client2" 100Mb 0ms]
+set arm1region4node1 [$ns node]
+tb-set-node-os $arm1region4node1 XEN46-64-STD
+tb-set-hardware $arm1region4node1 pc3000
+
+set arm1region4client1 [$ns node]
+tb-set-node-os $arm1region4client1 XEN46-64-STD
+
+set arm1region4client2 [$ns node]
+tb-set-node-os $arm1region4client2 XEN46-64-STD
+
+set lanarm1region4Client [$ns make-lan "$arm1region4node1 $arm1region4client1 $arm1region4client2" 100Mb 0ms]
+set arm2region1node1 [$ns node]
+tb-set-node-os $arm2region1node1 XEN46-64-STD
+tb-set-hardware $arm2region1node1 pc3000
+
+set arm2region1node2 [$ns node]
+tb-set-node-os $arm2region1node2 XEN46-64-STD
+tb-set-hardware $arm2region1node2 pc3000
+
+set lanarm2region1 [$ns make-lan "$arm2region1node1 $arm2region1node2" 100Mb 0ms]
+set arm2region2node1 [$ns node]
+tb-set-node-os $arm2region2node1 XEN46-64-STD
+tb-set-hardware $arm2region2node1 pc3000
+
+set arm2region2client1 [$ns node]
+tb-set-node-os $arm2region2client1 XEN46-64-STD
+
+set arm2region2client2 [$ns node]
+tb-set-node-os $arm2region2client2 XEN46-64-STD
+
+set lanarm2region2Client [$ns make-lan "$arm2region2node1 $arm2region2client1 $arm2region2client2" 100Mb 0ms]
+set arm2region3node1 [$ns node]
+tb-set-node-os $arm2region3node1 XEN46-64-STD
+tb-set-hardware $arm2region3node1 pc3000
+
+set arm2region3client1 [$ns node]
+tb-set-node-os $arm2region3client1 XEN46-64-STD
+
+set arm2region3client2 [$ns node]
+tb-set-node-os $arm2region3client2 XEN46-64-STD
+
+set lanarm2region3Client [$ns make-lan "$arm2region3node1 $arm2region3client1 $arm2region3client2" 100Mb 0ms]
+set arm2region4node1 [$ns node]
+tb-set-node-os $arm2region4node1 XEN46-64-STD
+tb-set-hardware $arm2region4node1 pc3000
+
+set arm2region4client1 [$ns node]
+tb-set-node-os $arm2region4client1 XEN46-64-STD
+
+set arm2region4client2 [$ns node]
+tb-set-node-os $arm2region4client2 XEN46-64-STD
+
+set lanarm2region4Client [$ns make-lan "$arm2region4node1 $arm2region4client1 $arm2region4client2" 100Mb 0ms]
+set arm3region1node1 [$ns node]
+tb-set-node-os $arm3region1node1 XEN46-64-STD
+tb-set-hardware $arm3region1node1 pc3000
+
+set arm3region1node2 [$ns node]
+tb-set-node-os $arm3region1node2 XEN46-64-STD
+tb-set-hardware $arm3region1node2 pc3000
+
+set lanarm3region1 [$ns make-lan "$arm3region1node1 $arm3region1node2" 100Mb 0ms]
+set arm3region2node1 [$ns node]
+tb-set-node-os $arm3region2node1 XEN46-64-STD
+tb-set-hardware $arm3region2node1 pc3000
+
+set arm3region2node2 [$ns node]
+tb-set-node-os $arm3region2node2 XEN46-64-STD
+tb-set-hardware $arm3region2node2 pc3000
+
+set lanarm3region2 [$ns make-lan "$arm3region2node1 $arm3region2node2" 100Mb 0ms]
+set arm3region2client1 [$ns node]
+tb-set-node-os $arm3region2client1 XEN46-64-STD
+
+set arm3region2client2 [$ns node]
+tb-set-node-os $arm3region2client2 XEN46-64-STD
+
+set lanarm3region2Client [$ns make-lan "$arm3region2node1 $arm3region2client1 $arm3region2client2" 100Mb 0ms]
+set arm3region3node1 [$ns node]
+tb-set-node-os $arm3region3node1 XEN46-64-STD
+tb-set-hardware $arm3region3node1 pc3000
+
+set arm3region3client1 [$ns node]
+tb-set-node-os $arm3region3client1 XEN46-64-STD
+
+set arm3region3client2 [$ns node]
+tb-set-node-os $arm3region3client2 XEN46-64-STD
+
+set lanarm3region3Client [$ns make-lan "$arm3region3node1 $arm3region3client1 $arm3region3client2" 100Mb 0ms]
+set arm3region4node1 [$ns node]
+tb-set-node-os $arm3region4node1 XEN46-64-STD
+tb-set-hardware $arm3region4node1 pc3000
+
+set arm3region4client1 [$ns node]
+tb-set-node-os $arm3region4client1 XEN46-64-STD
+
+set arm3region4client2 [$ns node]
+tb-set-node-os $arm3region4client2 XEN46-64-STD
+
+set lanarm3region4Client [$ns make-lan "$arm3region4node1 $arm3region4client1 $arm3region4client2" 100Mb 0ms]
+set arm3region5node1 [$ns node]
+tb-set-node-os $arm3region5node1 XEN46-64-STD
+tb-set-hardware $arm3region5node1 pc3000
+
+set arm3region5client1 [$ns node]
+tb-set-node-os $arm3region5client1 XEN46-64-STD
+
+set arm3region5client2 [$ns node]
+tb-set-node-os $arm3region5client2 XEN46-64-STD
+
+set lanarm3region5Client [$ns make-lan "$arm3region5node1 $arm3region5client1 $arm3region5client2" 100Mb 0ms]
+set arm3region6node1 [$ns node]
+tb-set-node-os $arm3region6node1 XEN46-64-STD
+tb-set-hardware $arm3region6node1 pc3000
+
+set arm3region6client1 [$ns node]
+tb-set-node-os $arm3region6client1 XEN46-64-STD
+
+set arm3region6client2 [$ns node]
+tb-set-node-os $arm3region6client2 XEN46-64-STD
+
+set lanarm3region6Client [$ns make-lan "$arm3region6node1 $arm3region6client1 $arm3region6client2" 100Mb 0ms]
+set arm4region1node1 [$ns node]
+tb-set-node-os $arm4region1node1 XEN46-64-STD
+tb-set-hardware $arm4region1node1 pc3000
+
+set arm4region1node2 [$ns node]
+tb-set-node-os $arm4region1node2 XEN46-64-STD
+tb-set-hardware $arm4region1node2 pc3000
+
+set lanarm4region1 [$ns make-lan "$arm4region1node1 $arm4region1node2" 100Mb 0ms]
+set arm4region1client1 [$ns node]
+tb-set-node-os $arm4region1client1 XEN46-64-STD
+
+set arm4region1client2 [$ns node]
+tb-set-node-os $arm4region1client2 XEN46-64-STD
+
+set lanarm4region1Client [$ns make-lan "$arm4region1node1 $arm4region1client1 $arm4region1client2" 100Mb 0ms]
+set arm4region2node1 [$ns node]
+tb-set-node-os $arm4region2node1 XEN46-64-STD
+tb-set-hardware $arm4region2node1 pc3000
+
+set arm4region2client1 [$ns node]
+tb-set-node-os $arm4region2client1 XEN46-64-STD
+
+set arm4region2client2 [$ns node]
+tb-set-node-os $arm4region2client2 XEN46-64-STD
+
+set lanarm4region2Client [$ns make-lan "$arm4region2node1 $arm4region2client1 $arm4region2client2" 100Mb 0ms]
+set arm5region1node1 [$ns node]
+tb-set-node-os $arm5region1node1 XEN46-64-STD
+tb-set-hardware $arm5region1node1 pc3000
+
+set arm5region1node2 [$ns node]
+tb-set-node-os $arm5region1node2 XEN46-64-STD
+tb-set-hardware $arm5region1node2 pc3000
+
+set lanarm5region1 [$ns make-lan "$arm5region1node1 $arm5region1node2" 100Mb 0ms]
+set arm5region2node1 [$ns node]
+tb-set-node-os $arm5region2node1 XEN46-64-STD
+tb-set-hardware $arm5region2node1 pc3000
+
+set arm5region2node2 [$ns node]
+tb-set-node-os $arm5region2node2 XEN46-64-STD
+tb-set-hardware $arm5region2node2 pc3000
+
+set lanarm5region2 [$ns make-lan "$arm5region2node1 $arm5region2node2" 100Mb 0ms]
+set arm5region2client1 [$ns node]
+tb-set-node-os $arm5region2client1 XEN46-64-STD
+
+set arm5region2client2 [$ns node]
+tb-set-node-os $arm5region2client2 XEN46-64-STD
+
+set lanarm5region2Client [$ns make-lan "$arm5region2node1 $arm5region2client1 $arm5region2client2" 100Mb 0ms]
+set arm5region3node1 [$ns node]
+tb-set-node-os $arm5region3node1 XEN46-64-STD
+tb-set-hardware $arm5region3node1 pc3000
+
+set arm5region3client1 [$ns node]
+tb-set-node-os $arm5region3client1 XEN46-64-STD
+
+set arm5region3client2 [$ns node]
+tb-set-node-os $arm5region3client2 XEN46-64-STD
+
+set lanarm5region3Client [$ns make-lan "$arm5region3node1 $arm5region3client1 $arm5region3client2" 100Mb 0ms]
+set arm5region4node1 [$ns node]
+tb-set-node-os $arm5region4node1 XEN46-64-STD
+tb-set-hardware $arm5region4node1 pc3000
+
+set arm5region4client1 [$ns node]
+tb-set-node-os $arm5region4client1 XEN46-64-STD
+
+set arm5region4client2 [$ns node]
+tb-set-node-os $arm5region4client2 XEN46-64-STD
+
+set lanarm5region4Client [$ns make-lan "$arm5region4node1 $arm5region4client1 $arm5region4client2" 100Mb 0ms]
+### end include
+
+
+
+# datacenter
+set serverX1 [$ns node]
+tb-set-node-os $serverX1 XEN46-64-STD
+tb-set-hardware $serverX1 pc3000
+
+set serverX2 [$ns node]
+tb-set-node-os $serverX2 XEN46-64-STD
+tb-set-hardware $serverX2 pc3000
+
+set serverX3 [$ns node]
+tb-set-node-os $serverX3 XEN46-64-STD
+tb-set-hardware $serverX3 pc3000
+
+set serverX4 [$ns node]
+tb-set-node-os $serverX4 XEN46-64-STD
+tb-set-hardware $serverX4 pc3000
+
+set lanX [$ns make-lan "$serverX1 $serverX2 $serverX3 $serverX4 $arm1region1node1 $arm2region1node1 $arm3region1node1 $arm4region1node1 $arm5region1node1" 100Mb 0ms]
+
+# arm links
+set linkArm1r1tor2 [$ns duplex-link $arm1region1node1 $arm1region2node1 100Mb 0.0ms DropTail]
+set linkArm1r2tor3 [$ns duplex-link $arm1region2node1 $arm1region3node1 100Mb 0.0ms DropTail]
+set linkArm1r3tor4 [$ns duplex-link $arm1region3node1 $arm1region4node1 100Mb 0.0ms DropTail]
+
+set linkArm2r1tor2 [$ns duplex-link $arm2region1node1 $arm2region2node1 100Mb 0.0ms DropTail]
+set linkArm2r2tor3 [$ns duplex-link $arm2region2node1 $arm2region3node1 100Mb 0.0ms DropTail]
+set linkArm2r2tor4 [$ns duplex-link $arm2region2node1 $arm2region4node1 100Mb 0.0ms DropTail]
+
+set linkArm3r1tor2 [$ns duplex-link $arm3region1node1 $arm3region2node1 100Mb 0.0ms DropTail]
+set linkArm3r2tor3 [$ns duplex-link $arm3region2node1 $arm3region3node1 100Mb 0.0ms DropTail]
+set linkArm3r2tor4 [$ns duplex-link $arm3region2node1 $arm3region4node1 100Mb 0.0ms DropTail]
+set linkArm3r4tor5 [$ns duplex-link $arm3region4node1 $arm3region5node1 100Mb 0.0ms DropTail]
+set linkArm3r5tor6 [$ns duplex-link $arm3region5node1 $arm3region6node1 100Mb 0.0ms DropTail]
+
+set linkArm4r1tor2 [$ns duplex-link $arm4region1node1 $arm4region2node1 100Mb 0.0ms DropTail]
+
+set linkArm5r1tor2 [$ns duplex-link $arm5region1node1 $arm5region2node1 100Mb 0.0ms DropTail]
+set linkArm5r2tor3 [$ns duplex-link $arm5region2node1 $arm5region3node1 100Mb 0.0ms DropTail]
+set linkArm5r3tor4 [$ns duplex-link $arm5region3node1 $arm5region4node1 100Mb 0.0ms DropTail]
+
+$ns rtproto Static
+$ns run

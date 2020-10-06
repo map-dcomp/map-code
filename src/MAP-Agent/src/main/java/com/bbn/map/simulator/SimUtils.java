@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,6 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
@@ -51,11 +52,11 @@ public final class SimUtils {
     }
 
     /**
-     * Each C/G operation in the AP program can take up to 2 times the network
-     * diameter to complete. As of 10/25/2017 our program is G -> C -> G
-     * (measure, collect, broadcast), so the multiplier is 6.
+     * Each C/G operation in the AP program can take up to 1 times the network
+     * diameter to complete with Protelis 11. As of 10/25/2017 our program is G -> C -> G
+     * (measure, collect, broadcast), so the multiplier is 3.
      */
-    private static final int AP_ROUNDS_MULTIPLIER = 6;
+    private static final int AP_ROUNDS_MULTIPLIER = 3;
     /**
      * Extra rounds to wait to handle differences in systems.
      */
@@ -98,8 +99,8 @@ public final class SimUtils {
         final long timeToWait = AgentConfiguration.getInstance().getApRoundDuration().toMillis();
     
         // get current max number of executions so we know how long to wait
-        final Map<Controller, Long> currentMaxExecutions = sim.getScenario().getServers().entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getValue, e -> e.getValue().getExecutionCount()));
+        final Map<Controller, Long> currentMaxExecutions = sim.getAllControllers().stream()
+                .collect(Collectors.toMap(Function.identity(), e -> e.getExecutionCount()));
     
         // poll the simulation until we have enough executions
         boolean doneWaiting = false;

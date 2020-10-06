@@ -1,6 +1,6 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-# To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
 # Dispersed Computing (DCOMP)
@@ -58,7 +58,7 @@ sleep 5
 mkdir ${output_folder}
 printf "\n\n\n"
 
-for i in $(seq 1 ${runs_per_secenario}); do
+for i in $(seq 1 ${runs_per_scenario}); do
 	for scenario in $(ls "${scenarios_folder}") ; do
 
 		while read rlg_algorithm_line ; do

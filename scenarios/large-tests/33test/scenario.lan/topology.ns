@@ -1,0 +1,219 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# Clients
+set clientPoolB1 [$ns node]
+tb-set-node-os $clientPoolB1 XEN46-64-STD
+set clientPoolB2 [$ns node]
+tb-set-node-os $clientPoolB2 XEN46-64-STD
+
+set clientPoolC1 [$ns node]
+tb-set-node-os $clientPoolC1 XEN46-64-STD
+set clientPoolC2 [$ns node]
+tb-set-node-os $clientPoolC2 XEN46-64-STD
+
+set clientPoolD1 [$ns node]
+tb-set-node-os $clientPoolD1 XEN46-64-STD
+set clientPoolD2 [$ns node]
+tb-set-node-os $clientPoolD2 XEN46-64-STD
+
+set clientPoolE1 [$ns node]
+tb-set-node-os $clientPoolE1 XEN46-64-STD
+set clientPoolE2 [$ns node]
+tb-set-node-os $clientPoolE2 XEN46-64-STD
+
+set clientPoolF1 [$ns node]
+tb-set-node-os $clientPoolF1 XEN46-64-STD
+set clientPoolF2 [$ns node]
+tb-set-node-os $clientPoolF2 XEN46-64-STD
+
+# FOBS
+set nodeB01 [$ns node]
+tb-set-node-os $nodeB01 XEN46-64-STD
+tb-set-hardware $nodeB01 simple
+set nodeB02 [$ns node]
+tb-set-node-os $nodeB02 XEN46-64-STD
+tb-set-hardware $nodeB02 simple
+set nodeB10 [$ns node]
+tb-set-node-os $nodeB10 XEN46-64-STD
+tb-set-hardware $nodeB10 simple
+
+set nodeC01 [$ns node]
+tb-set-node-os $nodeC01 XEN46-64-STD
+tb-set-hardware $nodeC01 simple
+set nodeC02 [$ns node]
+tb-set-node-os $nodeC02 XEN46-64-STD
+tb-set-hardware $nodeC02 simple
+set nodeC10 [$ns node]
+tb-set-node-os $nodeC10 XEN46-64-STD
+tb-set-hardware $nodeC10 simple
+
+set nodeD01 [$ns node]
+tb-set-node-os $nodeD01 XEN46-64-STD
+tb-set-hardware $nodeD01 simple
+set nodeD02 [$ns node]
+tb-set-node-os $nodeD02 XEN46-64-STD
+tb-set-hardware $nodeD02 simple
+set nodeD10 [$ns node]
+tb-set-node-os $nodeD10 XEN46-64-STD
+tb-set-hardware $nodeD10 simple
+
+set nodeE01 [$ns node]
+tb-set-node-os $nodeE01 XEN46-64-STD
+tb-set-hardware $nodeE01 simple
+set nodeE02 [$ns node]
+tb-set-node-os $nodeE02 XEN46-64-STD
+tb-set-hardware $nodeE02 simple
+set nodeE10 [$ns node]
+tb-set-node-os $nodeE10 XEN46-64-STD
+tb-set-hardware $nodeE10 simple
+
+set nodeF01 [$ns node]
+tb-set-node-os $nodeF01 XEN46-64-STD
+tb-set-hardware $nodeF01 simple
+set nodeF02 [$ns node]
+tb-set-node-os $nodeF02 XEN46-64-STD
+tb-set-hardware $nodeF02 simple
+set nodeF10 [$ns node]
+tb-set-node-os $nodeF10 XEN46-64-STD
+tb-set-hardware $nodeF10 simple
+
+# NCPs linking to FOBs
+set nodeA1clientB [$ns node]
+tb-set-node-os $nodeA1clientB XEN46-64-STD
+tb-set-hardware $nodeA1clientB simple
+set nodeA2clientC [$ns node]
+tb-set-node-os $nodeA2clientC XEN46-64-STD
+tb-set-hardware $nodeA2clientC simple
+set nodeA3clientD [$ns node]
+tb-set-node-os $nodeA3clientD XEN46-64-STD
+tb-set-hardware $nodeA3clientD simple
+set nodeA4clientE [$ns node]
+tb-set-node-os $nodeA4clientE XEN46-64-STD
+tb-set-hardware $nodeA4clientE simple
+set nodeA5clientF [$ns node]
+tb-set-node-os $nodeA5clientF XEN46-64-STD
+tb-set-hardware $nodeA5clientF simple
+
+
+# pod link nodes
+set nodeA6pod1 [$ns node]
+tb-set-node-os $nodeA6pod1 XEN46-64-STD
+tb-set-hardware $nodeA6pod1 simple
+
+set nodeA7pod2 [$ns node]
+tb-set-node-os $nodeA7pod2 XEN46-64-STD
+tb-set-hardware $nodeA7pod2 simple
+
+# pod1
+set pod1N01 [$ns node]
+tb-set-node-os $pod1N01 XEN46-64-STD
+tb-set-hardware $pod1N01 simple
+set pod1N02 [$ns node]
+tb-set-node-os $pod1N02 XEN46-64-STD
+tb-set-hardware $pod1N02 simple
+set pod1N03 [$ns node]
+tb-set-node-os $pod1N03 XEN46-64-STD
+tb-set-hardware $pod1N03 simple
+set pod1N04 [$ns node]
+tb-set-node-os $pod1N04 XEN46-64-STD
+tb-set-hardware $pod1N04 simple
+set pod1N05 [$ns node]
+tb-set-node-os $pod1N05 XEN46-64-STD
+tb-set-hardware $pod1N05 simple
+
+# pod2
+set pod2N01 [$ns node]
+tb-set-node-os $pod2N01 XEN46-64-STD
+tb-set-hardware $pod2N01 simple
+set pod2N02 [$ns node]
+tb-set-node-os $pod2N02 XEN46-64-STD
+tb-set-hardware $pod2N02 simple
+set pod2N03 [$ns node]
+tb-set-node-os $pod2N03 XEN46-64-STD
+tb-set-hardware $pod2N03 simple
+set pod2N04 [$ns node]
+tb-set-node-os $pod2N04 XEN46-64-STD
+tb-set-hardware $pod2N04 simple
+set pod2N05 [$ns node]
+tb-set-node-os $pod2N05 XEN46-64-STD
+tb-set-hardware $pod2N05 simple
+
+# backhaul nodes
+set backhaulNodeA1 [$ns node]
+tb-set-node-os $backhaulNodeA1 XEN46-64-STD
+tb-set-hardware $backhaulNodeA1 simple
+
+# CONUS
+set serverX [$ns node]
+tb-set-node-os $serverX XEN46-64-STD
+tb-set-hardware $serverX inf
+
+# Tactical links 10mbps region B - Clients
+set linkB1C1 [$ns duplex-link $clientPoolB1 $nodeB01 10Mb 0.0ms DropTail]
+set linkB2C2 [$ns duplex-link $clientPoolB2 $nodeB02 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region B
+set linkB1B10 [$ns duplex-link $nodeB01 $nodeB10 10Mb 0.0ms DropTail]
+set linkB2B10 [$ns duplex-link $nodeB02 $nodeB10 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region C - Clients
+set linkC1C1 [$ns duplex-link $clientPoolC1 $nodeC01 10Mb 0.0ms DropTail]
+set linkC2C2 [$ns duplex-link $clientPoolC2 $nodeC02 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region C
+set linkC1C10 [$ns duplex-link $nodeC01 $nodeC10 10Mb 0.0ms DropTail]
+set linkC2C10 [$ns duplex-link $nodeC02 $nodeC10 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region D - Clients
+set linkD1C1 [$ns duplex-link $clientPoolD1 $nodeD01 10Mb 0.0ms DropTail]
+set linkD2C2 [$ns duplex-link $clientPoolD2 $nodeD02 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region D
+set linkD1D10 [$ns duplex-link $nodeD01 $nodeD10 10Mb 0.0ms DropTail]
+set linkD2D10 [$ns duplex-link $nodeD02 $nodeD10 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region E - Clients
+set linkE1C1 [$ns duplex-link $clientPoolE1 $nodeE01 10Mb 0.0ms DropTail]
+set linkE2C2 [$ns duplex-link $clientPoolE2 $nodeE02 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region E
+set linkE1E10 [$ns duplex-link $nodeE01 $nodeE10 10Mb 0.0ms DropTail]
+set linkE2E10 [$ns duplex-link $nodeE02 $nodeE10 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region F - Clients
+set linkF1C1 [$ns duplex-link $clientPoolF1 $nodeF01 10Mb 0.0ms DropTail]
+set linkF2C2 [$ns duplex-link $clientPoolF2 $nodeF02 10Mb 0.0ms DropTail]
+
+# Tactical links 10mbps region F
+set linkF1F10 [$ns duplex-link $nodeF01 $nodeF10 10Mb 0.0ms DropTail]
+set linkF2F10 [$ns duplex-link $nodeF02 $nodeF10 10Mb 0.0ms DropTail]
+
+# 100Mb links: backbone to FOBs
+set regAB [$ns duplex-link $nodeA1clientB $nodeB10 100Mb 0.0ms DropTail]
+set regAC [$ns duplex-link $nodeA2clientC $nodeC10 100Mb 0.0ms DropTail]
+set regAD [$ns duplex-link $nodeA3clientD $nodeD10 100Mb 0.0ms DropTail]
+set regAE [$ns duplex-link $nodeA4clientE $nodeE10 100Mb 0.0ms DropTail]
+set regAF [$ns duplex-link $nodeA5clientF $nodeF10 100Mb 0.0ms DropTail]
+
+# 500Mb FOB internal network
+set lanInternalA [$ns make-lan "$nodeA1clientB $nodeA2clientC $nodeA3clientD $nodeA4clientE $nodeA5clientF $nodeA6pod1 $nodeA7pod2 $backhaulNodeA1" 500Mb 0.0ms]
+
+
+# 500Mb POD1 connected to backbone through nodeA3/A6
+set pod1A [$ns duplex-link $nodeA6pod1 $pod1N01 500Mb 0.0ms DropTail]
+set pod1Lan [$ns make-lan "$pod1N01 $pod1N02 $pod1N03 $pod1N04 $pod1N05" 500Mb 0.0ms]
+
+# 500Mb POD2 connected to backbone through nodeA4/A11
+set pod2A [$ns duplex-link $nodeA7pod2 $pod2N01 500Mb 0.0ms DropTail]
+set pod2Lan [$ns make-lan "$pod2N01 $pod2N02 $pod2N03 $pod2N04 $pod2N05" 500Mb 0.0ms]
+
+
+# 1GB links: server X to region A (backbone)
+set backhaulLan [$ns make-lan "$backhaulNodeA1 $serverX" 1000Mb 0.0ms]
+#set regAX11000 [$ns duplex-link $backhaulNodeA1 $serverX 1000Mb 0.0ms DropTail]
+#set regAX21000 [$ns duplex-link $backhaulNodeA2 $serverX 1000Mb 0.0ms DropTail]
+#set regAX31000 [$ns duplex-link $backhaulNodeA3 $serverX 1000Mb 0.0ms DropTail]
+
+$ns rtproto Static
+$ns run

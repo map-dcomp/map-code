@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -82,7 +82,6 @@ import com.bbn.map.utils.MapLoggingConfigurationFactory;
 import com.bbn.protelis.common.testbed.termination.TerminationCondition;
 import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
-import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
 import com.bbn.protelis.utils.SimpleClock;
 import com.bbn.protelis.utils.VirtualClock;
@@ -527,11 +526,6 @@ public final class MapScenarioVisualization extends JFrame {
         visualizerPanel.add(visualizer, BorderLayout.CENTER);
 
         // setup dns panels
-        final DNSSim globalDns = sim.getGlobalDNS();
-        final DnsInformation globalPanel = new DnsInformation(new StringRegionIdentifier("GLOBAL"), globalDns);
-        dnsInfoPanels.add(globalPanel);
-        dnsPanel.add(globalPanel);
-
         sim.getAllRegions().forEach(region -> {
             final DNSSim dns = sim.getRegionalDNS(region);
             final DnsInformation panel = new DnsInformation(region, dns);

@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,6 +31,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.DemandGenerationGUI;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 
 /**
  * Stores intermediate information about a group of requests while it is being generated.
@@ -40,34 +48,50 @@ package com.bbn.map.DemandGenerationGUI;
  */
 public class RequestValue
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RequestValue.class);
+    
+    
     private long duration;
     
-    private double totalComputeLoad;
-    private double networkLoadRx;
-    private double networkLoadTx;
-    
     private int numClients;
+    private Map<NodeAttribute, Double> nodeLoad = new HashMap<>();
+    private Map<LinkAttribute, Double> networkLoad = new HashMap<>();
+//    private double totalComputeLoad;
+//    private double networkLoadRx;
+//    private double networkLoadTx;
     
     /**
      * 
      * @param duration
      *          the duration of the request in milliseconds
-     * @param totalComputeLoad
-     *          the total amount of compute load that this group will put on the system
-     * @param networkLoadRx
-     *          the RX network load for requests in this group
-     * @param networkLoadTx
-     *          the TX network load for requests in this group
+//     * @param totalComputeLoad
+//     *          the total amount of compute load that this group will put on the system
+//     * @param networkLoadRx
+//     *          the RX network load for requests in this group
+//     * @param networkLoadTx
+//     *          the TX network load for requests in this group    
      * @param numClients
      *          the total number of clients in this group of requests
+     * @param nodeLoad
+     *          attribute-value pairs for node load
+     * @param networkLoad
+     *          attribute-value pairs for network load
      */
-    public RequestValue(long duration, double totalComputeLoad, double networkLoadRx, double networkLoadTx, int numClients)
+    public RequestValue(long duration,
+//            double totalComputeLoad, double networkLoadRx, double networkLoadTx,
+            int numClients,
+            Map<NodeAttribute, Double> nodeLoad,
+            Map<LinkAttribute, Double> networkLoad)
     {
         this.duration = duration;
-        this.totalComputeLoad = totalComputeLoad;
-        this.networkLoadRx = networkLoadRx;
-        this.networkLoadTx = networkLoadTx;
+//        this.totalComputeLoad = totalComputeLoad;
+//        this.networkLoadRx = networkLoadRx;
+//        this.networkLoadTx = networkLoadTx;
         this.numClients = numClients;
+        this.nodeLoad = nodeLoad;
+        this.networkLoad = networkLoad;
+        
+        LOGGER.debug("Constructing RequestValue: {}", this);
     }
     
     
@@ -79,29 +103,29 @@ public class RequestValue
         return duration;
     }
     
-    /**
-     * @return the total amount of compute load that this group will put on the system
-     */
-    public double getTotalComputeLoad()
-    {
-        return totalComputeLoad;
-    }
-    
-    /**
-     * @return the RX network load for requests in this group
-     */
-    public double getNetworkLoadRx()
-    {
-        return networkLoadRx;
-    }
-    
-    /**
-     * @return the TX network load for requests in this group
-     */
-    public double getNetworkLoadTx()
-    {
-        return networkLoadTx;
-    }
+//    /**
+//     * @return the total amount of compute load that this group will put on the system
+//     */
+//    public double getTotalComputeLoad()
+//    {
+//        return totalComputeLoad;
+//    }
+//    
+//    /**
+//     * @return the RX network load for requests in this group
+//     */
+//    public double getNetworkLoadRx()
+//    {
+//        return networkLoadRx;
+//    }
+//    
+//    /**
+//     * @return the TX network load for requests in this group
+//     */
+//    public double getNetworkLoadTx()
+//    {
+//        return networkLoadTx;
+//    }
     
     /**
      * @return the total number of clients in this group of requests
@@ -111,6 +135,23 @@ public class RequestValue
         return numClients;
     }
     
+    
+    /**
+     * @return the node load attribute values for this group of requests
+     */
+    public Map<NodeAttribute, Double> getNodeLoad()
+    {
+        return nodeLoad;
+    }
+
+    /**
+     * @return the network load attribute values for this group of requests
+     */
+    public Map<LinkAttribute, Double> getNetworkLoad()
+    {
+        return networkLoad;
+    }
+
     /**
      * Sum the load and number of clients of two {@link RequestValue}s together. The duration of the {@link RequestValue}s is averaged.
      * 
@@ -122,17 +163,42 @@ public class RequestValue
      */
     public static RequestValue sum(RequestValue a, RequestValue b)
     {
-        return new RequestValue((a.duration + b.duration) / 2,
-                a.totalComputeLoad + b.totalComputeLoad,
-                a.networkLoadRx + b.networkLoadRx,
-                a.networkLoadTx + b.networkLoadTx,
-                a.numClients + b.numClients);
+        long duration = (a.getDuration() + b.getDuration()) / 2;
+        int numClients = a.getNumClients() + b.getNumClients();
+        
+        Map<NodeAttribute, Double> nodeLoad = new HashMap<>();
+        
+        a.getNodeLoad().forEach((attr, value) ->
+        {
+            nodeLoad.merge(attr, value, Double::sum);
+        });
+        
+        b.getNodeLoad().forEach((attr, value) ->
+        {
+            nodeLoad.merge(attr, value, Double::sum);
+        });
+        
+        
+        Map<LinkAttribute, Double> networkLoad = new HashMap<>();
+        
+        a.getNetworkLoad().forEach((attr, value) ->
+        {
+            networkLoad.merge(attr, value, Double::sum);
+        });
+        
+        b.getNetworkLoad().forEach((attr, value) ->
+        {
+            networkLoad.merge(attr, value, Double::sum);
+        });
+        
+        
+        return new RequestValue(duration, numClients, nodeLoad, networkLoad);
     }
     
     @Override
     public String toString()
     {
-        return ("[" + "duration: " + duration + ", totalComputeLoad: " + totalComputeLoad +
-                ", networkLoad RX,TX: " + networkLoadRx + "," + networkLoadTx + ", numClients: " + numClients + "]");
+        return ("[" + "duration: " + duration + ", nodeLoad: " + nodeLoad +
+                ", networkLoad: " + networkLoad + ", numClients: " + numClients + "]");
     }
 }

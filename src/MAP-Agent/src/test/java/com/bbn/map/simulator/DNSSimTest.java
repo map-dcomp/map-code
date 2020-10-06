@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -49,6 +49,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 
+import com.bbn.map.AgentConfiguration;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.dns.DelegateRecord;
 import com.bbn.map.dns.DnsRecord;
@@ -75,7 +76,7 @@ public class DNSSimTest {
      */
     @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestUtils.AddTestNameToLogContext());
+    public RuleChain chain = TestUtils.getStandardRuleChain();
 
     private DNSSim dns;
     private Simulation simulation;
@@ -159,10 +160,10 @@ public class DNSSimTest {
         final RegionIdentifier sourceRegion = null;
         final int ttl = 100;
         final int numRecords = 3;
-        final int numCycles = 1000000; // enough times to get a good sampling
+        final int numCycles = 100000; // enough times to get a good sampling
         final int numQueries = numRecords * numCycles;
         final String clientName = "test-client";
-        final double weightPrecision = 1E-3;
+        final double weightPrecision = 1D / AgentConfiguration.getInstance().getDnsWeightPrecision();
         final double expectedEvenWeight = 1D / numRecords;
 
         dns.addRecord(new NameRecord(sourceRegion, ttl, service, node1), 1);

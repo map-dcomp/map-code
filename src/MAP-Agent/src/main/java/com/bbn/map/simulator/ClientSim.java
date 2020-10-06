@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -31,24 +31,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
-import java.io.IOException;
 import java.net.UnknownHostException;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.PriorityQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nonnull;
 
-import org.apache.commons.io.output.FileWriterWithEncoding;
-import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.CloseableThreadContext;
 import org.slf4j.Logger;
@@ -61,14 +54,14 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.common.value.Dependency;
 import com.bbn.map.common.value.DependencyDemandFunction;
-import com.bbn.map.common.value.LinkMetricName;
-import com.bbn.map.common.value.NodeMetricName;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NetworkNode;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
@@ -77,142 +70,15 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-import java8.util.Objects;
-
 /**
  * Simulate a client by producing demand.
  * 
  */
-public class ClientSim extends Thread {
-
-    /**
-     * If a request is processed this many time units late a warning is output.
-     */
-    private static final long TIME_PROCESSING_THRESOLD = 10;
-
-    /**
-     * The status of applying a request on the network.
-     * 
-     * @author jschewe
-     *
-     */
-    public enum RequestResult {
-        /**
-         * The client request succeeded.
-         */
-        SUCCESS,
-        /**
-         * The client request succeeded, but was slowed down.
-         */
-        SLOW,
-        /**
-         * The client request failed.
-         */
-        FAIL;
-
-        /**
-         * Provide a way to choose the worst result with {@link #FAIL} being
-         * worse than {@link #SLOW}, which is worse than {@link #SUCCESS}.
-         * 
-         * @param one
-         *            the first result to compare
-         * @param two
-         *            the second result to compare
-         * @return the worst result
-         */
-        public static RequestResult chooseWorstResult(final RequestResult one, final RequestResult two) {
-            if (one == FAIL || two == FAIL) {
-                return FAIL;
-            } else if (one == SLOW || two == SLOW) {
-                return SLOW;
-            } else {
-                return SUCCESS;
-            }
-        }
-    }
+public class ClientSim extends AbstractClientSimulator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientSim.class);
     private final NetworkClient client;
 
-    private ObjectWriter mapper = Controller.createDumpWriter();
-
-    /**
-     * The number of client requests attempted is the sum of the
-     * {@link ClientLoad#getNumClients()} property of the {@link ClientLoad}
-     * objects that have been processed.
-     * 
-     * @return the number of client requests that were attempted
-     */
-    public int getNumRequestsAttempted() {
-        return state.getNumRequestsAttempted();
-    }
-
-    /**
-     * The number of client requests succeeded.
-     * 
-     * @return the number of client requests that succeeded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSucceeded() {
-        return state.getNumRequestsSucceeded();
-    }
-
-    /**
-     * @return the number of client requests that failed because the network
-     *         path was overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsFailedForNetworkLoad() {
-        return state.getNumRequestsFailedForNetworkLoad();
-    }
-
-    /**
-     * @return the number of client requests that failed because the server was
-     *         overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsFailedForServerLoad() {
-        return state.getNumRequestsFailedForServerLoad();
-    }
-
-    /**
-     * @return the number of client requests that were slow because the network
-     *         path was overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSlowForNetworkLoad() {
-        return state.getNumRequestsSlowForNetworkLoad();
-    }
-
-    /**
-     * @return the number of client requests that were slow because both the
-     *         network path and the server were overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSlowForNetworkAndServerLoad() {
-        return state.getNumRequestsSlowForNetworkAndServerLoad();
-    }
-
-    /**
-     * @return the number of client requests that are slow because the server
-     *         was overloaded
-     * @see #getNumRequestsAttempted()
-     */
-    public int getNumRequestsSlowForServerLoad() {
-        return state.getNumRequestsSlowForServerLoad();
-    }
-
-    /**
-     * The number of requests from this client that were serviced by each
-     * region.
-     * 
-     * @return key is region, value is count. Unmodifiable map.
-     */
-    public Map<RegionIdentifier, Integer> getNumRequestsServicedByRegion() {
-        return Collections.unmodifiableMap(state.getNumRequestsServicedByRegion());
-    }
-
-    private final Simulation simulation;
     private final ImmutableList<ClientLoad> clientRequests;
 
     /**
@@ -224,8 +90,6 @@ public class ClientSim extends Thread {
         return clientRequests;
     }
 
-    private AtomicBoolean running = new AtomicBoolean(false);
-
     /**
      * @param simulation
      *            the simulation
@@ -235,9 +99,10 @@ public class ClientSim extends Thread {
      *            the base path to demand, may be null
      */
     public ClientSim(@Nonnull final Simulation simulation, @Nonnull final NetworkClient client, final Path demandPath) {
-        super(client.getNodeIdentifier().getName() + "-simulator");
+        super(simulation);
 
-        this.simulation = simulation;
+        setName(client.getNodeIdentifier().getName() + "-simulator");
+
         this.client = client;
 
         if (null == demandPath) {
@@ -256,59 +121,18 @@ public class ClientSim extends Thread {
     }
 
     /**
-     * Shutdown the client simulator.
-     */
-    public void shutdownSimulator() {
-        running.set(false);
-        this.interrupt();
-    }
-
-    /**
-     * Start the simulator.
-     */
-    public void startSimulator() {
-        start();
-    }
-
-    /**
-     * Find the
-     * 
-     * @throws IllegalArgumentException
-     *             if a network node with the specified id cannot be found
-     */
-    private NetworkNode lookupNode(final NodeIdentifier id) {
-        final NetworkNode server = simulation.getControllerById(id);
-        if (null == server) {
-            final NetworkNode client = simulation.getClientById(id);
-            if (null == client) {
-                final ContainerSim container = simulation.getContainerById((NodeIdentifier) id);
-                if (null == container) {
-                    throw new IllegalArgumentException(
-                            id + " cannot be found in the simulation as a client, server or container");
-                } else {
-                    return container.getParentNode();
-                }
-            } else {
-                return client;
-            }
-        } else {
-            return server;
-        }
-    }
-
-    /**
      * Run the simulator. The thread will execute until either
      * {@link #shutdownSimulator()} is called or all client requests have been
      * dispatched and their durations completed.
      */
     @Override
     public void run() {
-        running.set(true);
+        setRunnning();
 
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Starting client sim thread");
         }
-        final VirtualClock clock = simulation.getClock();
+        final VirtualClock clock = getSimulation().getClock();
 
         final PriorityQueue<QueueEntry> runQueue = new PriorityQueue<>(QueueComparator.INSTANCE);
 
@@ -320,12 +144,14 @@ public class ClientSim extends Thread {
 
         final ApplicationManagerApi applicationManager = AppMgrUtils.getApplicationManager();
 
+        final ObjectWriter mapper = Controller.createDumpWriter();
+
         long latestEndOfRequest = 0;
 
         long numRequests = 0;
         long totalRequestStartDelay = 0;
 
-        while (running.get() && !runQueue.isEmpty()) {
+        while (isRunning() && !runQueue.isEmpty()) {
             final QueueEntry entry = runQueue.poll();
             if (null == entry) {
                 LOGGER.error(
@@ -341,7 +167,7 @@ public class ClientSim extends Thread {
             }
 
             clock.waitUntilTime(req.getStartTime());
-            LOGGER.info("Applying client request: " + req);
+            LOGGER.info("Applying client request: {} from {}", req, clientId);
 
             final long requestStartDelay = clock.getCurrentTime() - req.getStartTime();
             if (requestStartDelay > TIME_PROCESSING_THRESOLD) {
@@ -367,8 +193,6 @@ public class ClientSim extends Thread {
                 try (CloseableThreadContext.Instance ctc = CloseableThreadContext
                         .push(String.format("%d of %d", clientIndex + 1, req.getNumClients()))) {
 
-                    RequestResult serverResult = RequestResult.FAIL;
-
                     // do a DNS lookup each time in case there are
                     // multiple servers for the requested service
 
@@ -376,92 +200,40 @@ public class ClientSim extends Thread {
                         if (LOGGER.isTraceEnabled()) {
                             LOGGER.trace("getting container for hostname {}", appSpec.getServiceHostname());
                         }
-                        final ContainerSim destContainer = simulation.getContainerForService(clientId, clientRegion,
-                                service);
-                        LOGGER.info("  request for {} goes to {}", appSpec.getServiceHostname(),
-                                destContainer.getIdentifier());
+                        final ContainerSim destContainer = getSimulation().getContainerForService(clientId,
+                                clientRegion, service);
+                        // final destination for the network traffic
+                        final NodeIdentifier destinationIdentifier = destContainer.getIdentifier();
+                        LOGGER.info("  request for {} goes to {}", appSpec.getServiceHostname(), destinationIdentifier);
 
                         final NetworkServer destNode = destContainer.getParentNode();
                         if (!destNode.isExecuting()) {
                             LOGGER.warn("Server {} is not running, cannot send request", destNode);
-                            state.incrementRequestsFailedForDownNode();
+                            getSimulationState().incrementRequestsFailedForDownNode();
 
                             dumpClientRequestRecord(new ClientRequestRecord(destNode.getNodeIdentifier(),
-                                    destContainer.getIdentifier(), now, req, 0, null, null, serverResult, true),
-                                    mapper);
+                                    destinationIdentifier, now, req, 0, null, null, RequestResult.FAIL, true), mapper);
 
                             continue;
                         }
 
-                        final List<NetworkLink> networkPath = simulation.getPath(localClient, destNode);
-                        if (networkPath.isEmpty()) {
-                            LOGGER.warn("No path to {} from {}", localClient, destNode);
-                            state.incrementRequestsFailedForDownNode();
+                        final Pair<Boolean, Long> requestResult = executeRequest(clientId, destinationIdentifier,
+                                localClient, destNode, mapper, destContainer, clientRegion, now, req,
+                                latestEndOfRequest);
+                        if (requestResult.getLeft()) {
+                            latestEndOfRequest = requestResult.getRight();
 
-                            dumpClientRequestRecord(new ClientRequestRecord(destNode.getNodeIdentifier(),
-                                    destContainer.getIdentifier(), now, req, 0, null, null, serverResult, true),
-                                    mapper);
-
-                            continue;
-                        }
-
-                        final ImmutableTriple<RequestResult, List<LinkLoadEntry>, List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>>> networkResult = applyNetworkDemand(
-                                clientId, localClient.getNodeIdentifier(), now, req, destContainer, networkPath);
-
-                        if (!RequestResult.FAIL.equals(networkResult.getLeft())) {
-                            serverResult = destContainer.addNodeLoad(clientId, now, clientRegion, req);
-
-                            if (RequestResult.FAIL.equals(serverResult)) {
-                                unapplyNetworkDemand(networkResult.getMiddle());
-                            }
-                        }
-
-                        // record the results of the request
-                        List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkLoads = new ArrayList<>();
-                        for (ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkResult : networkResult
-                                .getRight()) {
-                            ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkLoad = linkResult;
-                            linkLoads.add(linkLoad);
-                        }
-
-                        dumpClientRequestRecord(new ClientRequestRecord(destNode.getNodeIdentifier(),
-                                destContainer.getIdentifier(), now, req, networkResult.getRight().size(), linkLoads,
-                                networkResult.getLeft(), serverResult, false), mapper);
-
-                        if (RequestResult.FAIL.equals(networkResult.getLeft())) {
-                            state.incrementRequestsFailedForNetworkLoad();
-                            LOGGER.info("Request failed for network load");
-                        } else if (RequestResult.FAIL.equals(serverResult)) {
-                            state.incrementRequestsFailedForServerLoad();
-                            LOGGER.info("Request failed for server load");
-                        } else {
-                            if (RequestResult.SLOW.equals(networkResult.getLeft())) {
-                                state.incrementRequestsSlowForNetworkLoad();
-                            }
-                            if (RequestResult.SLOW.equals(serverResult)) {
-                                state.incrementRequestsSlowForServerLoad();
-                            }
-                            if (RequestResult.SLOW.equals(networkResult.getLeft())
-                                    && RequestResult.SLOW.equals(serverResult)) {
-                                state.incrementRequestsSlowForNetworkAndServerLoad();
-                            }
-
-                            final RegionIdentifier destinationRegion = destNode.getRegionIdentifier();
-                            state.incrementRequestsServicedByRegion(destinationRegion);
-
-                            final long endOfThisRequest = req.getStartTime()
-                                    + Math.max(req.getNetworkDuration(), req.getServerDuration());
-                            latestEndOfRequest = Math.max(latestEndOfRequest, endOfThisRequest);
-
-                            // Create dependent load for each successful client
-                            // request. One might be able to combine multiple
+                            // Create dependent load for each successful
+                            // client
+                            // request. One might be able to combine
+                            // multiple
                             // requests from common destContainer if this
                             // creates too many requests.
                             for (final Dependency dependency : appSpec.getDependencies()) {
                                 final ClientLoad dependentRequest = createDependentRequest(req, dependency, 1);
 
                                 LOGGER.info("Created dependent demand {}", dependentRequest);
-                                final QueueEntry dependentEntry = new QueueEntry(destContainer.getIdentifier(),
+                                final QueueEntry dependentEntry = new QueueEntry(destinationIdentifier,
                                         dependentRequest);
                                 runQueue.add(dependentEntry);
                             }
@@ -471,14 +243,14 @@ public class ClientSim extends Thread {
                         LOGGER.warn("Error finding container for service: {}. Client request failed.", service, uhe);
 
                         dumpClientRequestRecord(
-                                new ClientRequestRecord(null, null, now, req, 0, null, null, serverResult, true),
+                                new ClientRequestRecord(null, null, now, req, 0, null, null, RequestResult.FAIL, true),
                                 mapper);
 
-                        state.incrementRequestsFailedForDownNode();
+                        getSimulationState().incrementRequestsFailedForDownNode();
                     }
 
                     // increment counters
-                    state.incrementRequestsAttempted();
+                    getSimulationState().incrementRequestsAttempted();
 
                 } // logging context
                 catch (final DNSSim.DNSLoopException e) {
@@ -487,7 +259,7 @@ public class ClientSim extends Thread {
                     dumpClientRequestRecord(new ClientRequestRecord(null, null, now, req, 0, null, null, null, true),
                             mapper);
 
-                    state.incrementRequestsAttempted();
+                    getSimulationState().incrementRequestsAttempted();
                 } // allocate logger context and catch dns loops
 
             } // foreach client request
@@ -527,9 +299,9 @@ public class ClientSim extends Thread {
         final long networkDuration = demandFunction.computeNetworkDuration(req.getServerDuration(),
                 req.getNetworkDuration());
 
-        final ImmutableMap<NodeMetricName, Double> nodeLoad = ImmutableMap
+        final ImmutableMap<NodeAttribute, Double> nodeLoad = ImmutableMap
                 .copyOf(demandFunction.computeDependencyNodeLoad(req.getNodeLoad()));
-        final ImmutableMap<LinkMetricName, Double> linkLoad = ImmutableMap
+        final ImmutableMap<LinkAttribute, Double> linkLoad = ImmutableMap
                 .copyOf(demandFunction.computeDependencyLinkLoad(req.getNetworkLoad()));
 
         final ClientLoad dependentLoad = new ClientLoad(startTime, serverDuration, networkDuration, numClients,
@@ -537,156 +309,132 @@ public class ClientSim extends Thread {
         return dependentLoad;
     }
 
-    // lock for the dump properties
-    private final Object dumpPropertyLock = new Object();
-
-    private Path baseOutputDirectory = null;
-
     /**
+     * <code>destNode</code> and <code>destinationIdentifier</code> will be
+     * different when <code>destContainer</code> is specified.
      * 
-     * @return the base directory to write to, the node will create a directory
-     *         within this directory to put it's state. May be null, in which
-     *         case data will not be dumped, but an error will be logged.
-     */
-    public Path getBaseOutputDirectory() {
-        synchronized (dumpPropertyLock) {
-            return baseOutputDirectory;
-        }
-    }
-
-    /**
-     * 
-     * @param v
-     *            see {@link #getBaseOutputDirectory()}
-     */
-    public void setBaseOutputDirectory(final Path v) {
-        synchronized (dumpPropertyLock) {
-            baseOutputDirectory = v;
-        }
-    }
-
-    /**
-     * Records a client request and other relevant information to a JSON file.
-     * 
-     * @param record
-     *            the object storing the request information
-     * @param mapper
-     *            the {@link ObjectWriter} for outputting the information to
-     *            JSON
-     * 
-     */
-    private void dumpClientRequestRecord(@Nonnull final ClientRequestRecord record,
-            @Nonnull final ObjectWriter mapper) {
-        if (baseOutputDirectory != null) {
-            try {
-                Path outputDirectory = baseOutputDirectory.resolve(getClientName());
-
-                if (outputDirectory.toFile().exists() || outputDirectory.toFile().mkdirs()) {
-                    Path clientRequestsLogFilename = outputDirectory
-                            .resolve(String.format("client_requests_sent-%s.json", getClient().getName()));
-
-                    try (FileWriterWithEncoding writer = new FileWriterWithEncoding(clientRequestsLogFilename.toFile(),
-                            Charset.defaultCharset(), true)) {
-                        mapper.writeValue(writer, record);
-                        LOGGER.debug("Write to client request log file: {}", clientRequestsLogFilename);
-                    }
-                }
-            } catch (IOException e) {
-                LOGGER.error("Unable to dump client request record.", e);
-            }
-        }
-    }
-
-    /**
-     * Apply the network demand to all nodes on the path.
-     *
-     * @param firstNodeId
-     *            the first node in the path, this is the same as the clientId
-     *            if the client is a node on the network graph and not a
-     *            container
      * @param clientId
-     *            the client that is creating the network load
-     * @return the request status, the applied loads for later unapplying if
-     *         needed, and the current loads
+     *            the client making the request
+     * @param destinationIdentifier
+     *            the identifier of the destination node
+     * @param localClient
+     *            the node making the request
+     * @param destNodegoes
+     *            the node receiving the request, must be a node in the graph.
+     *            Note that containers are not in the graph.
+     * @param mapper
+     *            used to write out the state of the request
+     * @param destContainer
+     *            the container receiving the traffic, may be null
+     * @param clientRegion
+     *            the region that the request is being made from
+     * @param now
+     *            what time it is now
+     * @param req
+     *            the request
+     * @param latestEndOfRequest
+     *            the current end of the last request
+     * @return boolean if the request succeeded, the new value of end of last
+     *         request
      */
-    private ImmutableTriple<RequestResult, List<LinkLoadEntry>, List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>>> applyNetworkDemand(
-            final NodeIdentifier clientId,
-            final NodeIdentifier firstNodeId,
+    private Pair<Boolean, Long> executeRequest(final NodeIdentifier clientId,
+            final NodeIdentifier destinationIdentifier,
+            final NetworkNode localClient,
+            final NetworkNode destNode,
+            final ObjectWriter mapper,
+            final ContainerSim destContainer,
+            final RegionIdentifier clientRegion,
             final long now,
             final ClientLoad req,
-            final ContainerSim serviceContainer,
-            final List<NetworkLink> path) {
+            final long latestEndOfRequest) {
 
-        List<ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkLoads = new ArrayList<>();
+        final NodeNetworkFlow flow = createNetworkFlow(clientId, destinationIdentifier);
 
-        // need to break once there is a failure
-        // need to keep track of the applied link loads
+        final NetworkDemandApplicationResult networkResult;
+        if (!localClient.getNodeIdentifier().equals(destNode.getNodeIdentifier())) {
+            final List<NetworkLink> networkPath = getSimulation().getPath(localClient, destNode);
+            if (networkPath.isEmpty()) {
+                LOGGER.warn("No path to {} from {}", destNode, localClient);
+                getSimulationState().incrementRequestsFailedForDownNode();
 
-        RequestResult result = RequestResult.SUCCESS;
+                dumpClientRequestRecord(new ClientRequestRecord(destNode.getNodeIdentifier(), destinationIdentifier,
+                        now, req, 0, null, null, RequestResult.FAIL, true), mapper);
 
-        final List<LinkLoadEntry> appliedLoads = new LinkedList<>();
+                return Pair.of(false, latestEndOfRequest);
+            } else {
+                LOGGER.trace("Path from {} to {} is {}", localClient, destNode, networkPath);
+            }
+            networkResult = applyNetworkDemand(getSimulation(), clientId, localClient.getNodeIdentifier(), now, req,
+                    destContainer, flow, networkPath);
+        } else {
+            // traffic is between 2 containers on the same node, no network
+            // traffic to apply, treat this as success with nothing to do
+            networkResult = new NetworkDemandApplicationResult();
+            networkResult.result = RequestResult.SUCCESS;
+        }
 
-        NodeIdentifier localSource = firstNodeId;
-        for (final NetworkLink link : path) {
-            final LinkResourceManager lmgr = simulation.getLinkResourceManager(link);
+        final RequestResult serverResult;
+        if (!RequestResult.FAIL.equals(networkResult.result)) {
+            if (null != destContainer) {
+                serverResult = destContainer.addNodeLoad(clientId, now + Math.round(networkResult.pathLinkDelay),
+                        clientRegion, req);
+            } else {
+                // no destination container means there is no
+                // way for the server to fail
+                serverResult = RequestResult.SUCCESS;
+            }
 
-            final ImmutableTriple<ClientSim.RequestResult, LinkLoadEntry, ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>>> linkResult = lmgr
-                    .addLinkLoad(now, req, clientId, localSource);
+            if (RequestResult.FAIL.equals(serverResult)) {
+                unapplyNetworkDemand(networkResult.appliedLoads);
+            }
+        } else {
+            serverResult = RequestResult.FAIL;
+        }
 
-            final ClientSim.RequestResult requestResult = linkResult.getLeft();
-            final LinkLoadEntry appliedLinkLoad = linkResult.getMiddle();
-            final ImmutableMap<NodeIdentifier, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute<?>, Double>>> linkLoad = linkResult
-                    .getRight();
+        // record the results of the request
+        final List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoads = new ArrayList<>();
+        for (ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkResult : networkResult.linkLoads) {
+            ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkLoad = linkResult;
             linkLoads.add(linkLoad);
-
-            result = RequestResult.chooseWorstResult(result, requestResult);
-            if (linkResult.getLeft() == RequestResult.FAIL) {
-                LOGGER.trace("Failed for network load at link {}", link);
-
-                // no sense going farther
-                break;
-            } else {
-                appliedLoads.add(appliedLinkLoad);
-            }
-
-            final NodeIdentifier localDest;
-            if (link.getLeft().getNodeIdentifier().equals(localSource)) {
-                localDest = link.getRight().getNodeIdentifier();
-            } else if (link.getRight().getNodeIdentifier().equals(localSource)) {
-                localDest = link.getLeft().getNodeIdentifier();
-            } else {
-                throw new RuntimeException(
-                        "Invalid path, cannot find one side of the link that has " + localSource.getName());
-            }
-
-            localSource = localDest;
-        } // foreach link in the path
-
-        if (RequestResult.FAIL != result) {
-            // apply to the container
-            final Pair<RequestResult, LinkLoadEntry> containerResult = serviceContainer.addLinkLoad(req, clientId);
-
-            result = RequestResult.chooseWorstResult(result, containerResult.getLeft());
         }
 
-        if (RequestResult.FAIL == result) {
-            // unapply on failure
-            unapplyNetworkDemand(appliedLoads);
+        dumpClientRequestRecord(new ClientRequestRecord(destNode.getNodeIdentifier(), destinationIdentifier, now, req,
+                linkLoads.size(), linkLoads, networkResult.result, serverResult, false), mapper);
+
+        if (RequestResult.FAIL.equals(networkResult.result)) {
+            getSimulationState().incrementRequestsFailedForNetworkLoad();
+            LOGGER.info("Request for {} to {} failed for network load", req.getService().getArtifact(),
+                    destContainer.getIdentifier());
+            return Pair.of(false, latestEndOfRequest);
+        } else if (RequestResult.FAIL.equals(serverResult)) {
+            getSimulationState().incrementRequestsFailedForServerLoad();
+            LOGGER.info("Request for {} to {} failed for server load", req.getService().getArtifact(),
+                    destContainer.getIdentifier());
+            return Pair.of(false, latestEndOfRequest);
+        } else {
+            if (RequestResult.SLOW.equals(networkResult.result)) {
+                getSimulationState().incrementRequestsSlowForNetworkLoad();
+            }
+            if (RequestResult.SLOW.equals(serverResult)) {
+                getSimulationState().incrementRequestsSlowForServerLoad();
+            }
+            if (RequestResult.SLOW.equals(networkResult.result) && RequestResult.SLOW.equals(serverResult)) {
+                getSimulationState().incrementRequestsSlowForNetworkAndServerLoad();
+            }
+            if (RequestResult.SUCCESS.equals(networkResult.result) && RequestResult.SUCCESS.equals(serverResult)) {
+                LOGGER.info("Request for {} to {} succeeded", req.getService().getArtifact(),
+                        destContainer.getIdentifier());
+            }
+
+            final RegionIdentifier destinationRegion = destNode.getRegionIdentifier();
+            getSimulationState().incrementRequestsServicedByRegion(destinationRegion);
+
+            final long endOfThisRequest = req.getStartTime()
+                    + Math.max(req.getNetworkDuration(), req.getServerDuration());
+            final long newLatestEndOfRequest = Math.max(latestEndOfRequest, endOfThisRequest);
+
+            return Pair.of(true, newLatestEndOfRequest);
         }
-
-        return ImmutableTriple.of(result, appliedLoads, linkLoads);
-    }
-
-    /**
-     * Unapply the specified link loads from the specified resource managers
-     */
-    private static void unapplyNetworkDemand(final List<LinkLoadEntry> appliedLoads) {
-        appliedLoads.forEach(entry -> {
-            final LinkResourceManager resManager = entry.getParent();
-
-            resManager.removeLinkLoad(entry);
-        });
-
     }
 
     /**
@@ -696,20 +444,9 @@ public class ClientSim extends Thread {
         return client.getRegionIdentifier();
     }
 
-    /**
-     * @return the name of the client
-     */
-    public String getClientName() {
+    @Override
+    public String getSimName() {
         return client.getName();
-    }
-
-    private ClientState state;
-
-    /**
-     * @return the state information of the simulation
-     */
-    public ClientState getSimulationState() {
-        return state;
     }
 
     /**
@@ -764,6 +501,13 @@ public class ClientSim extends Thread {
         public ClientLoad getClientLoad() {
             return clientLoad;
         }
+    }
+
+    private ClientState state;
+
+    @Override
+    public ClientState getSimulationState() {
+        return state;
     }
 
 }

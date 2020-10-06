@@ -1,6 +1,6 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019>, <Raytheon BBN Technologies>
-To be applied to the DCOMP/MAP Public Source Code Release dated 2019-03-14, with
+Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
 Dispersed Computing (DCOMP)
@@ -32,11 +32,13 @@ BBN_LICENSE_END*/
 package com.bbn.map.ChartGeneration;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,13 +56,13 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jfree.util.Log;
 
 import com.bbn.map.Controller.NodeState;
 import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.diffplug.common.base.Errors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 
@@ -123,7 +125,7 @@ public class DCOPPlanUpdateTableGenerator {
         Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> serviceRegionPlans = new HashMap<>();
         List<RegionIdentifier> regions = new ArrayList<>();
 
-        ChartGenerationUtils.visitTimeFolders(inputFolder.toPath(), (nodeName, timeFolder, time) -> {
+        ChartGenerationUtils.visitTimeFolders(inputFolder.toPath(), (nodeName, timeFolder, folderTime) -> {
 
             final Path nodeStateFile = timeFolder.resolve(NODE_STATE_FILENAME);
 
@@ -136,19 +138,19 @@ public class DCOPPlanUpdateTableGenerator {
 
                     if (Files.exists(regionPlanFile)) {
                         try (BufferedReader regionPlanReader = Files.newBufferedReader(regionPlanFile)) {
-                            final RegionPlan regionPlan = mapper.readValue(regionPlanReader, RegionPlan.class);
-                            LOGGER.debug("Read region plan for time {}: {}", time, regionPlan);
-                            processRegionPlan(time, nodeState.getRegion().getName(), nodeState.getName(), regionPlan,
+                            final RegionPlan regionPlan = mapper.readValue(regionPlanReader, RegionPlan.class);                            
+                            LOGGER.debug("Read region plan for time {}: {}", folderTime, regionPlan);
+                            processRegionPlan(folderTime, nodeState.getRegion().getName(), nodeState.getName(), regionPlan,
                                     regionsPlans);
                         } catch (final IOException e) {
                             LOGGER.error("Error parsing JSON file: {}", regionPlanFile, e);
                         }
                     } else {
-                        LOGGER.info("WARNING: At time {} DCOP is running but RegionPlan file '{}' not found.", time,
+                        LOGGER.info("WARNING: At time {} DCOP is running but RegionPlan file '{}' not found.", folderTime,
                                 regionPlanFile);
                     }
                 } else {
-                    processRegionPlan(time, nodeState.getRegion().getName(), nodeState.getName(), null, regionsPlans);
+                    processRegionPlan(folderTime, nodeState.getRegion().getName(), nodeState.getName(), null, regionsPlans);
                 }
 
             } catch (final IOException e) {
@@ -184,6 +186,91 @@ public class DCOPPlanUpdateTableGenerator {
         outputServicePlanChangeMatrices(outputFolder, serviceRegionPlans,
                 Lists.copyOf(ChartGenerationUtils.getSecondOrderKeys(timeBinnedRegionsPlans)), regions);
         outputServicePlanChangeGnuPlotFiles(outputFolder, serviceRegionPlans, regions);
+
+        try {
+            outputDcopPlans(outputFolder.toPath(), timeBinnedRegionsPlans, regions);
+        } catch (final IOException e) {
+            LOGGER.error("Unable to print DCOP plans", e);
+        }
+    }
+
+    private void outputDcopPlans(final Path outputFolder,
+            final Map<String, Map<Long, Map<String, RegionPlan>>> timeBinnedRegionsPlans,
+            final List<RegionIdentifier> regions) throws IOException {
+
+        final Map<RegionIdentifier, Map<Long, RegionPlan>> plansPerRegion = new HashMap<>();
+        timeBinnedRegionsPlans.forEach((regionName, regionData) -> {
+            regionData.forEach((time, timeData) -> {
+                timeData.forEach((nodeName, plan) -> {
+                    if (null != plan) {
+                        plansPerRegion.computeIfAbsent(plan.getRegion(), k -> new HashMap<>()).put(time, plan);
+                    }
+                });
+            });
+        });
+
+        final int numNonRegionColumns = 3;
+        final String[] header = new String[numNonRegionColumns + regions.size()];
+        header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
+        header[1] = "service";
+        header[2] = "plan_region";
+        for (int i = 0; i < regions.size(); ++i) {
+            header[numNonRegionColumns + i] = regions.get(i).getName();
+        }
+
+        final CSVFormat format = CSVFormat.EXCEL.withHeader(header);
+
+        final Path outputFile = outputFolder.resolve("all_dcop_plans" + ChartGenerationUtils.CSV_FILE_EXTENSION);
+        try (BufferedWriter writer = Files.newBufferedWriter(outputFile, Charset.defaultCharset());
+                CSVPrinter printer = new CSVPrinter(writer, format)) {
+
+            // use Object[] so that printer.printRecord handles the
+            // variable arguments correctly
+            final Object[] line = new String[header.length];
+
+            plansPerRegion.entrySet().forEach(Errors.rethrow().wrap(regionEntry -> {
+                final RegionIdentifier region = regionEntry.getKey();
+                line[2] = region.getName();
+
+                regionEntry.getValue().entrySet().forEach(Errors.rethrow().wrap(timeEntry -> {
+                    final long time = timeEntry.getKey();
+                    final RegionPlan plan = timeEntry.getValue();
+                    line[0] = Long.toString(time);
+
+                    final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> servicePlan = plan
+                            .getPlan();
+
+                    servicePlan.entrySet().forEach(Errors.rethrow().wrap(serviceEntry -> {
+                        final ServiceIdentifier<?> service = serviceEntry.getKey();
+
+                        // mark all overflow regions as unknown values by
+                        // default
+                        Arrays.fill(line, numNonRegionColumns, line.length, ChartGenerationUtils.EMPTY_CELL_VALUE);
+
+                        line[1] = ChartGenerationUtils.serviceToFilenameString(service);
+                        
+                        final double overflowSum = serviceEntry.getValue().entrySet().stream().mapToDouble(Map.Entry::getValue).sum();
+
+                        serviceEntry.getValue().entrySet().forEach(planEntry -> {
+                            final RegionIdentifier overflowRegion = planEntry.getKey();
+                            final double value = planEntry.getValue();
+                            final int regionIndex = regions.indexOf(overflowRegion);
+                            if (-1 == regionIndex) {
+                                throw new RuntimeException(
+                                        "Cannot find index of " + overflowRegion + " in regions: " + regions);
+                            }
+
+                            // divide by sum to ensure that we have a common base of 1
+                            line[regionIndex + numNonRegionColumns] = Double.toString(value / overflowSum);
+                        }); // foreach region plan entry
+
+                        printer.printRecord(line);
+                    })); // foreach service
+                })); // foreach time
+
+            })); // foreach region
+
+        } // allocate csv writer
     }
 
     /* package */ static <V>
@@ -291,7 +378,7 @@ public class DCOPPlanUpdateTableGenerator {
                     + ChartGenerationUtils.CSV_FILE_EXTENSION);
             LOGGER.debug("Start file for region {}: {}", region, regionFile);
 
-            CSVFormat format = CSVFormat.EXCEL.withHeader(ChartGenerationUtils.CSV_HEADER_TIMESTAMP);
+            CSVFormat format = CSVFormat.EXCEL.withHeader(ChartGenerationUtils.CSV_TIME_COLUMN_LABEL);
 
             try (CSVPrinter printer = new CSVPrinter(
                     new OutputStreamWriter(new FileOutputStream(regionFile), Charset.defaultCharset()), format)) {
@@ -364,7 +451,7 @@ public class DCOPPlanUpdateTableGenerator {
             });
 
             String[] header = new String[services.size() + 1];
-            header[0] = ChartGenerationUtils.CSV_HEADER_TIMESTAMP;
+            header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
 
             for (int n = 0; n < services.size(); n++)
                 header[n + 1] = services.get(n).toString();
@@ -474,8 +561,9 @@ public class DCOPPlanUpdateTableGenerator {
 
         serviceRegionPlans2.forEach((service, regionsPlans) -> {
             regionsPlans.forEach((fromRegion, timePlans) -> {
-                File serviceRegionGnuPlotFile = new File(outputFolder + File.separator + "dcop-"
-                        + ChartGenerationUtils.serviceToFilenameString(service) + "_" + fromRegion.toString() + "-gnu.txt");
+                File serviceRegionGnuPlotFile = new File(
+                        outputFolder + File.separator + "dcop-" + ChartGenerationUtils.serviceToFilenameString(service)
+                                + "_" + fromRegion.toString() + "-gnu.txt");
 
                 List<Long> times = new ArrayList<>();
                 times.addAll(timePlans.keySet());
@@ -494,7 +582,8 @@ public class DCOPPlanUpdateTableGenerator {
                     }
                 }
 
-                try (FileWriter writer = new FileWriter(serviceRegionGnuPlotFile)) {
+                try (Writer writer = Files.newBufferedWriter(serviceRegionGnuPlotFile.toPath(),
+                        Charset.defaultCharset())) {
                     try (GnuPlotPrinter printer = new GnuPlotPrinter(writer, "Region Plan:\\n", endTime)) {
                         printer.printEntry(0, (times.isEmpty() ? endTime : times.get(0)), new HashMap<>());
 
@@ -505,12 +594,12 @@ public class DCOPPlanUpdateTableGenerator {
                             try {
                                 printer.printEntry(time, nextTime, timePlans.get(time));
                             } catch (IOException e) {
-                                Log.error("Unable to print GNU plot entry: {}", e);
+                                LOGGER.error("Unable to print GNU plot entry: {}", e);
                             }
                         }
                     }
                 } catch (IOException e) {
-                    Log.error("Unable to print GNU plot entries: {}", e);
+                    LOGGER.error("Unable to print GNU plot entries: {}", e);
                 }
             });
         });
@@ -538,7 +627,7 @@ public class DCOPPlanUpdateTableGenerator {
             File serviceRegionGnuPlotFile = new File(
                     outputFolder + File.separator + "dcop-" + fromRegion.toString() + "-gnu.txt");
 
-            try (FileWriter writer = new FileWriter(serviceRegionGnuPlotFile)) {
+            try (Writer writer = Files.newBufferedWriter(serviceRegionGnuPlotFile.toPath(), Charset.defaultCharset())) {
                 try (GnuPlotPrinter printer = new GnuPlotPrinter(writer, "Region Plan:", endTime)) {
                     printer.printEntry(0, (times.isEmpty() ? endTime : times.get(0)), new HashMap<>());
 
@@ -549,12 +638,12 @@ public class DCOPPlanUpdateTableGenerator {
                         try {
                             printer.printServiceEntry(time, nextTime, timeServicePlans.get(time));
                         } catch (IOException e) {
-                            Log.error("Unable to print GNU plot entry: {}", e);
+                            LOGGER.error("Unable to print GNU plot entry: {}", e);
                         }
                     }
                 }
             } catch (IOException e) {
-                Log.error("Unable to print GNU plot entries: {}", e);
+                LOGGER.error("Unable to print GNU plot entries: {}", e);
             }
         });
         // });
@@ -583,7 +672,7 @@ public class DCOPPlanUpdateTableGenerator {
                             + "-dcop_plan_request_distribution" + ChartGenerationUtils.CSV_FILE_EXTENSION);
 
             String[] header = new String[1 + regions.size() * regions.size() + 1];
-            header[0] = ChartGenerationUtils.CSV_HEADER_TIMESTAMP;
+            header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
 
             for (int f = 0; f < regions.size(); f++)
                 for (int t = 0; t < regions.size(); t++)
