@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -294,7 +294,9 @@ import com.google.common.collect.ImmutableSet;
                         }
                     } else {
                         LOGGER.warn(
-                                "Service {} is overloaded. However the plan already wants to allocate more containers ({}) than are currently running ({}). No more containers will be added to the plan at this time. It is assumed that the node will start up more containers soon.",
+                                "Service {} is overloaded. However the plan already wants to allocate more containers ({}) "
+                                + "than are currently running ({}). No more containers will be added to the plan at this time. "
+                                + "It is assumed that the node will start up more containers soon.",
                                 service, servicePlannedContainers, serviceRunningContainers);
                     }
                 } // MAP managed service

@@ -21,7 +21,6 @@ import com.bbn.map.ap.ApLogger;
 import com.bbn.map.common.ApplicationManagerApi;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.google.common.hash.Hashing;
 
@@ -64,7 +63,7 @@ import com.google.common.hash.Hashing;
         this.dcopInfoProvider = dcopInfoProvider;
         networkManager = new CdiffPlusNetworkManager(dcopInfoProvider, region);
         environment = new SimpleExecutionEnvironment();
-        resourceSummary = dcopInfoProvider.getRegionSummary(EstimationWindow.LONG);
+        resourceSummary = dcopInfoProvider.getDcopResourceSummary();
 
         this.apLogger = LoggerFactory.getLogger(this.getClass().getName() + ".ap_program");
 
@@ -88,7 +87,7 @@ import com.google.common.hash.Hashing;
      */
     public RegionPlan computePlan(final DCOPService service) {
         // snapshot the summary once per plan computations
-        resourceSummary = dcopInfoProvider.getRegionSummary(EstimationWindow.LONG);
+        resourceSummary = dcopInfoProvider.getDcopResourceSummary();
 
         // run as many rounds as possible before running out of duration, then
         // return

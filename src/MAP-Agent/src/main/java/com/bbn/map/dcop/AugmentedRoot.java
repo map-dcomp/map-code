@@ -110,7 +110,7 @@ public class AugmentedRoot implements Serializable {
         } else {
             final AugmentedRoot other = (AugmentedRoot) obj;
             return Objects.equals(getRoot(), other.getRoot()) //
-                && Objects.equals(getTreeNumber(), other.getTreeNumber()) //
+                && getTreeNumber() == other.getTreeNumber() //
             ;
         }
     }

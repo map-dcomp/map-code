@@ -1,0 +1,11 @@
+{
+    "DCOP": true,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "leader",
+    "name": "Ndcop",
+    "region": "N",
+    "router": false,
+    "underlay": false
+}

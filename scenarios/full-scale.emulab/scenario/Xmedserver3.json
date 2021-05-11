@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "compute",
+    "name": "Xmedserver3",
+    "region": "Xmed",
+    "router": false,
+    "underlay": false
+}

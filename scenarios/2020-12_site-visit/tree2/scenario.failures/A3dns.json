@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": true,
+    "hardware": "no_containers",
+    "name": "A3dns",
+    "region": "A3",
+    "underlay": false
+}

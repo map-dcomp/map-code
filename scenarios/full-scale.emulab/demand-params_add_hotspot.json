@@ -1,0 +1,14 @@
+{
+    "client_request_cpu_load" : 0.05,
+    "client_request_network_tx" : 0.01,
+    "client_request_network_rx" : 0.01,
+    "num_clients_per_service" : 80,
+    "feathering_factor" : 60,
+    "feathering_range_minutes" : 1,
+
+    "start_minutes" : 30,
+    "end_minutes" : 35,
+    
+    "services" : [ "appP3N1" ],
+    "clients" : [ "Nclient01", "Nclient02", "Nclient03" ]
+}

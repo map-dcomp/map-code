@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "router",
+    "name": "Irtr1",
+    "region": "I",
+    "router": true,
+    "underlay": false
+}

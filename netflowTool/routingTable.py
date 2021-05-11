@@ -16,6 +16,8 @@ def findNode(name,nodes):
                 if(node["name"] == name):
                         return node
 
+        print("node not found " + name + " \n\n\n")
+
 #returns link based on names
 def findLink(src,dest):
         global links
@@ -24,6 +26,7 @@ def findLink(src,dest):
                         return link
                 elif(link["source"] == dest and link["target"] == src):
                         return link
+        print("link not found\n\n\n")
 
 #checks if node has be visited in a run of findPath yet
 def visited(name,pile):
@@ -39,6 +42,7 @@ def findPath(source, target):
         visit = []
         path = []
         nodes = copy.deepcopy(graph)
+        #print(source["name"])
         queue.append(findNode(source["name"], nodes))
         
         #preforms a BFS to find the target from the source
@@ -51,6 +55,7 @@ def findPath(source, target):
                         if(temp["name"] == link["source"]):
                                 if(not visited(link["target"],visit)):
                                         visit.append(link["target"])
+                                        #print(link)
                                         node = findNode(link["target"], nodes)
                                         queue.append(node)
                                         try:
@@ -62,6 +67,7 @@ def findPath(source, target):
                         elif(temp["name"] == link["target"]):
                                 if(not visited(link["source"],visit)):
                                         visit.append(link["source"])
+                                        #print(link)
                                         node = findNode(link["source"], nodes)
                                         queue.append(node)
                                         try: 
@@ -69,7 +75,7 @@ def findPath(source, target):
                                                         node["back"] = temp["name"]
                                         except KeyError:
                                                 node["back"] = temp["name"] #if there was a key error then that means that the node doesn't have a back yet
-                                                
+                                              
         #back tracks from dest to source
         while(temp["name"] != source["name"]):
                 
@@ -77,7 +83,6 @@ def findPath(source, target):
                 temp = findNode(temp["back"], nodes)
                 
         path.insert(0,source["name"])
-        
         i = 0
 
         #populates the table with info of this run
@@ -117,7 +122,7 @@ def main(argv=None):
                 for node2 in graph:
                         if(not (node == node2)):
                                 findPath(node,node2)
-                                continue
+                                        
 
 
         with open("routingTable.json", "w") as fout:

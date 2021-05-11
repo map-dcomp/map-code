@@ -6,7 +6,7 @@ This is a web based tool designed to visualize network flows of a simulated netw
 * pip3
 * nfdump - installed locally as part of setup.sh
   * requires the packages: libbz2-dev flex bison doxygen
-* d3.v5.js, jquery-3.4.1.js, jquery-ui.js (which are in the git repository)
+* d3.v5.js, jquery-3.5.1.js, jquery-ui.js (which are in the git repository)
 
 # Running the Simulation
 After setup.sh is finished, copy config.json.template to config.json and edit it. Then the data for the visualization needs to be created by just running masterScript.py. If everything ran correctly you should see the 4-5 files mentioned below in webdata. Use python to run server.py and it will start a server on localhost:3000. If any of the .json files are changed the server will need to be restarted to ensure that the new files are used.
@@ -21,7 +21,7 @@ The website needs 4 jsons to visualize the flows. The website reads these files 
 
 # Scripts
 There are a handful of python and bash scripts that help create the data used for the website. They require Python3.6, newer versions may also work.
-	1. setup.sh: This program installs python3.6, pip3, and nfdump. It should be run as administrator.
+	1. setup.sh: This program installs python3.6, pip3, and nfdump.
 	2. topologyReader.py: This script reads through topology.ns to create a json containing all the nodes, their ip, and what links connect them. It does this by looking for key words in the .ns files like "tb-set-ip-lan" that specify what data is in the command. The output is netconfig.json which is required by some of the other scripts so it shouldn't be moved into the webdata directory until all other scripts have been run. This script should be run with the first command-line arguments as the path to the topology.ns file, or the topology.ns file should be in the main directory.
 		Inputs: config.json, *.ns
 		Outputs: netconfig.json
@@ -31,21 +31,24 @@ There are a handful of python and bash scripts that help create the data used fo
 	4. merger.py: This script finds all the recorded flows and merges them into one file with all the flows. The first command-line argument should be the path to the directory with the node directories containing nfcapd files. The script loops through the node directories looking for nodes with nfcapd files in them. It uses nfdump to read the nfcapd files into the mergeFiles directory as a json-like text file. It then converts it into a json file and merges the files from all the different nodes. During the merge, it checks for duplicate flows recorded from multiple sources and removes any duplicates. This process may not be 100% accurate and hasn't been tested with any simulated network latency on the links.
 		Inputs: config.json, netconfig.json, routingTable.json
 		Outputs: flowData.json
-	5. gatherNFCAPDFiles.sh: Run from merger.py to run the command to read the nfcapd files to jsons.
-	6. nodeDataReader.py: Reads a csv with the cpu load information of the nodes and creates nodeData.json.
-		Inputs: config.json, *.csv
+	5. flowSplitter.py: This script will split flowData.json in the specified number of sections based on time. This only needs to be run if the original flowData.json is too big to be read in by the website. Problematic sizes are around over 1GB.
+	6. gatherNFCAPDFiles.sh: Run from merger.py to run the command to read the nfcapd files to jsons.
+    7. compare-app-load.py:  This script is in MAP-code/src/MAP-ChartGeneration/scripts and needs to be run before nodeDataReader.py. The output folder of this script then needs to be put in the config.json
+	8. nodeDataReader.py: Reads the outputs of compare-app-load.py to get the cpu load information of the nodes and put them in "ready to be graphed in D3" formats.
+		Inputs: config.json,
 		Outputs: nodeData.json
-	7. server.py: Runs a simple python server so the website can be accessed by localhost in a webbroswer.
-	8. masterScript.py: This script runs topologyReader.py, routingTable.py, and merger.py and moves the outputs into webdata.
-	9. export.sh: After you have run all the scripts to make the data, this script groups only the necessary files to run the simulation and tars and zips them. This tar can be sent to other people and all they have to do is run server.py to see the visualization. This exported version will work on Windows, Linux, and Mac.
+	9. server.py: Runs a simple python server so the website can be accessed by localhost in a webbroswer.
+	10. masterScript.py: This script runs topologyReader.py, routingTable.py, and merger.py and moves the outputs into webdata.
+	11. export.sh: After you have run all the scripts to make the data, this script groups only the necessary files to run the simulation and tars and zips them. This tar can be sent to other people and all they have to do is run server.py to see the visualization. This exported version will work on Windows, Linux, and Mac.
 
 # Using the website
 	Buttons: (Most buttons are accessed through right clicking on the simulation)
 		"Save Layout": This button saves the xy positions of the network layout into the downloaded file. Replace netconfig.json with the downloaded file to update the positions.
-		"Load Flows": This loads flowData.json and will attempts to load nodeData.json if it exists. You can tell it worked it the time slider shows up.
-		"Replay: This asks for Window Size which is the window of seconds that is displayed in the graphs. The seconds per second controls the speed that the replay runs at. If no input is given then it defaults to 60 second window at 1 second per second. 
+		"Load Flows": This loads flowData.json and will attempts to load nodeData.json if it exists. You can tell it worked it the time slider shows up. If it fails to load flowData.json it will attempt to load flowData0.json then flowData1.json and so on.
+		"Replay: This asks for Window Size which is the window of seconds that is displayed in the graphs. It also asks for how many seconds you want the window to move by and where to start the end of the window.
 		"Pause": This allows you to pause and play the simulation when it is in replay mode.
-		"Set Detail": Controls the amount of data points on the graphs. Defaults to 1000. Turning the detail up too much can cause the replay to run at a slower pace than spefified in seconds per second.
+		"Set Detail": Controls the amount of data points on the graphs. Defaults to 1000. Turning the detail up too much can cause the replay to run at a slower pace.
 		"Swap": This swaps out the main network graph for a chord diagram.
-		"Move": This allow you to move the visualizations around a bit. Visualizations should only be moved to an empty spot. The 4 visualizations start in "slot0-slot3" and the other open slot is called "popup". "Move" will ask for a source and destination slot and that is where you specify slot0-slot3 or popup.
+		"Show/Hide Times": This will overlay a vertical black line over key times of the scenario like node failures
+		"Green button on bottom righthand side of graphs": These allow you to disable a graph from updating. This is useful because some of the graphs take a bit of time to compute and if you aren't interested in them they don't need to be updated.
 		 

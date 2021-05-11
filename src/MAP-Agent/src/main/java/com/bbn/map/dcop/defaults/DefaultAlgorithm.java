@@ -2,9 +2,9 @@ package com.bbn.map.dcop.defaults;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.Map.Entry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +16,6 @@ import com.bbn.map.dcop.DcopSharedInformation;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
@@ -76,7 +75,7 @@ public class DefaultAlgorithm extends AbstractDcopAlgorithm {
         
         LOGGER.info("AFTER DCOP FOR LOOP, Dcop run {} Region {} has getClientLoadMap {}", currentDcopRun, getRegionID(), getClientKeepLoadMap());
         
-        return defaultPlan(summary);
+        return defaultPlan(summary, 0);
     }
     
     /**
@@ -177,10 +176,11 @@ public class DefaultAlgorithm extends AbstractDcopAlgorithm {
         
         LOGGER.info("DCOP Run {} Region {} read inbox {}",currentDcopRun, getRegionID(), inbox);
                 
-        summary = getDcopInfoProvider().getRegionSummary(ResourceReport.EstimationWindow.LONG);
+        summary = getDcopInfoProvider().getDcopResourceSummary();
                 
         retrieveAggregateCapacity(summary);
         retrieveNeighborSetFromNetworkLink(summary);
+        retrieveAllService(summary);
         
         LOGGER.info("DCOP Run {} Region {} has Region Capacity {}", currentDcopRun, getRegionID(), getRegionCapacity());
     }

@@ -1,0 +1,22 @@
+[
+	{
+		"time": 3600000,
+		"node": "nodeB3"
+	},
+	{
+		"time": 3600000,
+		"node": "nodeB4"
+	},
+	{
+		"time": 3600000,
+		"node": "nodeB5"
+	},
+	{
+		"time": 3600000,
+		"node": "nodeB6"
+	},
+	{
+		"time": 3600000,
+		"node": "nodeB7"
+	}
+]

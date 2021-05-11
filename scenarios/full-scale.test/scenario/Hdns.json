@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": true,
+    "hardware": "no_containers",
+    "name": "Hdns",
+    "region": "H",
+    "router": false,
+    "underlay": false
+}

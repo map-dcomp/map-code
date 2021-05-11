@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -49,7 +49,6 @@ import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.ContainerInfo
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlanBuilder;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionNodeState;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
@@ -96,25 +95,25 @@ public class RlgPlanBuilderTest {
         final NodeIdentifier containerStarting = new DnsNameIdentifier("nodeA0_cSTARTING");
         final ContainerResourceReport containerStartingReport = new ContainerResourceReport(containerStarting, 0,
                 service, ServiceStatus.STARTING, EstimationWindow.SHORT, ImmutableMap.of(), ImmutableMap.of(),
-                ImmutableMap.of(), 0, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+                ImmutableMap.of(), 0);
         containerReportsBuilder.put(containerStarting, containerStartingReport);
 
         final NodeIdentifier containerRunning = new DnsNameIdentifier("nodeA0_cRUNNING");
         final ContainerResourceReport containerRunningReport = new ContainerResourceReport(containerRunning, 0, service,
                 ServiceStatus.RUNNING, EstimationWindow.SHORT, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(),
-                0, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+                0);
         containerReportsBuilder.put(containerRunning, containerRunningReport);
 
         final NodeIdentifier containerStopping = new DnsNameIdentifier("nodeA0_cSTOPPING");
         final ContainerResourceReport containerStoppingReport = new ContainerResourceReport(containerStopping, 0,
                 service, ServiceStatus.STOPPING, EstimationWindow.SHORT, ImmutableMap.of(), ImmutableMap.of(),
-                ImmutableMap.of(), 0, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+                ImmutableMap.of(), 0);
         containerReportsBuilder.put(containerStopping, containerStoppingReport);
 
         final NodeIdentifier containerStopped = new DnsNameIdentifier("nodeA0_cSTOPPED");
         final ContainerResourceReport containerStoppedReport = new ContainerResourceReport(containerStopped, 0, service,
                 ServiceStatus.STOPPED, EstimationWindow.SHORT, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(),
-                0, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+                0);
         containerReportsBuilder.put(containerStopped, containerStoppedReport);
 
         final ResourceReport resourceReport = new ResourceReport(node, 0, EstimationWindow.SHORT, //
@@ -126,8 +125,7 @@ public class RlgPlanBuilderTest {
 
                 containerReportsBuilder.build(), 0, 0);
 
-        final RegionNodeState regionState = new RegionNodeState(region);
-        regionState.setResourceReports(ImmutableSet.of(resourceReport));
+        final ImmutableSet<ResourceReport> reports = ImmutableSet.of(resourceReport);
 
         LoadBalancerPlanBuilder newServicePlan = null;
 
@@ -137,15 +135,15 @@ public class RlgPlanBuilderTest {
         try {
             LoadBalancerPlan prevPlan = LoadBalancerPlan.getNullLoadBalancerPlan(region);
 
-            newServicePlan = new LoadBalancerPlanBuilder(prevPlan, regionState.getNodeResourceReports());
+            newServicePlan = new LoadBalancerPlanBuilder(prevPlan, reports);
             newServicePlan.getPlan().clear();
             newServicePlan.getPlan().computeIfAbsent(node, k -> new HashSet<>())
                     .add(new ContainerInfo(containerStarting, service, 1.0, false, false));
             newServicePlan.getPlan().computeIfAbsent(node, k -> new HashSet<>())
                     .add(new ContainerInfo(containerRunning, service, 1.0, false, false));
 
-            LOGGER.info("newServicePlan: {}, regionServiceState: {}", newServicePlan, regionState);
-            newServicePlan.toLoadBalancerPlan(regionState.getNodeResourceReports(), overflowPlan);
+            LOGGER.info("newServicePlan: {}, reports: {}", newServicePlan, reports);
+            newServicePlan.toLoadBalancerPlan(reports, overflowPlan);
         } catch (Exception e) {
             Assert.fail("Failed to build plan " + newServicePlan + ": " + e);
         }
@@ -155,11 +153,11 @@ public class RlgPlanBuilderTest {
         try {
             LoadBalancerPlan prevPlan = LoadBalancerPlan.getNullLoadBalancerPlan(region);
 
-            newServicePlan = new LoadBalancerPlanBuilder(prevPlan, regionState.getNodeResourceReports());
+            newServicePlan = new LoadBalancerPlanBuilder(prevPlan, reports);
             newServicePlan.getPlan().clear();
 
-            LOGGER.info("newServicePlan: {}, regionServiceState: {}", newServicePlan, regionState);
-            newServicePlan.toLoadBalancerPlan(regionState.getNodeResourceReports(), overflowPlan);
+            LOGGER.info("newServicePlan: {}, reports: {}", newServicePlan, reports);
+            newServicePlan.toLoadBalancerPlan(reports, overflowPlan);
 
             Assert.fail("Failed to throw exception for ommitting STARTING and RUNNING " + "containers from plan: "
                     + newServicePlan);
@@ -172,14 +170,14 @@ public class RlgPlanBuilderTest {
         try {
             LoadBalancerPlan prevPlan = LoadBalancerPlan.getNullLoadBalancerPlan(region);
 
-            newServicePlan = new LoadBalancerPlanBuilder(prevPlan, regionState.getNodeResourceReports());
-            LOGGER.info("newServicePlan: {}, regionServiceState: {}", newServicePlan, regionState);
+            newServicePlan = new LoadBalancerPlanBuilder(prevPlan, reports);
+            LOGGER.info("newServicePlan: {}, reports: {}", newServicePlan, reports);
             newServicePlan.getPlan().clear();
             newServicePlan.getPlan().computeIfAbsent(node, k -> new HashSet<>())
                     .add(new ContainerInfo(containerStarting, service, 1.0, false, false));
             newServicePlan.getPlan().computeIfAbsent(node, k -> new HashSet<>())
                     .add(new ContainerInfo(containerRunning, serviceChanged, 1.0, false, false));
-            newServicePlan.toLoadBalancerPlan(regionState.getNodeResourceReports(), overflowPlan);
+            newServicePlan.toLoadBalancerPlan(reports, overflowPlan);
 
             Assert.fail("Failed to throw exception for changing the service " + "of a container in plan: "
                     + newServicePlan);

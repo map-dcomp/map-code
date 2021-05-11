@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": true,
+    "dns": false,
+    "hardware": "rohu",
+    "name": "C3client02",
+    "region": "C3",
+    "underlay": false
+}

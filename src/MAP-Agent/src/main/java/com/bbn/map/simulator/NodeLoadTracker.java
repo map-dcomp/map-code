@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -101,6 +101,21 @@ import com.google.common.collect.ImmutableMap;
             currentLoadPerClient.computeIfAbsent(NodeIdentifier.UNKNOWN, k -> new HashMap<>()).merge(attr,
                     multiplier * value, Double::sum);
         });
+
+        // add to TASK_CONTAINERS equal to CPU if it's not there. This makes lo-fi
+        // behave like hi-fi where CPU is measured and copied to
+        // TASK_CONTAINERS. If CPU is missing from the request then TASK_CONTAINERS is added to CPU.
+        if (!entry.getRequest().getNodeLoad().containsKey(NodeAttribute.TASK_CONTAINERS)
+                && entry.getRequest().getNodeLoad().containsKey(NodeAttribute.CPU)) {
+            currentLoadPerClient.computeIfAbsent(NodeIdentifier.UNKNOWN, k -> new HashMap<>()).merge(
+                    NodeAttribute.TASK_CONTAINERS, multiplier * entry.getRequest().getNodeLoad().get(NodeAttribute.CPU),
+                    Double::sum);
+        } else if (entry.getRequest().getNodeLoad().containsKey(NodeAttribute.TASK_CONTAINERS)
+                && !entry.getRequest().getNodeLoad().containsKey(NodeAttribute.CPU)) {
+            currentLoadPerClient.computeIfAbsent(NodeIdentifier.UNKNOWN, k -> new HashMap<>()).merge(
+                    NodeAttribute.CPU, multiplier * entry.getRequest().getNodeLoad().get(NodeAttribute.TASK_CONTAINERS),
+                    Double::sum);
+        }
         currentLoadImmutable = null;
         currentLoadPerClientImmutable = null;
     }

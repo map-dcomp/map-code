@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -64,6 +64,7 @@ public class DelegateRecord extends DnsRecord {
             @JsonProperty("delegateRegion") @Nonnull final RegionIdentifier delegateRegion) {
         super(sourceRegion, ttl, service);
         this.delegateRegion = delegateRegion;
+        this.hashCode = getService().hashCode();
     }
 
     private final RegionIdentifier delegateRegion;
@@ -82,9 +83,11 @@ public class DelegateRecord extends DnsRecord {
         return "DelegateRecord[" + getService() + " -> " + getDelegateRegion() + "]";
     }
 
+    private final int hashCode;
+
     @Override
     public int hashCode() {
-        return getService().hashCode();
+        return hashCode;
     }
 
     @Override
@@ -95,8 +98,14 @@ public class DelegateRecord extends DnsRecord {
             return false;
         } else if (getClass().equals(o.getClass())) {
             final DelegateRecord other = (DelegateRecord) o;
-            return Objects.equal(getDelegateRegion(), other.getDelegateRegion())
-                    && Objects.equal(getSourceRegion(), other.getSourceRegion()) && getTtl() == other.getTtl();
+            if (this.hashCode != other.hashCode) {
+                return false;
+            } else {
+                return getTtl() == other.getTtl() //
+                        && Objects.equal(getService(), other.getService()) //
+                        && Objects.equal(getDelegateRegion(), other.getDelegateRegion()) //
+                        && Objects.equal(getSourceRegion(), other.getSourceRegion());
+            }
         } else {
             return false;
         }

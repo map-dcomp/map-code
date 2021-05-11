@@ -86,10 +86,11 @@ dependencies {
 }
 
 checkstyle {
-    config = resources.text.fromFile('style.xml', 'UTF-8')
+    configDirectory = file("$projectDir")
+    configFile = file("style.xml")
     showViolations = true
     ignoreFailures = true
-    toolVersion = "8.10"
+    toolVersion = "8.18"
 }
 
 task sourceJar(type: Jar) {

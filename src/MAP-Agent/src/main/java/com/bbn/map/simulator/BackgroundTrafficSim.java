@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -42,7 +42,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.Controller;
+import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
@@ -52,7 +52,6 @@ import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -128,7 +127,7 @@ public class BackgroundTrafficSim extends AbstractClientSimulator {
         }
         final VirtualClock clock = getSimulation().getClock();
 
-        final ObjectWriter mapper = Controller.createDumpWriter();
+        final ThreadLocalObjectWriter mapper = new ThreadLocalObjectWriter();
 
         long latestEndOfRequest = 0;
 
@@ -218,7 +217,7 @@ public class BackgroundTrafficSim extends AbstractClientSimulator {
      */
     private Pair<Boolean, Long> executeRequest(final NetworkNode clientNode,
             final NetworkNode serverNode,
-            final ObjectWriter mapper,
+            final ThreadLocalObjectWriter mapper,
             final long now,
             final BackgroundNetworkLoad request,
             final long latestEndOfRequest) {
@@ -235,8 +234,15 @@ public class BackgroundTrafficSim extends AbstractClientSimulator {
             return Pair.of(false, latestEndOfRequest);
         }
 
+        final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute = request.getNetworkLoadAsAttribute();
+        final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped = request
+                .getNetworkLoadAsAttributeFlipped();
+        final ApplicationCoordinates service = request.getService();
+        final long networkDuration = request.getNetworkDuration();
+
         final NetworkDemandApplicationResult networkResult = applyNetworkDemand(getSimulation(),
-                clientNode.getNodeIdentifier(), clientNode.getNodeIdentifier(), now, request, null, flow, networkPath);
+                clientNode.getNodeIdentifier(), clientNode.getNodeIdentifier(), now, networkLoadAsAttribute,
+                networkLoadAsAttributeFlipped, service, networkDuration, null, flow, networkPath);
 
         // record the results of the request
         final List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoads = new ArrayList<>();

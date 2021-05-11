@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Fserver01",
+    "region": "F",
+    "underlay": false
+}

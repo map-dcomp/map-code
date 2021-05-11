@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "minnow",
+    "name": "B2server04",
+    "region": "B2",
+    "underlay": false
+}

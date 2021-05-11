@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": true,
+    "client": false,
+    "dns": true,
+    "hardware": "no_containers_large",
+    "name": "NrlgDns",
+    "region": "N",
+    "router": false,
+    "underlay": false
+}

@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Frtr3",
+    "region": "F",
+    "underlay": false
+}

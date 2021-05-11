@@ -1,0 +1,11 @@
+{
+    "DCOP": true,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Mdcop",
+    "region": "M",
+    "router": false,
+    "underlay": false
+}

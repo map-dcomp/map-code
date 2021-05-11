@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -49,9 +49,11 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +68,7 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.rlg.RlgUtils.LoadPercentages;
 import com.bbn.map.utils.MapUtils;
+import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlanBuilder;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
@@ -198,12 +201,10 @@ public class RLGService extends AbstractPeriodicService {
     @Override
     protected void execute() {
         try {
-            final LoadBalancerPlan previousPlan = rlgInfoProvider.getRlgPlan();
-
             final LoadBalancerPlan newPlan = computePlan();
             if (null == newPlan) {
                 LOGGER.warn("RLG produced a null plan, ignoring");
-            } else if (!newPlan.equals(previousPlan)) {
+            } else {
                 LOGGER.info("Publishing RLG plan: {}", newPlan);
 
                 rlgInfoProvider.publishRlgPlan(newPlan);
@@ -228,15 +229,23 @@ public class RLGService extends AbstractPeriodicService {
         }
     }
 
-    private void initializeServicePriorityManager(ServicePriorityManager servicePriorityManager,
-            LoadBalancerPlanBuilder newServicePlan,
-            RegionPlan regionPlan,
-            ImmutableSet<ResourceReport> resourceReports,
-            LoadPercentages loadPercentages) {
-        // create set of services with services that are currently in the plan
-        final Set<ServiceIdentifier<?>> priorityServices = newServicePlan.getPlan().entrySet().stream()
-                .map(e -> e.getValue()).flatMap(cis -> cis.stream()).map(ci -> ci.getService()).distinct()
-                .collect(Collectors.toSet());
+    private void initializeServicePriorityManager(final ServicePriorityManager servicePriorityManager,
+            final LoadBalancerPlanBuilder newServicePlan,
+            final RegionPlan regionPlan,
+            final ImmutableSet<ResourceReport> resourceReports,
+            final LoadPercentages loadPercentages) {
+
+        final Set<ServiceIdentifier<?>> priorityServices = new HashSet<>();
+
+        // add all services that are in the DCOP plan and have traffic to this
+        // region > 0
+        regionPlan.getPlan().forEach((service, regionTraffic) -> {
+            Double trafficToThisRegion = regionTraffic.get(this.region);
+
+            if (trafficToThisRegion != null && trafficToThisRegion > 0.0) {
+                priorityServices.add(service);
+            }
+        });
 
         // add all services that default to this region
         final Collection<ApplicationCoordinates> allServices = applicationManager.getAllCoordinates();
@@ -246,15 +255,6 @@ public class RLGService extends AbstractPeriodicService {
                 priorityServices.add(service);
             }
         }
-
-        // add all services that are in the DCOP plan
-        regionPlan.getPlan().forEach((service, regionTraffic) -> {
-            Double trafficToThisRegion = regionTraffic.get(this.region);
-
-            if (trafficToThisRegion != null && trafficToThisRegion > 0.0) {
-                priorityServices.add(service);
-            }
-        });
 
         servicePriorityManager.beginIteration(priorityServices, resourceReports, loadPercentages);
     }
@@ -287,23 +287,15 @@ public class RLGService extends AbstractPeriodicService {
     private LoadBalancerPlan stubComputePlan() {
         LOGGER.debug("---- stubComputePlan ----");
 
-        final RegionIdentifier thisRegion = region;
         final LocalDateTime currentTime = LocalDateTime.now();
 
         // Acquire information from the RlgInfoProvider
-        final ImmutableSet<ResourceReport> resourceReports = rlgInfoProvider.getNodeResourceReports();
+        final ImmutableSet<ResourceReport> resourceReports = rlgInfoProvider.getRlgResourceReports();
         final RegionPlan dcopPlan = rlgInfoProvider.getDcopPlan();
         final LoadBalancerPlan prevPlan = rlgInfoProvider.getRlgPlan();
 
-        // get and set the shared RLG information through rlgInfoProvider
-        final ImmutableMap<RegionIdentifier, RlgSharedInformation> infoFromAllRlgs = rlgInfoProvider
-                .getAllRlgSharedInformation();
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("shared rlg information: " + infoFromAllRlgs);
-        }
-
         LOGGER.info("Resource reports: {}", resourceReports);
-        LOGGER.trace("DCOP plan: {}", dcopPlan);
+        LOGGER.debug("DCOP plan: {}", dcopPlan);
         LOGGER.trace("ApplicationManager: {}", applicationManager);
 
         final Map<NodeIdentifier, ResourceReport> reports = filterResourceReports(resourceReports);
@@ -315,8 +307,6 @@ public class RLGService extends AbstractPeriodicService {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getServiceStatus()));
 
         // track which services are running and on which node
-        final RlgSharedInformation newRlgShared = new RlgSharedInformation();
-
         final LoadBalancerPlanBuilder newServicePlan = createBasePlan(resourceReports, prevPlan);
         LOGGER.trace("Plan after doing base create: {}", newServicePlan);
 
@@ -326,30 +316,26 @@ public class RLGService extends AbstractPeriodicService {
 
         final RlgUtils.LoadPercentages loadPercentages = RlgUtils.computeServiceLoadPercentages(reports);
 
+        final Map<ServiceIdentifier<?>, Integer> containersPerService = computeContainersPerService(reports);
+
         // initialize the servicePriorityManager for this iteration according to
         // the DCOP plan services and serviceReports
-        // add the initial set of services in newServicePlan to the Set
-        // final Set<ServiceIdentifier<?>> priorityServices =
-        // newServicePlan.getPlan().entrySet().stream().map(e -> e.getValue())
-        // .flatMap(cis -> cis.stream()).map(ci ->
-        // ci.getService()).distinct().collect(Collectors.toSet());
-
-        // servicePriorityManager.beginIteration(priorityServices,
-        // resourceReports, loadPercentages);
         initializeServicePriorityManager(servicePriorityManager, newServicePlan, dcopPlan, resourceReports,
                 loadPercentages);
 
-        ensureServicesInDefaultRegion(newServicePlan, nodesWithAvailableCapacity, loadPercentages);
+        final Set<ServiceIdentifier<?>> servicesDefaultingToThisRegion = ensureServicesInDefaultRegion(newServicePlan,
+                nodesWithAvailableCapacity, loadPercentages, containersPerService, reports);
 
         // make sure there is at least one instance of each service that DCOP
         // wants running in this region
         if (!resourceReports.isEmpty()) {
-            startServicesForDcop(dcopPlan, nodesWithAvailableCapacity, thisRegion, newServicePlan);
+            startAndStopServicesForDcop(dcopPlan, newServicePlan, nodesWithAvailableCapacity, loadPercentages,
+                    containersPerService, reports, servicesDefaultingToThisRegion);
         } else {
             LOGGER.warn("No resource reports, RLG cannot do much of anything");
         }
 
-        LOGGER.trace("Service plan after creating instances for DCOP: " + newServicePlan);
+        LOGGER.trace("Service plan after creating instances for DCOP: {}", newServicePlan);
 
         // find services that are overloaded, underloaded, and underload ended
         final double serviceOverloadThreshold = AgentConfiguration.getInstance().getRlgLoadThreshold();
@@ -360,7 +346,7 @@ public class RLGService extends AbstractPeriodicService {
         final List<ServiceIdentifier<?>> underloadedServices = new LinkedList<>();
         final List<ServiceIdentifier<?>> underloadedEndedServices = new LinkedList<>();
 
-        StringBuilder serviceLoadAndThresholdInfo = new StringBuilder();
+        final StringBuilder serviceLoadAndThresholdInfo = new StringBuilder();
 
         for (final Map.Entry<ServiceIdentifier<?>, Map<NodeAttribute, Double>> entry : loadPercentages.allocatedLoadPercentagePerService
                 .entrySet()) {
@@ -409,7 +395,7 @@ public class RLGService extends AbstractPeriodicService {
         LOGGER.debug("scheduledContainerShutdowns: {}", scheduledContainerShutdowns);
 
         // initial computations
-        final Set<ServiceIdentifier<?>> downscaleableServices = getDownscaleableServices(resourceReports);
+        final Set<ServiceIdentifier<?>> downscaleableServices = getDownscaleableServices(containersPerService);
         LOGGER.debug("Found downscaleable services: {} ", downscaleableServices);
 
         Map<ServiceIdentifier<?>, Map<NodeIdentifier, Map<NodeAttribute, Double>>> totalContainerLoadByService = getTotalContainerLoadByService(
@@ -417,6 +403,9 @@ public class RLGService extends AbstractPeriodicService {
 
         final Map<ServiceIdentifier<?>, List<NodeIdentifier>> smallestLoadServiceContainers = sortServiceContainersByAscendingLoadLoad(
                 totalContainerLoadByService, MapUtils.COMPUTE_ATTRIBUTE);
+
+        LOGGER.trace("totalContainerLoadByService: {}, smallestLoadServiceContainers: {}", totalContainerLoadByService,
+                smallestLoadServiceContainers);
 
         // cancel any shutdowns for services that are underload ended
         underloadedEndedServices.forEach((serviceId) -> {
@@ -482,7 +471,8 @@ public class RLGService extends AbstractPeriodicService {
             double totalServiceLoad = 0.0;
             Map<NodeIdentifier, Double> containerCapacities = new HashMap<>();
 
-            for (Map<NodeAttribute, Double> load : totalContainerLoadByService.get(serviceId).values()) {
+            for (Map<NodeAttribute, Double> load : totalContainerLoadByService
+                    .getOrDefault(serviceId, Collections.emptyMap()).values()) {
                 totalServiceLoad += load.getOrDefault(MapUtils.COMPUTE_ATTRIBUTE, 0.0);
             }
 
@@ -499,15 +489,22 @@ public class RLGService extends AbstractPeriodicService {
                     new LinkedList<>());
             final Set<NodeIdentifier> containerIds = new HashSet<>(shutdownContainerIds);
 
+            LOGGER.trace("shutdownContainerIds = {}", shutdownContainerIds);
+
             // remove containers that are already scheduled for shutdown from
             // the list
             shutdownContainerIds.removeAll(serviceStopContainers.keySet());
+
+            LOGGER.trace("after remove containers that are already scheduled for shutdown, shutdownContainerIds = {}",
+                    shutdownContainerIds);
 
             // remove a container from containerIds so that the last container
             // cannot be stopped
             if (!shutdownContainerIds.isEmpty()) {
                 shutdownContainerIds.remove(shutdownContainerIds.size() - 1);
             }
+
+            LOGGER.trace("after remove last container, shutdownContainerIds = {}", shutdownContainerIds);
 
             // schedule priority shutdowns
             int priorityShutdowns = (int) Math
@@ -527,6 +524,10 @@ public class RLGService extends AbstractPeriodicService {
                 priorityShutdowns--;
             }
 
+            LOGGER.debug(
+                    "For service '{}', preparing to stop {} containers for priority reasons: {}, shutdownContainerIds = {}",
+                    serviceId, serviceStopContainers.size(), serviceStopContainers, shutdownContainerIds);
+
             // check if a container shutdown should be scheduled for reasons
             // other than priority
             Map<NodeIdentifier, LocalDateTime> scheduledShutdowns = scheduledContainerShutdowns.get(serviceId);
@@ -541,6 +542,9 @@ public class RLGService extends AbstractPeriodicService {
                     while (shutdownContainerIds.size() > MAXIMUM_SIMULTANEOUS_SHUTDOWNS) {
                         shutdownContainerIds.remove(shutdownContainerIds.size() - 1);
                     }
+
+                    LOGGER.trace("after limit number of containers for shutdown, shutdownContainerIds = {}",
+                            shutdownContainerIds);
 
                     // predict the remaining container capacity and limit the
                     // number of containers to be stopped
@@ -595,29 +599,35 @@ public class RLGService extends AbstractPeriodicService {
                 final LocalDateTime shutdownTime = entry.getValue();
                 final NodeIdentifier nodeId = containerToNodeMap.get(containerId);
 
-                LOGGER.warn(
-                        "While traversing potentialShutdownContainers ({}), could not find node for container '{}'"
-                                + "in containerToNodeMap: {}. Assuming container is STOPPED.",
-                        potentialShutdownContainers, containerId, containerToNodeMap);
+                if (nodeId == null) {
+                    LOGGER.warn(
+                            "While traversing potentialShutdownContainers ({}), could not find node for container '{}'"
+                                    + "in containerToNodeMap: {}. Assuming container is STOPPED.",
+                            potentialShutdownContainers, containerId, containerToNodeMap);
+                }
 
                 // remove a container from scheduledContainerShutdowns if the
-                // container is no longer supplying a service status or if its
-                // status is STOPPED, or it no longer appears on a node
+                // container is no longer supplying
+                // a service status or if its status is STOPPED, or it no longer
+                // appears on a node
                 if (!containerServiceStatus.containsKey(containerId)
                         || ServiceStatus.STOPPED.equals(containerServiceStatus.get(containerId)) || nodeId == null) {
                     LOGGER.debug(" *** Removing STOPPED container '{}' for service '{}' from scheduled shutdowns.",
                             containerId, serviceId);
                     scheduledContainerShutdowns.get(serviceId).remove(containerId);
                 } else {
-                    newServicePlan.stopTrafficToContainer(nodeId, containerId);
+                    try {
+                        newServicePlan.stopTrafficToContainer(nodeId, containerId);
 
-                    if (currentTime.isAfter(shutdownTime) || currentTime.isEqual(shutdownTime)) {
-                        LOGGER.debug(
-                                " *** Stopping container '{}' for service '{}' (scheduled shutdown time: {}) at time {}.",
-                                containerId, serviceId, shutdownTime, currentTime);
+                        if (currentTime.isAfter(shutdownTime) || currentTime.isEqual(shutdownTime)) {
+                            LOGGER.debug(
+                                    " *** Stopping container '{}' for service '{}' (scheduled shutdown time: {}) at time {}.",
+                                    containerId, serviceId, shutdownTime, currentTime);
 
-                        newServicePlan.stopContainer(nodeId, containerId);
-                        servicePriorityManager.notifyDeallocation(serviceId, 1.0);
+                            newServicePlan.stopContainer(nodeId, containerId);
+                        }
+                    } catch (final IllegalArgumentException e) {
+                        LOGGER.debug("Could not find container that we planned to stop, assuming this is ok", e);
                     }
                 }
             }
@@ -661,8 +671,10 @@ public class RLGService extends AbstractPeriodicService {
                         }
                     } else {
                         LOGGER.warn(
-                                "Unexpectedly found container '{}' in the STOPPING or STOPPED state when trying to allow traffic.",
-                                container);
+                                "Unexpectedly found container '{}' for service '{}' in the STOPPING or STOPPED state "
+                                        + "when trying to allow traffic. This may be a result of the DCOP plan specifiying no "
+                                        + "traffic for the service.",
+                                container, service);
                     }
                 }
             });
@@ -682,11 +694,32 @@ public class RLGService extends AbstractPeriodicService {
         LOGGER.debug("RLG currentTime: {}, RLG plan to be published: {}, RLG scheduledContainerShutdowns: {} ",
                 currentTime, plan, scheduledContainerShutdowns);
 
-        // tell other RLGs about the services running in this region
-        LOGGER.trace("Sharing information about services: {}", newRlgShared);
-        rlgInfoProvider.setLocalRlgSharedInformation(newRlgShared);
+        validatePlan(reports, plan);
 
         return plan;
+    }
+
+    private void validatePlan(final Map<NodeIdentifier, ResourceReport> reports, final LoadBalancerPlan plan) {
+        final StringBuilder message = new StringBuilder();
+
+        plan.getServicePlan().forEach((node, containerInfos) -> {
+            final int plannedContainers = countNotStoppedContainers(containerInfos);
+            if (reports.containsKey(node)) {
+                final int containerLimit = reports.get(node).getMaximumServiceContainers();
+                if (plannedContainers > containerLimit) {
+                    message.append(String.format("Planning %d containers for node %s when it's limit is %d: %s; ",
+                            plannedContainers, node.getName(), containerLimit, containerInfos));
+                }
+            } else {
+                message.append(
+                        String.format("Planning containers for node %s that is not in the list of resource reports; ",
+                                node.getName()));
+            }
+        });
+
+        if (message.length() > 0) {
+            LOGGER.error("Invalid RLG plan: {}", message);
+        }
     }
 
     /**
@@ -697,14 +730,11 @@ public class RLGService extends AbstractPeriodicService {
     private LoadBalancerPlan noMapPlan() {
         LOGGER.debug("---- no MAP plan ----");
 
-        final ImmutableSet<ResourceReport> resourceReports = rlgInfoProvider.getNodeResourceReports();
+        final ImmutableSet<ResourceReport> resourceReports = rlgInfoProvider.getRlgResourceReports();
         final LoadBalancerPlan prevPlan = rlgInfoProvider.getRlgPlan();
 
         final Map<NodeIdentifier, ResourceReport> reports = filterResourceReports(resourceReports);
         final Map<NodeIdentifier, NodeIdentifier> containerToNodeMap = createContainerToNodeMap(resourceReports);
-
-        // track which services are running and on which node
-        final RlgSharedInformation newRlgShared = new RlgSharedInformation();
 
         // start new service plan
         final LoadBalancerPlanBuilder newServicePlan = createBasePlan(resourceReports, prevPlan);
@@ -718,10 +748,6 @@ public class RLGService extends AbstractPeriodicService {
                 .of();
 
         final LoadBalancerPlan plan = newServicePlan.toLoadBalancerPlan(resourceReports, overflowPlan);
-
-        // tell other RLGs about the services running in this region
-        LOGGER.trace("noMapPlan: Sharing information about services: {}", newRlgShared);
-        rlgInfoProvider.setLocalRlgSharedInformation(newRlgShared);
 
         return plan;
     }
@@ -806,46 +832,196 @@ public class RLGService extends AbstractPeriodicService {
         }
     }
 
+    private static int countNotStoppedContainers(final Collection<LoadBalancerPlan.ContainerInfo> infos) {
+        return (int) infos.stream() //
+                .filter(c -> !c.isStop()) //
+                .count();
+    }
+
+    /**
+     * This is used by
+     * {@link #ensureServicesInDefaultRegion(LoadBalancerPlanBuilder, SortedMap, LoadPercentages)}
+     * and
+     * {@link #startServicesForDcop(RegionPlan, LoadBalancerPlanBuilder, Map, LoadPercentages)}
+     * to allocate required containers.
+     */
+    private boolean allocateRequiredContainer(final LoadBalancerPlanBuilder newServicePlan,
+            final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            final LoadPercentages loadPercentages,
+            final ServiceIdentifier<?> service,
+            final Map<ServiceIdentifier<?>, Integer> containersPerService,
+            final Map<NodeIdentifier, ResourceReport> reports) {
+        // allocate a node
+        final NodeIdentifier newNode = StubFunctions.chooseNode(service, newServicePlan, nodesWithAvailableCapacity,
+                loadPercentages);
+
+        if (null == newNode) {
+            LOGGER.error("There is no capacity to allocate a container for the service {}", service);
+
+            // need to stop a container to have an NCP to start a
+            // new one on
+            final Set<ServiceIdentifier<?>> servicesWithMultipleContainers = containersPerService.entrySet().stream()
+                    .filter(e -> e.getValue() > 1).map(Map.Entry::getKey).collect(Collectors.toSet());
+            if (servicesWithMultipleContainers.isEmpty()) {
+                LOGGER.warn(
+                        "All services running in region only have a single container, nothing can be stopped to start service {} for DCOP",
+                        service);
+                return false;
+            } else {
+                // find service with the lowest priority
+                final ApplicationManagerApi appMgr = AppMgrUtils.getApplicationManager();
+                final OrderServicesByPriority comparator = new OrderServicesByPriority(appMgr);
+
+                final ServiceIdentifier<?> serviceToReduce = servicesWithMultipleContainers.stream().min(comparator)
+                        .get();
+
+                final Pair<NodeIdentifier, NodeIdentifier> result = findLeastLoadedContainerForService(reports,
+                        serviceToReduce, newServicePlan);
+
+                final NodeIdentifier leastLoadedContainer = result.getRight();
+                final NodeIdentifier leastLoadedContainerNcp = result.getLeft();
+                if (null == leastLoadedContainer || null == leastLoadedContainerNcp) {
+                    throw new RuntimeException("Cannot find least loaded container for service: " + serviceToReduce);
+                }
+                newServicePlan.stopContainer(leastLoadedContainerNcp, leastLoadedContainer);
+                servicePriorityManager.notifyDeallocation(serviceToReduce, 1);
+                containersPerService.merge(serviceToReduce, -1, Integer::sum);
+
+                newServicePlan.addService(leastLoadedContainerNcp, service, 1);
+                servicePriorityManager.requestAllocation(service, 1);
+                containersPerService.merge(service, 1, Integer::sum);
+                return true;
+            }
+        } else if (!nodesWithAvailableCapacity.containsKey(newNode)
+                || null == nodesWithAvailableCapacity.get(newNode)) {
+            LOGGER.error(
+                    "The chosen node ({}) is not in nodesWithAvailableCapacity. This is an internal error. Service {} available nodes: {}",
+                    newNode, service, nodesWithAvailableCapacity);
+            return false;
+        } else {
+            final int availCap = nodesWithAvailableCapacity.get(newNode);
+            if (availCap < 1) {
+                LOGGER.error("The chosen node has no container capacity {} available nodes: {}", service,
+                        newServicePlan, newNode, nodesWithAvailableCapacity);
+                return false;
+            } else {
+                StubFunctions.allocateContainers(servicePriorityManager, service, newNode, 1, newServicePlan,
+                        nodesWithAvailableCapacity);
+                return true;
+            }
+        }
+    }
+
+    /**
+     * 
+     * @param newPlan
+     *            TODO
+     * @return NCP, container
+     */
+    private Pair<NodeIdentifier, NodeIdentifier> findLeastLoadedContainerForService(
+            final Map<NodeIdentifier, ResourceReport> reports,
+            final ServiceIdentifier<?> service,
+            final LoadBalancerPlanBuilder newPlan) {
+        NodeIdentifier ncp = null;
+        NodeIdentifier container = null;
+        double minimumLoad = Double.NaN;
+        for (final Map.Entry<NodeIdentifier, ResourceReport> entry : reports.entrySet()) {
+            final NodeIdentifier candidateNcp = entry.getKey();
+            final ResourceReport report = entry.getValue();
+
+            for (final Map.Entry<NodeIdentifier, ContainerResourceReport> centry : report.getContainerReports()
+                    .entrySet()) {
+                final NodeIdentifier candidateContainer = centry.getKey();
+                final ContainerResourceReport creport = centry.getValue();
+                if (service.equals(creport.getService())) {
+
+                    final boolean planToStopCandidateContainer;
+                    if (newPlan.getPlan().containsKey(candidateNcp) && null != newPlan.getPlan().get(candidateNcp)) {
+                        final Optional<LoadBalancerPlan.ContainerInfo> candidateContainerPlan = newPlan.getPlan()
+                                .get(candidateNcp).stream()
+                                .filter(i -> null != i && Objects.equals(candidateContainer, i.getId())).findAny();
+                        planToStopCandidateContainer = candidateContainerPlan.isPresent()
+                                && candidateContainerPlan.get().isStop();
+                    } else {
+                        planToStopCandidateContainer = false;
+                    }
+
+                    if (!ServiceStatus.STOPPED.equals(creport.getServiceStatus())
+                            && !ServiceStatus.STOPPING.equals(creport.getServiceStatus())
+                            && !planToStopCandidateContainer) {
+                        final ImmutableMap<NodeIdentifier, ImmutableMap<NodeAttribute, Double>> creportLoad = RlgUtils
+                                .getConfiguredLoadInput(creport);
+                        final Stream<ImmutableMap<NodeAttribute, Double>> s1 = creportLoad.entrySet().stream()
+                                .map(Map.Entry::getValue);
+                        final Stream<Map.Entry<NodeAttribute, Double>> s2 = s1.map(Map::entrySet)
+                                .flatMap(Collection::stream);
+                        final Stream<Double> s3 = s2.filter(e -> MapUtils.COMPUTE_ATTRIBUTE.equals(e.getKey()))
+                                .map(Map.Entry::getValue);
+                        final double load = s3.mapToDouble(i -> i).sum();
+
+                        if (Double.isNaN(minimumLoad) || load < minimumLoad) {
+                            ncp = candidateNcp;
+                            container = candidateContainer;
+                            minimumLoad = load;
+                        }
+                    } // the container is running
+                } // the service we care about
+            } // foreach container report
+        }
+
+        return Pair.of(ncp, container);
+    }
+
+    private static final class OrderServicesByPriority implements Comparator<ServiceIdentifier<?>> {
+
+        private final ApplicationManagerApi appMgr;
+
+        private OrderServicesByPriority(final ApplicationManagerApi appMgr) {
+            this.appMgr = appMgr;
+        }
+
+        @Override
+        public int compare(final ServiceIdentifier<?> o1, final ServiceIdentifier<?> o2) {
+            final int o1Priority = AppMgrUtils.getApplicationSpecification(appMgr, o1).getPriority();
+            final int o2Priority = AppMgrUtils.getApplicationSpecification(appMgr, o2).getPriority();
+            return Integer.compare(o1Priority, o2Priority);
+        }
+
+    }
+
     /**
      * Ensure that any services that default to this region have at least 1
      * instance of the service running.
+     * 
+     * @return the services that default to this region
      */
-    private void ensureServicesInDefaultRegion(final LoadBalancerPlanBuilder newServicePlan,
+    private Set<ServiceIdentifier<?>> ensureServicesInDefaultRegion(final LoadBalancerPlanBuilder newServicePlan,
             final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
-            final RlgUtils.LoadPercentages loadPercentages) {
+            final RlgUtils.LoadPercentages loadPercentages,
+            final Map<ServiceIdentifier<?>, Integer> containersPerService,
+            final Map<NodeIdentifier, ResourceReport> reports) {
+        final Set<ServiceIdentifier<?>> servicesDefaultingToThisRegion = new HashSet<>();
+
         final Collection<ApplicationCoordinates> allServices = applicationManager.getAllCoordinates();
         for (final ApplicationCoordinates service : allServices) {
             final ApplicationSpecification spec = AppMgrUtils.getApplicationSpecification(applicationManager, service);
             if (Objects.equals(this.region, spec.getServiceDefaultRegion())) {
+                servicesDefaultingToThisRegion.add(service);
+
                 // need to have at least 1 instance running
                 if (!planHasContainerForService(newServicePlan, service)) {
-                    // allocate a node
-                    final NodeIdentifier newNode = StubFunctions.chooseNode(service, newServicePlan,
-                            nodesWithAvailableCapacity, loadPercentages);
-
-                    if (null == newNode) {
+                    final boolean result = allocateRequiredContainer(newServicePlan, nodesWithAvailableCapacity,
+                            loadPercentages, service, containersPerService, reports);
+                    if (!result) {
                         LOGGER.error(
                                 "{} defaults to this region and has no containers in the plan and there are no available nodes to start the service",
                                 service);
-                    } else if (!nodesWithAvailableCapacity.containsKey(newNode)
-                            || null == nodesWithAvailableCapacity.get(newNode)) {
-                        LOGGER.error(
-                                "{} defaults to this region and has no containers in the plan {}, however the chosen node has no container capacity {} available nodes: {}",
-                                service, newServicePlan, newNode, nodesWithAvailableCapacity);
-                    } else {
-                        final int availCap = nodesWithAvailableCapacity.get(newNode);
-                        if (availCap < 1) {
-                            LOGGER.error(
-                                    "{} defaults to this region and has no containers in the plan {}, however the chosen node has no container capacity {} available nodes: {}",
-                                    service, newServicePlan, newNode, nodesWithAvailableCapacity);
-                        } else {
-                            StubFunctions.allocateContainers(servicePriorityManager, service, newNode, 1,
-                                    newServicePlan, nodesWithAvailableCapacity);
-                        }
                     }
-                }
-            }
-        }
+                } // no plan to use this service
+            } // services defaults to this region
+        } // foreach service
+
+        return servicesDefaultingToThisRegion;
     }
 
     /**
@@ -864,26 +1040,27 @@ public class RLGService extends AbstractPeriodicService {
                 .anyMatch(info -> Objects.equals(service, info.getService()));
     }
 
-    private Set<ServiceIdentifier<?>> getDownscaleableServices(final ImmutableSet<ResourceReport> resourceReports) {
-        final Set<ServiceIdentifier<?>> downscaleableServices = new HashSet<>();
+    private static Set<ServiceIdentifier<?>> getDownscaleableServices(
+            final Map<ServiceIdentifier<?>, Integer> serviceInstances) {
+        final Set<ServiceIdentifier<?>> downscaleableServices = serviceInstances.entrySet().stream()
+                .filter(e -> e.getValue() > 1).map(Map.Entry::getKey).collect(Collectors.toSet());
+
+        LOGGER.debug("getDownscaleableServices(): {}", downscaleableServices);
+        return downscaleableServices;
+    }
+
+    private static Map<ServiceIdentifier<?>, Integer> computeContainersPerService(
+            final Map<NodeIdentifier, ResourceReport> reports) {
         final Map<ServiceIdentifier<?>, Integer> serviceInstances = new HashMap<>();
 
-        resourceReports.forEach((report) -> {
+        reports.forEach((node, report) -> {
             report.getContainerReports().forEach((containerId, containerReport) -> {
                 serviceInstances.merge(containerReport.getService(), 1, Integer::sum);
             });
         });
+        LOGGER.debug("containers per service: {}", serviceInstances);
 
-        LOGGER.debug("serviceInstances: {}", serviceInstances);
-
-        serviceInstances.forEach((serviceId, instances) -> {
-            if (instances > 1) {
-                downscaleableServices.add(serviceId);
-            }
-        });
-
-        LOGGER.debug("getDownscaleableServices(): {}", downscaleableServices);
-        return downscaleableServices;
+        return serviceInstances;
     }
 
     private Map<NodeIdentifier, NodeIdentifier> createContainerToNodeMap(ImmutableSet<ResourceReport> resourceReports) {
@@ -980,36 +1157,9 @@ public class RLGService extends AbstractPeriodicService {
 
         if (AgentConfiguration.getInstance().isRlgNullOverflowPlan()) {
             return ImmutableMap.of();
+        } else {
+            return dcopPlan.getPlan();
         }
-
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> dcopOverflowPlan = dcopPlan
-                .getPlan();
-
-        final ImmutableMap.Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowPlan = ImmutableMap
-                .builder();
-        dcopOverflowPlan.forEach((service, dcopServiceOverflowPlan) -> {
-            final ImmutableMap.Builder<RegionIdentifier, Double> serviceOverflowPlanBuilder = ImmutableMap.builder();
-
-            dcopServiceOverflowPlan.forEach((region, weight) -> {
-                if (weight > 0) {
-                    // check if service is running in region
-                    if (rlgInfoProvider.isServiceAvailable(region, service)) {
-                        serviceOverflowPlanBuilder.put(region, weight);
-                    } else {
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.trace("No instance of {} in region {}, skipping delegation", service, region);
-                        }
-                    }
-                }
-            });
-
-            final ImmutableMap<RegionIdentifier, Double> serviceOverflowPlan = serviceOverflowPlanBuilder.build();
-            if (!serviceOverflowPlan.isEmpty()) {
-                overflowPlan.put(service, serviceOverflowPlan);
-            }
-        });
-
-        return overflowPlan.build();
     }
 
     private static boolean infoSpecifiesRunningService(final ServiceIdentifier<?> service,
@@ -1020,21 +1170,36 @@ public class RLGService extends AbstractPeriodicService {
     }
 
     /**
-     * Start any services that DCOP plans to send to.
+     * Start any services that DCOP plans to send to and stop any containers
+     * that DCOP doesn't plan to send traffic to if this is not the default
+     * region for the service.
+     * 
      */
-    private void startServicesForDcop(final RegionPlan dcopPlan,
-            Map<NodeIdentifier, Integer> nodesWithAvailableCapacity,
-            final RegionIdentifier thisRegion,
-            final LoadBalancerPlanBuilder newServicePlan) {
+    private void startAndStopServicesForDcop(final RegionPlan dcopPlan,
+            final LoadBalancerPlanBuilder newServicePlan,
+            final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity,
+            final LoadPercentages loadPercentages,
+            final Map<ServiceIdentifier<?>, Integer> containersPerService,
+            final Map<NodeIdentifier, ResourceReport> reports,
+            final Set<ServiceIdentifier<?>> servicesDefaultingToThisRegion) {
         if (AgentConfiguration.getInstance().isRlgNullOverflowPlan()) {
             // ignore the overflow plan from DCOP
             return;
         }
 
-        // TODO: stop services that are not on the DCOP plan
+        final int containersToStart = AgentConfiguration.getInstance().getRlgAllocationsForDcop();
+        if (containersToStart < 1) {
+            LOGGER.warn("rlg allocations for DCOP is less than 1, not starting any containers for DCOP");
+            return;
+        }
 
+        // start services that DCOP plans to have running in this region
+        final Set<ServiceIdentifier<?>> servicesDcopPlansForThisRegion = new HashSet<>();
         dcopPlan.getPlan().forEach((service, servicePlan) -> {
-            if (servicePlan.containsKey(thisRegion)) {
+            final double thisRegionWeight = servicePlan.getOrDefault(this.region, 0D);
+            if (thisRegionWeight > 0) {
+                servicesDcopPlansForThisRegion.add(service);
+
                 final Optional<?> runningService = newServicePlan.getPlan().entrySet().stream()
                         .filter(e -> infoSpecifiesRunningService(service, e.getValue())).findAny();
 
@@ -1044,17 +1209,56 @@ public class RLGService extends AbstractPeriodicService {
                             .entrySet().stream().findAny();
                     if (newNodeAndCap.isPresent()) {
                         final NodeIdentifier newNode = newNodeAndCap.get().getKey();
-                        newServicePlan.addService(newNode, service, 1);
+                        newServicePlan.addService(newNode, service, containersToStart);
                         // subtract 1 from available container capacity on
                         // newNode
                         nodesWithAvailableCapacity.merge(newNode, -1, Integer::sum);
                         if (nodesWithAvailableCapacity.get(newNode) <= 0) {
                             nodesWithAvailableCapacity.remove(newNode);
                         }
+                    } else {
+                        final boolean result = allocateRequiredContainer(newServicePlan, nodesWithAvailableCapacity,
+                                loadPercentages, service, containersPerService, reports);
+                        if (!result) {
+                            LOGGER.warn("Unable to find a node to start service {} for DCOP", service);
+                        }
                     }
                 }
             } // if dcop is using this region for the service
         }); // foreach dcop service
+
+        if (AgentConfiguration.getInstance().getRlgStopForDcop() && !dcopPlan.getPlan().isEmpty()) {
+            // If there is a DCOP plan stop services not in the DCOP plan. If
+            // the plan is empty, assume that DCOP hasn't published a plan yet
+            // and don't stop any containers.
+            final List<Runnable> removeContainers = new LinkedList<>();
+            newServicePlan.getPlan().forEach((ncp, containerInfos) -> {
+                containerInfos.forEach(containerInfo -> {
+                    final ServiceIdentifier<?> service = containerInfo.getService();
+                    if (!containerInfo.isStop() && null != containerInfo.getId()) {
+                        final NodeIdentifier container = containerInfo.getId();
+                        if (!servicesDefaultingToThisRegion.contains(service)
+                                && !servicesDcopPlansForThisRegion.contains(service)) {
+                            // stop this container
+
+                            removeContainers.add(() -> {
+                                // cannot execute inside the loop otherwise
+                                // we'll get a
+                                // concurrent modification exception, so build a
+                                // Runnable and execute outside the loop
+                                newServicePlan.stopTrafficToContainer(ncp, container);
+                                newServicePlan.stopContainer(ncp, container);
+                                servicePriorityManager.notifyDeallocation(service, 1.0);
+                            });
+
+                        } // container should stop
+                    } // running container
+                });
+            });
+
+            // Do the removals
+            removeContainers.forEach(Runnable::run);
+        } // plan is not empty and containers should be stopped
     }
 
     /**
@@ -1118,16 +1322,8 @@ public class RLGService extends AbstractPeriodicService {
 
     private LoadBalancerPlan realComputePlan() {
         final RegionPlan dcopPlan = rlgInfoProvider.getDcopPlan();
-        final ImmutableSet<ResourceReport> resourceReports = rlgInfoProvider.getNodeResourceReports();
+        final ImmutableSet<ResourceReport> resourceReports = rlgInfoProvider.getRlgResourceReports();
         final LoadBalancerPlan prevPlan = rlgInfoProvider.getRlgPlan();
-        final RegionIdentifier thisRegion = rlgInfoProvider.getRegion();
-
-        // get and set the shared RLG information through rlgInfoProvider
-        final ImmutableMap<RegionIdentifier, RlgSharedInformation> infoFromAllRlgs = rlgInfoProvider
-                .getAllRlgSharedInformation();
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("shared rlg information: " + infoFromAllRlgs);
-        }
 
         // LOGGER.trace("Resource reports: {}", resourceReports);
         LOGGER.info("Resource reports: {}", resourceReports);
@@ -1153,13 +1349,21 @@ public class RLGService extends AbstractPeriodicService {
 
         LOGGER.trace("Filtered reports: {}", reports);
 
-        final Map<NodeIdentifier, Integer> nodesWithAvailableCapacity = findNodesWithAvailableContainerCapacity(reports,
-                newServicePlan);
+        final Map<ServiceIdentifier<?>, Integer> containersPerService = computeContainersPerService(reports);
+
+        final RlgUtils.LoadPercentages loadPercentages = RlgUtils.computeServiceLoadPercentages(reports);
+
+        final SortedMap<NodeIdentifier, Integer> nodesWithAvailableCapacity = findNodesWithAvailableContainerCapacity(
+                reports, newServicePlan);
+
+        final Set<ServiceIdentifier<?>> servicesDefaultingToThisRegion = ensureServicesInDefaultRegion(newServicePlan,
+                nodesWithAvailableCapacity, loadPercentages, containersPerService, reports);
 
         // make sure there is at least one instance of each service that DCOP
         // wants running in this region
         if (!resourceReports.isEmpty()) {
-            startServicesForDcop(dcopPlan, nodesWithAvailableCapacity, thisRegion, newServicePlan);
+            startAndStopServicesForDcop(dcopPlan, newServicePlan, nodesWithAvailableCapacity, loadPercentages,
+                    containersPerService, reports, servicesDefaultingToThisRegion);
         } else {
             LOGGER.warn("No resource reports, RLG cannot do much of anything");
         }
@@ -1279,9 +1483,9 @@ public class RLGService extends AbstractPeriodicService {
             // if (avgLoad > PACKING_LOADPRED_UPPER_THRESHOLD) {
             // int newContainers = (int) Math.ceil(curLoad /
             // PACKING_LOADPRED_UPPER_THRESHOLD);
-            // System.out.println("New containers:" + newContainers);
+            // LOGGER.debug("New containers: {}", newContainers);
             // int contToAdd = newContainers - curContainers;
-            // System.out.println("contToAdd:" + contToAdd);
+            // LOGGER.debug("contToAdd: {}", contToAdd);
             // serviceContToAdd.put(serviceName, contToAdd);
             // }
         }
@@ -1289,13 +1493,13 @@ public class RLGService extends AbstractPeriodicService {
         prevLoads = serviceLoads;
         prevContainers = serviceContainers;
 
-        System.out.println("New heuristic debug, serviceLoads: " + serviceLoads);
-        System.out.println("New heuristic debug, serviceContainers: " + serviceContainers);
-        System.out.println("New heuristic debug, serviceContToAdd: " + serviceContToAdd);
+        LOGGER.debug("New heuristic debug, serviceLoads: {}", serviceLoads);
+        LOGGER.debug("New heuristic debug, serviceContainers: {}", serviceContainers);
+        LOGGER.debug("New heuristic debug, serviceContToAdd: {}", serviceContToAdd);
 
         // add new servers at this point
         for (Server server : serverCollection) {
-            // System.out.println("Checking server " +
+            // LOGGER.debug("Checking server {}",
             // Objects.toString(server.getName()));
             if (!rlgBins.hasServer(server)) {
                 rlgBins.addServer(server);
@@ -1323,10 +1527,10 @@ public class RLGService extends AbstractPeriodicService {
             if (!oldServices.contains(service.getName())) {
                 LOGGER.info("RLG adding new service:" + service.toString());
                 rlgBins.addBestFit(service.getName(), service.getLoad());
-                // System.out.println("RLG: New service added.");
+                // LOGGER.debug("RLG: New service added.");
             }
             // else {
-            // System.out.println("RLG: Old service, not added.");
+            // LOGGER.debug("RLG: Old service, not added.");
             // }
         }
 
@@ -1340,8 +1544,6 @@ public class RLGService extends AbstractPeriodicService {
         // -- start overloaded and underloaded service estimation
         // now we determine overloaded services and handle them -- we use the
         // STUB implementation for this currently
-
-        final RlgUtils.LoadPercentages loadPercentages = RlgUtils.computeServiceLoadPercentages(reports);
 
         // find services that are overloaded, underloaded, and underload ended
         final double serviceOverloadThreshold = AgentConfiguration.getInstance().getRlgLoadThreshold();
@@ -1421,7 +1623,7 @@ public class RLGService extends AbstractPeriodicService {
 
         // initial computations
         final LocalDateTime currentTime = LocalDateTime.now();
-        final Set<ServiceIdentifier<?>> downscaleableServices = getDownscaleableServices(resourceReports);
+        final Set<ServiceIdentifier<?>> downscaleableServices = getDownscaleableServices(containersPerService);
 
         if (!downscaleableServices.isEmpty())
             LOGGER.debug("Found downscaleable services: {} ", downscaleableServices);
@@ -1474,7 +1676,8 @@ public class RLGService extends AbstractPeriodicService {
 
             double totalServiceLoad = 0.0;
 
-            for (Map<NodeAttribute, Double> load : totalContainerLoadByService.get(serviceId).values()) {
+            for (Map<NodeAttribute, Double> load : totalContainerLoadByService
+                    .getOrDefault(serviceId, Collections.emptyMap()).values()) {
                 totalServiceLoad += load.getOrDefault(MapUtils.COMPUTE_ATTRIBUTE, 0.0);
             }
 
@@ -1639,9 +1842,9 @@ public class RLGService extends AbstractPeriodicService {
 
                         newServicePlan.stopContainer(nodeId, containerId);
 
-                        System.out.println("DEBUG. Service to shut down: " + serviceId);
-                        System.out.println("DEBUG. Container to shut down: " + containerId);
-                        System.out.println("DEBUG. NCP for shut down: " + nodeId);
+                        LOGGER.debug("Service to shut down: {}", serviceId);
+                        LOGGER.debug("Container to shut down: {}", containerId);
+                        LOGGER.debug("NCP for shut down: {}", nodeId);
 
                         // remove container from BinPacking object
                         // if it is the only container for the service in the
@@ -1674,6 +1877,8 @@ public class RLGService extends AbstractPeriodicService {
                 dcopPlan);
 
         final LoadBalancerPlan plan = newServicePlan.toLoadBalancerPlan(resourceReports, overflowPlan);
+
+        validatePlan(reports, plan);
 
         return plan;
     }

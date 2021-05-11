@@ -14,12 +14,15 @@ import com.bbn.map.common.ApplicationManagerApi;
 import com.bbn.map.dcop.acdiff.ACdiffAlgorithm;
 import com.bbn.map.dcop.cdiff.CdiffAlgorithm;
 import com.bbn.map.dcop.defaults.DefaultAlgorithm;
+import com.bbn.map.dcop.final_rcdiff.FinalRCDiffAlgorithm;
 import com.bbn.map.dcop.modular_acdiff.ModularACdiffAlgorithm;
 import com.bbn.map.dcop.modular_rcdiff.ModularRCdiffAlgorithm;
 import com.bbn.map.dcop.rcdiff.RCdiffAlgorithm;
 import com.bbn.map.dcop.rdiff.RdiffAlgorithm;
+import com.bbn.map.ta2.RegionalTopology;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
+import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -44,14 +47,12 @@ public class DCOPService extends AbstractPeriodicService {
     private final RegionIdentifier regionID;
     private final DcopAlgorithm algorithm;
     private final CdiffPlusAlgorithm cdiffPlusAlgorithm;
-    
+
     /**
      * Number of rounds of AP to wait between checking for new messages.
      */
     public static final int AP_ROUNDS_TO_SLEEP_BETWEEN_MESSAGE_CHECKS = 5;
-    
-    
-//>>>>>>> DCOP
+
     /**
      * Construct a DCOP service.
      * 
@@ -73,7 +74,7 @@ public class DCOPService extends AbstractPeriodicService {
             @Nonnull final ApplicationManagerApi applicationManager) {
         super("DCOP-" + nodeName, AgentConfiguration.getInstance().getDcopRoundDuration());
         this.regionID = region;
-        this.algorithm = AgentConfiguration.getInstance().getDcopAlgorithm();      
+        this.algorithm = AgentConfiguration.getInstance().getDcopAlgorithm();
 
         this.dcopInfoProvider = Objects.requireNonNull(dcopInfoProvider);
         this.applicationManager = Objects.requireNonNull(applicationManager, "application manager");
@@ -96,11 +97,10 @@ public class DCOPService extends AbstractPeriodicService {
     @Override
     protected void execute() {
         try {
-            final RegionPlan prevPlan = dcopInfoProvider.getDcopPlan();
             final RegionPlan plan = computePlan();
             if (null == plan) {
                 LOGGER.warn("DCOP produced a null plan, ignoring");
-            } else if (!plan.equals(prevPlan)) {
+            } else {
                 LOGGER.info("Publishing DCOP plan: {}", plan);
                 dcopInfoProvider.publishDcopPlan(plan);
             }
@@ -110,14 +110,20 @@ public class DCOPService extends AbstractPeriodicService {
     }
 
     private RegionPlan computePlan() {
-        LOGGER.info("Using algorithm {}", this.algorithm);  
-        LOGGER.info("Asynchronous message drop {}", AgentConfiguration.getInstance().getDcopAcdiffSimulateMessageDrops());  
-        LOGGER.info("Asynchronous message drop rate {}", AgentConfiguration.getInstance().getDcopAcdiffSimulateMessageDropRate());  
+        LOGGER.info("Using algorithm {}", this.algorithm);
+        LOGGER.info("Asynchronous message drop {}",
+                AgentConfiguration.getInstance().getDcopAcdiffSimulateMessageDrops());
+        LOGGER.info("Asynchronous message drop rate {}",
+                AgentConfiguration.getInstance().getDcopAcdiffSimulateMessageDropRate());
         LOGGER.info("Asynchronous timeout {}", AgentConfiguration.getInstance().getDcopAcdiffTimeOut());
+        
+        final ResourceSummary summary = dcopInfoProvider.getDcopResourceSummary();
+        
+        final RegionalTopology topology = dcopInfoProvider.getRegionTopology();
 
         switch (this.algorithm) {
         case DISTRIBUTED_ROUTING_DIFFUSION:
-            final AbstractDcopAlgorithm rdiff = new RdiffAlgorithm(regionID, dcopInfoProvider, applicationManager);
+            final AbstractDcopAlgorithm rdiff = new RdiffAlgorithm(regionID, dcopInfoProvider, applicationManager, summary, topology);
             return rdiff.run();
         case DISTRIBUTED_CONSTRAINT_DIFFUSION:
             final CdiffAlgorithm cdiff = new CdiffAlgorithm(regionID, dcopInfoProvider, applicationManager);
@@ -129,13 +135,18 @@ public class DCOPService extends AbstractPeriodicService {
             final RCdiffAlgorithm rcdiff = new RCdiffAlgorithm(regionID, dcopInfoProvider, applicationManager);
             return rcdiff.run();
         case MODULAR_RCDIFF:
-            final ModularRCdiffAlgorithm modularRcdiff = new ModularRCdiffAlgorithm(regionID, dcopInfoProvider, applicationManager);    
+            final ModularRCdiffAlgorithm modularRcdiff = new ModularRCdiffAlgorithm(regionID, dcopInfoProvider,
+                    applicationManager);
             return modularRcdiff.run();
         case MODULAR_ACDIFF:
-            ModularACdiffAlgorithm modularAcdiff = new ModularACdiffAlgorithm(regionID, dcopInfoProvider, applicationManager);    
+            ModularACdiffAlgorithm modularAcdiff = new ModularACdiffAlgorithm(regionID, dcopInfoProvider,
+                    applicationManager);
             return modularAcdiff.run();
+        case FINAL_RCDIFF:    
+            FinalRCDiffAlgorithm finalRCDiffAlgorithm = new FinalRCDiffAlgorithm(regionID, dcopInfoProvider, applicationManager, summary, topology);    
+            return finalRCDiffAlgorithm.run();
         case DEFAULT_PLAN:
-            DefaultAlgorithm defaultAlg = new DefaultAlgorithm(regionID, dcopInfoProvider, applicationManager);    
+            DefaultAlgorithm defaultAlg = new DefaultAlgorithm(regionID, dcopInfoProvider, applicationManager);
             return defaultAlg.run();
         case CDIFF_PLUS:
             LOGGER.info("Running DCOP CDIFF + with period {} seconds", this.getPeriod().getSeconds());

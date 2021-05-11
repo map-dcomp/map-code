@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -186,8 +186,7 @@ public final class RlgTestUtils {
         ContainerResourceReport containerResourceReport = new ContainerResourceReport(containerName, time, service,
                 ServiceStatus.RUNNING, EstimationWindow.SHORT, ImmutableMap.of(NodeAttribute.TASK_CONTAINERS, 1.0),
                 ImmutableMap.of(client1, ImmutableMap.copyOf(load)),
-                ImmutableMap.of(client1, ImmutableMap.copyOf(load)), averageProcessingTime, ImmutableMap.of(),
-                ImmutableMap.of(), ImmutableMap.of());
+                ImmutableMap.of(client1, ImmutableMap.copyOf(load)), averageProcessingTime);
 
         return containerResourceReport;
     }

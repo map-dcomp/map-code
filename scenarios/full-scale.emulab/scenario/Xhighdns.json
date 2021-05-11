@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": true,
+    "hardware": "leader",
+    "name": "Xhighdns",
+    "region": "Xhigh",
+    "router": false,
+    "underlay": false
+}

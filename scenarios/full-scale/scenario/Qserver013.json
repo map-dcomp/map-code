@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "Qserver013",
+    "region": "Q",
+    "router": false,
+    "underlay": false
+}

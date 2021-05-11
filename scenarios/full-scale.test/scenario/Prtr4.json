@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Prtr4",
+    "region": "P",
+    "router": false,
+    "underlay": false
+}

@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -80,6 +80,8 @@ public class DCOPPlanUpdateTableGenerator {
 
     private static final String REGION_PLAN_FILENAME = "regionPlan.json";
     private static final String NODE_STATE_FILENAME = "state.json";
+    
+    private static final double DEFAULT_PLAN_PERCENT_ROUND_UNIT = 0.01;
 
     private final ObjectMapper mapper;
 
@@ -119,6 +121,7 @@ public class DCOPPlanUpdateTableGenerator {
 
         // region name -> time -> node name -> RegionPlan
         Map<String, Map<Long, Map<String, RegionPlan>>> regionsPlans = new HashMap<>();
+        
 
         // service -> time -> from region -> node name -> to region -> percent
         // requests
@@ -165,8 +168,11 @@ public class DCOPPlanUpdateTableGenerator {
         final long firstBinCenter = (times.size() > 0 ? times.get(0) : 0);
 
         LOGGER.debug("Regions plans: {}", regionsPlans);
+        
+        // region -> time -> node -> plan
         final Map<String, Map<Long, Map<String, RegionPlan>>> timeBinnedRegionsPlans = timeBinRegionPlans(regionsPlans,
                 firstBinCenter, binSize);
+        
         LOGGER.debug("Time binnned regions plans: {}", timeBinnedRegionsPlans);
 
         ChartGenerationUtils.outputRegionLeadersToCSV(outputFolder, "-dcop_leaders", timeBinnedRegionsPlans);
@@ -184,7 +190,8 @@ public class DCOPPlanUpdateTableGenerator {
 
         LOGGER.debug("Service region plans: {}", serviceRegionPlans);
         outputServicePlanChangeMatrices(outputFolder, serviceRegionPlans,
-                Lists.copyOf(ChartGenerationUtils.getSecondOrderKeys(timeBinnedRegionsPlans)), regions);
+                Lists.copyOf(ChartGenerationUtils.getSecondOrderKeys(timeBinnedRegionsPlans)), regions,
+                DEFAULT_PLAN_PERCENT_ROUND_UNIT);
         outputServicePlanChangeGnuPlotFiles(outputFolder, serviceRegionPlans, regions);
 
         try {
@@ -231,7 +238,7 @@ public class DCOPPlanUpdateTableGenerator {
             plansPerRegion.entrySet().forEach(Errors.rethrow().wrap(regionEntry -> {
                 final RegionIdentifier region = regionEntry.getKey();
                 line[2] = region.getName();
-
+                
                 regionEntry.getValue().entrySet().forEach(Errors.rethrow().wrap(timeEntry -> {
                     final long time = timeEntry.getKey();
                     final RegionPlan plan = timeEntry.getValue();
@@ -454,7 +461,7 @@ public class DCOPPlanUpdateTableGenerator {
             header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
 
             for (int n = 0; n < services.size(); n++)
-                header[n + 1] = services.get(n).toString();
+                header[n + 1] = ChartGenerationUtils.serviceToFilenameString(services.get(n));
 
             CSVFormat format = CSVFormat.EXCEL.withHeader(header);
 
@@ -649,10 +656,131 @@ public class DCOPPlanUpdateTableGenerator {
         // });
     }
 
+    
+    private void outputServicePlans(File outputFolder,
+            Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> serviceRegionPlans,
+            List<Long> times,
+            List<RegionIdentifier> regions, Double percentRoundUnit) {
+        if (!outputFolder.exists()) {
+            if (!outputFolder.mkdirs()) {
+                throw new RuntimeException("Unable to create directory " + outputFolder);
+            }
+        }
+        
+        Collections.sort(regions, new Comparator<RegionIdentifier>() {
+            @Override
+            public int compare(RegionIdentifier o1, RegionIdentifier o2) {
+                return o1.toString().compareTo(o2.toString());
+            }
+        });
+        
+        serviceRegionPlans.forEach((service, servicePlans) -> {
+            File serviceFile = new File(
+                    outputFolder + File.separator + "service_" + ChartGenerationUtils.serviceToFilenameString(service)
+                            + "-dcop_plan_request_distribution" + ChartGenerationUtils.CSV_FILE_EXTENSION);
+
+            String[] header = new String[1 + regions.size() * regions.size() + 1];
+            header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
+
+            for (int f = 0; f < regions.size(); f++)
+                for (int t = 0; t < regions.size(); t++)
+                    header[1 + f * regions.size() + t] = regions.get(f) + "-" + regions.get(t);
+
+            header[1 + regions.size() * regions.size()] = "error";
+
+            CSVFormat format = CSVFormat.EXCEL.withHeader(header);
+
+            try (CSVPrinter printer = new CSVPrinter(
+                    new OutputStreamWriter(new FileOutputStream(serviceFile), Charset.defaultCharset()), format)) {
+                List<Long> times2 = new ArrayList<>();
+                times2.addAll(times);
+                Collections.sort(times2);
+
+                Object[] prevRowValues = null;
+
+                for (int n = 0; n < times2.size(); n++) {
+                    long time = times2.get(n);
+                    int error = 0;
+                    Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>> servicePlan = servicePlans
+                            .get(time);
+
+                    Object[] rowValues = new Object[header.length];
+
+                    rowValues[0] = time; // add time to row
+                    Arrays.fill(rowValues, 1, regions.size() * regions.size() + 1,
+                            ChartGenerationUtils.EMPTY_CELL_VALUE);
+
+                    for (int f = 0; f < regions.size(); f++) {
+                        RegionIdentifier fromRegion = regions.get(f);
+
+                        if (servicePlan != null && servicePlan.containsKey(fromRegion)) {
+                            Map<String, Map<RegionIdentifier, Double>> toRegions = servicePlan.get(fromRegion);
+
+                            if (toRegions.keySet().size() > 1) {
+                                LOGGER.info(
+                                        "ERROR: More than one plan found for service '{}' at time {} in region '{}' from nodes '{}'",
+                                        service, time, fromRegion, toRegions.keySet());
+                                error = 1;
+                            } else if (toRegions.keySet().isEmpty()) {
+                                LOGGER.info("ERROR: No region plan found for service '{}' at time {} in region '{}'",
+                                        service, time, fromRegion);
+                                error = 1;
+                            } else {
+                                for (final Map.Entry<String, Map<RegionIdentifier, Double>> entry : toRegions
+                                        .entrySet()) {
+                                    Map<RegionIdentifier, Double> toRegionPercents = entry.getValue();
+
+                                    for (int t = 0; t < regions.size(); t++) {
+                                        RegionIdentifier toRegion = regions.get(t);
+
+                                        // check if there is data available for
+                                        // this toRegion
+                                        if (toRegionPercents.containsKey(toRegion)) {
+                                            Double value = toRegionPercents.get(toRegion);
+                                            
+                                            rowValues[1 + f * regions.size() + t] = value; // add
+                                                                                           // value
+                                                                                           // to
+                                                                                           // row
+                                        } else {
+                                            LOGGER.info(
+                                                    "ERROR: For service '{}', no data found for to region '{}' at time {} in region '{}'",
+                                                    service, toRegion, time, fromRegion);
+                                            error = 1;
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            LOGGER.info("ERROR: For service '{}', no data found for from region '{}' at time {}",
+                                    service, fromRegion, time);
+                            error = 1;
+                        }
+                    }
+
+                    rowValues[1 + regions.size() * regions.size()] = error;
+
+                    // print rowValues if it is the first or last entry or
+                    // different from the previous entry
+                    if (prevRowValues == null || !ChartGenerationUtils.compareArrays(prevRowValues, rowValues, 1,
+                            regions.size() * regions.size() + 1) || n == times2.size() - 1)
+                        printer.printRecord(rowValues);
+
+                    prevRowValues = rowValues;
+                }
+            } catch (IOException e) {
+                LOGGER.error("Error writing to CSV file: {}", e);
+                e.printStackTrace();
+            }
+        });
+        
+    }
+    
     private void outputServicePlanChangeMatrices(File outputFolder,
             Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<RegionIdentifier, Double>>>>> serviceRegionPlans,
             List<Long> times,
-            List<RegionIdentifier> regions) {
+            List<RegionIdentifier> regions,
+            Double percentRoundUnit) {
         if (!outputFolder.exists()) {
             if (!outputFolder.mkdirs()) {
                 throw new RuntimeException("Unable to create directory " + outputFolder);
@@ -720,7 +848,7 @@ public class DCOPPlanUpdateTableGenerator {
                             } else {
                                 for (final Map.Entry<String, Map<RegionIdentifier, Double>> entry : toRegions
                                         .entrySet()) {
-                                    Map<RegionIdentifier, Double> toRegionPercents = entry.getValue();
+                                    Map<RegionIdentifier, Double> toRegionPercents = ChartGenerationUtils.normalizeWeights(entry.getValue());
 
                                     for (int t = 0; t < regions.size(); t++) {
                                         RegionIdentifier toRegion = regions.get(t);
@@ -729,6 +857,11 @@ public class DCOPPlanUpdateTableGenerator {
                                         // this toRegion
                                         if (toRegionPercents.containsKey(toRegion)) {
                                             Double value = toRegionPercents.get(toRegion);
+
+                                            if (value != null && percentRoundUnit != null)  {
+                                                value = Math.round(value / percentRoundUnit) * percentRoundUnit;
+                                            }
+                                            
                                             rowValues[1 + f * regions.size() + t] = value; // add
                                                                                            // value
                                                                                            // to

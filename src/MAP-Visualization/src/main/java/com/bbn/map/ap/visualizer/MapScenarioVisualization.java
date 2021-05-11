@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -45,7 +45,6 @@ import java.text.ParseException;
 import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import javax.annotation.Nonnull;
@@ -66,12 +65,10 @@ import javax.swing.Timer;
 import javax.swing.text.DefaultFormatterFactory;
 import javax.swing.text.MaskFormatter;
 
-import org.protelis.lang.datatype.DeviceUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
-import com.bbn.map.Controller;
 import com.bbn.map.ap.visualizer.region.RegionGraphVisualizer;
 import com.bbn.map.ap.visualizer.utils.VisualizationViewerControlPanel;
 import com.bbn.map.appmgr.util.AppMgrUtils;
@@ -79,9 +76,8 @@ import com.bbn.map.simulator.DNSSim;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.utils.LogExceptionHandler;
 import com.bbn.map.utils.MapLoggingConfigurationFactory;
-import com.bbn.protelis.common.testbed.termination.TerminationCondition;
-import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
+import com.bbn.protelis.networkresourcemanagement.NetworkNode;
 import com.bbn.protelis.networkresourcemanagement.visualizer.ScenarioVisualizer;
 import com.bbn.protelis.utils.SimpleClock;
 import com.bbn.protelis.utils.VirtualClock;
@@ -154,7 +150,7 @@ public final class MapScenarioVisualization extends JFrame {
     private Simulation sim = null;
     private Path scenarioPath = null;
     private Path demandPath = null;
-    private ScenarioVisualizer<DisplayController, DisplayLink, NetworkLink, Controller, NetworkClient> visualizer = null;
+    private ScenarioVisualizer<DisplayController, DisplayLink, NetworkLink, NetworkNode> visualizer = null;
     private final JPanel visualizerPanel;
 
     private final JFormattedTextField apDurationField;
@@ -428,7 +424,7 @@ public final class MapScenarioVisualization extends JFrame {
                 lastElement = scenarioPath.toString();
             }
             topologyButton.setText(lastElement);
-            
+
             // load the scenario just so it's visible
             try {
                 loadScenario();
@@ -496,11 +492,9 @@ public final class MapScenarioVisualization extends JFrame {
         sim = new Simulation(scenarioPath.toString(), scenarioPath, demandPath, clock, POLLING_INTERVAL_MS, TTL,
                 AppMgrUtils::getContainerParameters);
 
-        sim.getScenario().setTerminationCondition(termination);
-
         final MapNetworkVisualizerFactory visFactory = new MapNetworkVisualizerFactory();
         visualizer = new ScenarioVisualizer<>(visFactory);
-        visualizer.setScenario(sim.getScenario());
+        visualizer.setScenario(sim.getGraph());
 
         viewerControl.setViewer(visualizer.getViewer());
 
@@ -598,8 +592,6 @@ public final class MapScenarioVisualization extends JFrame {
 
         visualizer.start(false);
 
-        stopScenario = false;
-
         stopButton.setEnabled(true);
         demandButton.setEnabled(false);
         topologyButton.setEnabled(false);
@@ -607,15 +599,6 @@ public final class MapScenarioVisualization extends JFrame {
 
         sim.startSimulation();
     }
-
-    private boolean stopScenario;
-
-    private final transient TerminationCondition<Map<DeviceUID, Controller>> termination = new TerminationCondition<Map<DeviceUID, Controller>>() {
-        @Override
-        public boolean shouldTerminate(final Map<DeviceUID, Controller> ignored) {
-            return stopScenario;
-        }
-    };
 
     private void closeAllRequestPlots() {
         requestStatusDialogs.forEach(plot -> {
@@ -640,7 +623,6 @@ public final class MapScenarioVisualization extends JFrame {
             dnsPanel.removeAll();
             clientPanel.removeAll();
 
-            stopScenario = true;
             sim.stopSimulation();
 
             sim = null;

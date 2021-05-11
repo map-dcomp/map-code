@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -74,6 +74,7 @@ import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
@@ -85,7 +86,6 @@ import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Side;
 import javafx.scene.Cursor;
-import javafx.scene.Node;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart.Data;
@@ -1799,7 +1799,7 @@ public class Controller
                 final long networkDuration = value.getDuration();
                 ClientLoad clientLoad = new ClientLoad(startTime, serverDuration,
                         networkDuration, numClients, service, 
-                        ImmutableMap.copyOf(nodeLoad), ImmutableMap.copyOf(networkLoad));
+                        ImmutableMap.copyOf(nodeLoad), ImmutableMap.copyOf(networkLoad), ImmutableList.of());
                 
                 if (numClients > 0 && (nodeLoad.values().stream().anyMatch(v -> v > 0.0) ||
                         networkLoad.values().stream().anyMatch(v -> v > 0.0)))

@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "router",
+    "name": "Frtr1",
+    "region": "F",
+    "router": true,
+    "underlay": false
+}

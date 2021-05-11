@@ -2,10 +2,13 @@ package com.bbn.map.dcop;
 
 import javax.annotation.Nonnull;
 
+import com.bbn.map.ap.TotalDemand;
+import com.bbn.map.ta2.RegionalTopology;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.ResourceReport;
+import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
+import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
 
 /**
@@ -22,7 +25,9 @@ public interface DcopInfoProvider {
     ImmutableMap<RegionIdentifier, DcopSharedInformation> getAllDcopSharedInformation();
 
     /**
-     * This method is called by DCOP to share new information.
+     * This method is called by DCOP to share new information. This method will
+     * ensure that the stored value is disconnected from the value passed in so
+     * that it's safe for another to read the data later.
      * 
      * @param v
      *            the current information to share FROM this DCOP node with
@@ -31,12 +36,10 @@ public interface DcopInfoProvider {
     void setLocalDcopSharedInformation(@Nonnull DcopSharedInformation v);
 
     /**
-     * @param estimationWindow
-     *            the estimation window for the demand
      * @return the summary for the region.
      */
     @Nonnull
-    ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow);
+    ResourceSummary getDcopResourceSummary();
 
     /**
      * 
@@ -52,4 +55,22 @@ public interface DcopInfoProvider {
      */
     void publishDcopPlan(@Nonnull RegionPlan plan);
 
+    /**
+     * Total demand for the specified {@code service} across the topology. This
+     * uses the {@link EstimationWindow#LONG} estimation window.
+     * 
+     * @param service
+     *            the service to get the demand for
+     * @return demand for the service, {@link TotalDemand#nullTotalDemand()} if
+     *         there is no known demand for the service
+     */
+    TotalDemand getTotalDemandForService(@Nonnull ServiceIdentifier<?> service);
+
+    /**
+     * Get the graph of the regions in the network.
+     * 
+     * @return the resulting graph
+     */
+    @Nonnull
+    RegionalTopology getRegionTopology();
 }

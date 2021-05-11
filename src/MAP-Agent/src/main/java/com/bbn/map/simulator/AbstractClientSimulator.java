@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -50,6 +50,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.map.Controller;
+import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NetworkNode;
@@ -207,19 +209,21 @@ import com.google.common.collect.ImmutableMap;
      * 
      */
     protected final void dumpClientRequestRecord(@Nonnull final ClientRequestRecord record,
-            @Nonnull final ObjectWriter mapper) {
+            @Nonnull final ThreadLocalObjectWriter mapper) {
         if (baseOutputDirectory != null) {
             try {
-                Path outputDirectory = baseOutputDirectory.resolve(getSimName());
+                synchronized (baseOutputDirectory) {
+                    Path outputDirectory = baseOutputDirectory.resolve(getSimName());
 
-                if (outputDirectory.toFile().exists() || outputDirectory.toFile().mkdirs()) {
-                    Path clientRequestsLogFilename = outputDirectory
-                            .resolve(String.format("client_requests_sent-%s.json", getSimName()));
+                    if (outputDirectory.toFile().exists() || outputDirectory.toFile().mkdirs()) {
+                        Path clientRequestsLogFilename = outputDirectory
+                                .resolve(String.format("client_requests_sent-%s.json", getSimName()));
 
-                    try (FileWriterWithEncoding writer = new FileWriterWithEncoding(clientRequestsLogFilename.toFile(),
-                            Charset.defaultCharset(), true)) {
-                        mapper.writeValue(writer, record);
-                        LOGGER.debug("Write to client request log file: {}", clientRequestsLogFilename);
+                        try (FileWriterWithEncoding writer = new FileWriterWithEncoding(
+                                clientRequestsLogFilename.toFile(), Charset.defaultCharset(), true)) {
+                            mapper.get().writeValue(writer, record);
+                            LOGGER.debug("Write to client request log file: {}", clientRequestsLogFilename);
+                        }
                     }
                 }
             } catch (IOException e) {
@@ -254,7 +258,15 @@ import com.google.common.collect.ImmutableMap;
      * @param serviceContainer
      *            the container, will be null if the destination is not a
      *            container.
-     *
+     * @param networkLoadAsAttribute
+     *            {@link BaseNetworkLoad#getNetworkLoadAsAttribute()}
+     * @param networkLoadAsAttributeFlipped
+     *            {@link BaseNetworkLoad#getNetworkLoadAsAttributeFlipped()}
+     * @param service
+     *            {@link BaseNetworkLoad#getService()}
+     * @param duration
+     *            {@link BaseNetworkLoad#getNetworkDuration()}
+     * 
      * @return the request status, the applied loads for later unapplying if
      *         needed, and the current loads
      */
@@ -262,7 +274,10 @@ import com.google.common.collect.ImmutableMap;
             final NodeIdentifier clientId,
             final NodeIdentifier firstNodeId,
             final long now,
-            final BaseNetworkLoad req,
+            @Nonnull final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute,
+            @Nonnull final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped,
+            @Nonnull final ApplicationCoordinates service,
+            final long networkDuration,
             final ContainerSim serviceContainer,
             final NodeNetworkFlow flow,
             final List<NetworkLink> path) {
@@ -298,7 +313,8 @@ import com.google.common.collect.ImmutableMap;
             // transmitting node needs to match the TX value in the load, which
             // will be the node closest to the server.
             final ImmutableTriple<RequestResult, LinkLoadEntry, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkResult = lmgr
-                    .addLinkLoad(now + Math.round(pathLinkDelay), req, flow, localDest);
+                    .addLinkLoad(now + Math.round(pathLinkDelay), networkLoadAsAttribute, networkLoadAsAttributeFlipped,
+                            service, networkDuration, flow, localDest);
 
             final RequestResult requestResult = linkResult.getLeft();
             final LinkLoadEntry appliedLinkLoad = linkResult.getMiddle();
@@ -323,8 +339,9 @@ import com.google.common.collect.ImmutableMap;
 
         if (RequestResult.FAIL != result && null != serviceContainer) {
             // apply to the container
-            final Pair<RequestResult, LinkLoadEntry> containerResult = serviceContainer
-                    .addLinkLoad(now + Math.round(pathLinkDelay), req, clientId);
+            final Pair<RequestResult, LinkLoadEntry> containerResult = serviceContainer.addLinkLoad(
+                    now + Math.round(pathLinkDelay), networkLoadAsAttribute, networkLoadAsAttributeFlipped, service,
+                    networkDuration, clientId);
 
             result = RequestResult.chooseWorstResult(result, containerResult.getLeft());
         }
@@ -458,6 +475,18 @@ import com.google.common.collect.ImmutableMap;
             }
         } else {
             return server;
+        }
+    }
+
+    /**
+     * Class for thread local {@link ObjectWriter} instances.
+     * 
+     * @author jschewe
+     *
+     */
+    protected static final class ThreadLocalObjectWriter extends ThreadLocal<ObjectWriter> {
+        protected ObjectWriter initialValue() {
+            return Controller.createDumpWriter();
         }
     }
 

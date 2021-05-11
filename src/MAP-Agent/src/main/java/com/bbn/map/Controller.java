@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -48,20 +48,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
+import javax.annotation.concurrent.GuardedBy;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.CloseableThreadContext;
 import org.protelis.lang.datatype.Tuple;
+import org.protelis.lang.datatype.impl.ArrayTupleImpl;
 import org.protelis.vm.ProtelisProgram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AbstractService.Status;
+import com.bbn.map.AgentConfiguration.LinkDelayAlgorithm;
 import com.bbn.map.ap.ApLogger;
+import com.bbn.map.ap.ImmutableDcopSharedInformation;
+import com.bbn.map.ap.TotalDemand;
+import com.bbn.map.ap.dcop.DcopDirectCommunicator;
 import com.bbn.map.appmgr.util.AppMgrUtils;
+import com.bbn.map.common.ApplicationManagerApi;
+import com.bbn.map.common.value.ApplicationCoordinates;
+import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.dcop.DCOPService;
 import com.bbn.map.dcop.DcopInfoProvider;
 import com.bbn.map.dcop.DcopSharedInformation;
@@ -70,20 +81,25 @@ import com.bbn.map.dns.NameRecord;
 import com.bbn.map.dns.PlanTranslator;
 import com.bbn.map.rlg.RLGService;
 import com.bbn.map.rlg.RlgInfoProvider;
-import com.bbn.map.rlg.RlgSharedInformation;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.SimulationRunner;
 import com.bbn.map.ta2.OverlayTopology;
+import com.bbn.map.ta2.RegionalTopology;
 import com.bbn.map.utils.JsonUtils;
 import com.bbn.map.utils.MAPServices;
+import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
+import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
+import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan.ContainerInfo;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
+import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeLookupService;
+import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionLookupService;
-import com.bbn.protelis.networkresourcemanagement.RegionNodeState;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
@@ -93,6 +109,7 @@ import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindo
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceReport;
+import com.bbn.protelis.utils.ImmutableUtils;
 import com.bbn.protelis.utils.VirtualClock;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -136,11 +153,24 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private final Logger logger;
     private final Logger apLogger;
+    private static final Logger LOGGER = LoggerFactory.getLogger(Controller.class);
 
     private final NetworkServices networkServices;
     private final boolean allowDnsChanges;
     private final boolean enableDcop;
     private final boolean enableRlg;
+
+    private final DnsManagementThread dnsManagementThread;
+    private final ContainerManagementThread containerManagementThread;
+
+    private final ApplicationManagerApi applicationManager;
+
+    private final NodeLookupService dcopNodeLookup;
+
+    /**
+     * Not null when running DCOP and using direct communication.
+     */
+    private DcopDirectCommunicator dcopDirect = null;
 
     /**
      * Full constructor a controller.
@@ -166,8 +196,10 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      *            passed to parent
      * @param extraData
      *            passed to parent
-     * @see NetworkServer#NetworkServer(NodeLookupService, RegionLookupService,
-     *      ProtelisProgram, NodeIdentifier, ResourceManagerFactory, Map)
+     * @param dcopNodeLookup
+     *            used to lookup nodes for DCOP direct communication
+     * @see NetworkServer#NetworkServer(NodeLookupService, ProtelisProgram,
+     *      NodeIdentifier, ResourceManagerFactory, Map)
      */
     @SuppressFBWarnings(value = "SC_START_IN_CTOR", justification = "starting dumper thread in the constructor is intentional")
     public Controller(@Nonnull final NodeLookupService nodeLookupService,
@@ -179,13 +211,16 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             @Nonnull final NetworkServices networkServices,
             final boolean allowDnsChanges,
             final boolean enableDcop,
-            final boolean enableRlg) {
-        super(nodeLookupService, regionLookupService, program, name, manager, extraData);
+            final boolean enableRlg,
+            final NodeLookupService dcopNodeLookup) {
+        super(nodeLookupService, program, name, manager, extraData);
+        this.regionLookupService = regionLookupService;
         this.logger = LoggerFactory.getLogger(Controller.class.getName() + "." + name);
         this.apLogger = LoggerFactory.getLogger("com.bbn.map.ap.program." + name);
+        this.applicationManager = AppMgrUtils.getApplicationManager();
 
-        this.dcop = new DCOPService(name.getName(), getRegionIdentifier(), this, AppMgrUtils.getApplicationManager());
-        this.rlg = new RLGService(name.getName(), getRegionIdentifier(), this, AppMgrUtils.getApplicationManager());
+        this.dcop = new DCOPService(name.getName(), getRegionIdentifier(), this, this.applicationManager);
+        this.rlg = new RLGService(name.getName(), getRegionIdentifier(), this, this.applicationManager);
         this.networkServices = networkServices;
         this.allowDnsChanges = allowDnsChanges;
         this.enableDcop = enableDcop
@@ -193,6 +228,13 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         this.enableRlg = enableRlg;
         this.dnsPrevLoadBalancerPlan = null;
         this.dnsPrevRegionServiceState = null;
+        this.dcopNodeLookup = dcopNodeLookup;
+
+        this.containerManagementThread = new ContainerManagementThread(this);
+        this.containerManagementThread.start();
+
+        this.dnsManagementThread = new DnsManagementThread(this);
+        this.dnsManagementThread.start();
 
         setRunDCOP(ControllerProperties.isRunningDcop(extraData));
         setRunRLG(ControllerProperties.isRunningRlg(extraData));
@@ -205,6 +247,10 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         dumperThread.start();
 
         logger.info("Running git version {}", SimulationRunner.getGitVersionInformation());
+
+        // setup starting state for DCOP messages. There MUST be an entry for
+        // the local region
+        setLocalDcopSharedInformation(new DcopSharedInformation());
     }
 
     private boolean globalLeader = false;
@@ -241,6 +287,34 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private LoadBalancerPlan dnsPrevLoadBalancerPlan;
     private RegionServiceState dnsPrevRegionServiceState;
+    private ImmutableCollection<Pair<DnsRecord, Double>> prevDnsEntries;
+
+    private final Object algorithmStartLock = new Object();
+
+    private long algorithmStartTime = -1;
+    private boolean algorithmsRunning = false;
+
+    /**
+     * Specify the time that the DCOP and RLG algorithms should start running.
+     * 
+     * @param time
+     *            a time based on {@link ResourceManager#getClock()}
+     */
+    public void startAlgorithmsAt(final long time) {
+        synchronized (algorithmStartLock) {
+            algorithmStartTime = time;
+        }
+    }
+
+    /**
+     * 
+     * @return {@link #startAlgorithmsAt(long)}
+     */
+    public long getAlgorithmStartTime() {
+        synchronized (algorithmStartLock) {
+            return algorithmStartTime;
+        }
+    }
 
     @Override
     protected void postRunCycle() {
@@ -249,28 +323,44 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             return;
         }
 
-        if (runDCOP && !isDCOPRunning()) {
-            startDCOP();
-        } else if (!runDCOP && isDCOPRunning()) {
-            stopDCOP();
+        if (!algorithmsRunning) {
+            final long algorithmStartTime = getAlgorithmStartTime();
+            if (algorithmStartTime >= 0) {
+                final long now = getResourceManager().getClock().getCurrentTime();
+                if (algorithmStartTime <= now) {
+                    // use this boolean to avoid needing to check the clock once
+                    // the algorithms have started
+                    algorithmsRunning = true;
+                }
+            }
         }
 
-        if (runRLG && !isRLGRunning()) {
-            startRLG();
-        } else if (!runRLG && isRLGRunning()) {
-            stopRLG();
+        if (algorithmsRunning) {
+            // only run RLG and DCOP once told to start
+
+            if (runDCOP && !isDCOPRunning()) {
+                startDCOP();
+            } else if (!runDCOP && isDCOPRunning()) {
+                stopDCOP();
+            }
+
+            if (runRLG && !isRLGRunning()) {
+                startRLG();
+            } else if (!runRLG && isRLGRunning()) {
+                stopRLG();
+            }
         }
 
         if (allowDnsChanges && isHandleDnsChanges()) {
-            updateDnsInformation();
+            this.dnsManagementThread.updateData(getNetworkState().getLoadBalancerPlan(), getRegionServiceState());
         }
 
         if (logger.isTraceEnabled()) {
             logger.trace("{} resource summary compute load: {}", getNodeIdentifier().getName(),
-                    getNetworkState().getRegionSummary(EstimationWindow.SHORT).getServerLoad());
+                    getDcopResourceSummary().getServerLoad());
         }
 
-        manageContainers();
+        this.containerManagementThread.updateData(getNetworkState().getLoadBalancerPlan());
 
         fetchServiceImages();
     }
@@ -287,11 +377,14 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         }
     }
 
-    private void updateDnsInformation() {
+    private void updateDnsInformation(final LoadBalancerPlan newLoadBalancerPlan,
+            final RegionServiceState newRegionServiceState) {
         logger.trace("Checking for DNS changes in node: {}", getNodeIdentifier());
 
-        final LoadBalancerPlan newLoadBalancerPlan = getNetworkState().getLoadBalancerPlan();
-        final RegionServiceState newRegionServiceState = getRegionServiceState();
+        if (null == newLoadBalancerPlan || null == newRegionServiceState) {
+            logger.warn("Got null rlg plan or service state, skipping DNS information update");
+            return;
+        }
 
         // update the DNS if something has changed
         if (!newLoadBalancerPlan.equals(dnsPrevLoadBalancerPlan)
@@ -341,9 +434,13 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                         !newRegionServiceState.equals(dnsPrevRegionServiceState));
             }
 
+            // only recompute DNS records if an input has changed
             final ImmutableCollection<Pair<DnsRecord, Double>> newDnsEntries = networkServices.getPlanTranslator()
                     .convertToDns(newLoadBalancerPlan, newRegionServiceState);
-            if (null != newDnsEntries) {
+
+            // only publish DNS record changes if the new records are different
+            // than last published
+            if (null != newDnsEntries && !newDnsEntries.equals(prevDnsEntries)) {
 
                 logger.info("Execution {}, found DNS changes in region {}. Replacing records with: {}",
                         getExecutionCount(), getRegionIdentifier(), newDnsEntries);
@@ -356,6 +453,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 if (success) {
                     dnsPrevLoadBalancerPlan = newLoadBalancerPlan;
                     dnsPrevRegionServiceState = newRegionServiceState;
+                    prevDnsEntries = newDnsEntries;
 
                     logger.trace("Storing LBPlan: {} services: {}", dnsPrevLoadBalancerPlan, dnsPrevRegionServiceState);
                 } else {
@@ -378,7 +476,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      */
     private final Object availableServicesLock = new Object();
 
-    private RegionAvailableServices regionAvailableServices = new MutableRegionAvailableServices(getRegionIdentifier());
+    private NetworkAvailableServices localAvailableServices = new NetworkAvailableServices();
     /**
      * The most recently used dns entries.
      */
@@ -386,20 +484,20 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private void updateLocalNetworkAvailableServices(final ImmutableCollection<Pair<DnsRecord, Double>> newDnsEntries) {
         synchronized (availableServicesLock) {
-            final MutableRegionAvailableServices serviceInfo = new MutableRegionAvailableServices(
-                    getRegionIdentifier());
+            final MutableNetworkAvailableServices serviceInfo = new MutableNetworkAvailableServices();
 
             newDnsEntries.stream().filter(r -> r.getLeft() instanceof NameRecord)
                     .forEach(r -> serviceInfo.addService((NameRecord) r.getLeft()));
 
             logger.trace("Created available services {} from {}", serviceInfo, newDnsEntries);
 
-            regionAvailableServices = serviceInfo;
+            localAvailableServices = new NetworkAvailableServices(serviceInfo);
             dnsEntries = newDnsEntries;
         }
     }
 
     /**
+     * Used by Protelis when sharing information.
      * 
      * @return the information that this node has about available services in
      *         the region
@@ -407,13 +505,11 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     @Nonnull
     public NetworkAvailableServices getLocalNetworkAvailableServices() {
         synchronized (availableServicesLock) {
-            final NetworkAvailableServices ret = NetworkAvailableServices
-                    .convertToNetworkAvailableServices(regionAvailableServices);
-            logger.trace("Getting local network available services - Created {} from {}", ret, regionAvailableServices);
-            return ret;
+            return localAvailableServices;
         }
     }
 
+    @GuardedBy("availableServicesLock")
     private NetworkAvailableServices allNetworkAvailableServices = new NetworkAvailableServices();
 
     /* package for testing */ NetworkAvailableServices getAllNetworkAvailableServices() {
@@ -456,20 +552,22 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     /**
      * Start and stop containers as necessary.
      */
-    private void manageContainers() {
+    private void manageContainers(final LoadBalancerPlan rlgPlan) {
+
         try (CloseableThreadContext.Instance ctc = CloseableThreadContext.push(getName())) {
+            if (null == rlgPlan) {
+                logger.warn("Got null RLG plan, skipping container management");
+                return;
+            }
+
             final long time = getResourceManager().getClock().getCurrentTime();
 
             final ResourceManager<?> resMgr = getResourceManager();
 
             // check if the service plan for this node has changed
-            final LoadBalancerPlan rlgPlan = getNetworkState().getLoadBalancerPlan();
             final ImmutableCollection<ContainerInfo> nodeServicePlan = rlgPlan.getServicePlan()
                     .get(getNodeIdentifier());
             if (Objects.equals(prevContainerPlan, nodeServicePlan)) {
-                logger.trace(
-                        "RLG service plan has not changed for this node, skipping container management. prev: {} new: {} full: {}",
-                        prevContainerPlan, nodeServicePlan, rlgPlan);
                 return;
             }
 
@@ -558,11 +656,24 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     protected void preStopExecuting() {
         stopDCOP();
         stopRLG();
+        this.dnsManagementThread.stopExecuting();
+        this.containerManagementThread.stopExecuting();
     }
 
     private final DCOPService dcop;
 
     private void startDCOP() {
+        if (getDcopShareDirect()) {
+            if (null == dcopDirect) {
+                // execute even when DCOP is disabled to allow tests that depend
+                // on
+                // DCOP sharing without DCOP running.
+                dcopDirect = new DcopDirectCommunicator(this, dcopNodeLookup, networkServices.getTA2Interface(),
+                        networkServices.getMapOracle());
+                dcopDirect.start();
+            }
+        }
+
         if (enableDcop) {
             logger.info("Starting DCOP");
             dcop.startService();
@@ -577,6 +688,9 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     private void stopDCOP() {
         logger.info("Stopping DCOP");
         dcop.stopService(AgentConfiguration.getInstance().getServiceShutdownWaitTime().toMillis());
+        if (null != dcopDirect) {
+            dcopDirect.stop();
+        }
         logger.info("DCOP stopped");
     }
 
@@ -682,7 +796,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     // ---- DcopInfoProvider
     private final Object dcopSharedInformationLock = new Object();
 
-    private DcopSharedInformation localDcopSharedInformation = new DcopSharedInformation();
+    private ImmutableDcopSharedInformation localDcopSharedInformation;
 
     /**
      * AP uses this to determine what to share with the rest of the network.
@@ -690,7 +804,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      * @return the DCOP shared information for this node
      */
     @Nonnull
-    public DcopSharedInformation getLocalDcopSharedInformation() {
+    public ImmutableDcopSharedInformation getLocalDcopSharedInformation() {
         synchronized (dcopSharedInformationLock) {
             logger.debug("Getting local DCOP information {}", localDcopSharedInformation);
             return localDcopSharedInformation;
@@ -700,12 +814,30 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     @Override
     public void setLocalDcopSharedInformation(@Nonnull final DcopSharedInformation v) {
         synchronized (dcopSharedInformationLock) {
-            logger.debug("Sharing DCOP information {}", v);
-            localDcopSharedInformation = v;
+            if (null != localDcopSharedInformation && localDcopSharedInformation.equivalentTo(v)) {
+                logger.debug("Ignoring extra set of duplicate DCOP shared information. prev: {} new: {}",
+                        localDcopSharedInformation, v);
+                return;
+            }
+            logger.debug("New dcop shared information {} old: {}", v, localDcopSharedInformation);
+            localDcopSharedInformation = new ImmutableDcopSharedInformation(v);
+            logger.debug("Sharing DCOP information {}", localDcopSharedInformation);
+        }
+        if (getDcopShareDirect()) {
+            // a controller should see it's own messages, this is consistent
+            // with the AP implementation
+            setDcopSharedInformation(getRegion(), getLocalDcopSharedInformation());
+
+            if (null == dcopDirect) {
+                logger.error(
+                        "Using DCOP direct communication, but dcopDirect variable is null. Message will not be sent");
+            } else {
+                dcopDirect.shareDcopMessage(getLocalDcopSharedInformation());
+            }
         }
     }
 
-    private ImmutableMap<RegionIdentifier, DcopSharedInformation> allDcopSharedInformation = ImmutableMap.of();
+    private Map<RegionIdentifier, ImmutableDcopSharedInformation> allDcopSharedInformation = new HashMap<>();
 
     /**
      * This method should be used by DCOP to get the most recent shared state.
@@ -717,7 +849,26 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     public ImmutableMap<RegionIdentifier, DcopSharedInformation> getAllDcopSharedInformation() {
         synchronized (dcopSharedInformationLock) {
             logger.debug("Returning all DCOP information {}", allDcopSharedInformation);
-            return allDcopSharedInformation;
+
+            final ImmutableMap.Builder<RegionIdentifier, DcopSharedInformation> builder = ImmutableMap.builder();
+            allDcopSharedInformation.forEach((region, shared) -> {
+                builder.put(region, shared.getMessage());
+            });
+            return builder.build();
+        }
+    }
+
+    /**
+     * Used by {@link DcopDirectCommunicator} to record shared DCOP information.
+     * 
+     * @param region
+     *            the region that the data was received from
+     * @param data
+     *            the data received
+     */
+    public void setDcopSharedInformation(final RegionIdentifier region, final ImmutableDcopSharedInformation data) {
+        synchronized (dcopSharedInformationLock) {
+            allDcopSharedInformation.put(region, data);
         }
     }
 
@@ -728,14 +879,16 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
      *            the new DCOP shared information
      */
     public void setAllDcopSharedInformation(final Tuple newInfo) {
-        ImmutableMap.Builder<RegionIdentifier, DcopSharedInformation> builder = ImmutableMap.builder();
+        final Map<RegionIdentifier, ImmutableDcopSharedInformation> builder = new HashMap<>();
         // TODO: this conversion seems super-awkward.
         for (Object entry : newInfo) {
             final Tuple pair = (Tuple) entry;
             final RegionIdentifier sourceRegion = (RegionIdentifier) pair.get(0);
             final Object value = pair.get(1);
-            if (value instanceof DcopSharedInformation) {
-                builder.put(sourceRegion, (DcopSharedInformation) value);
+            if (value instanceof ImmutableDcopSharedInformation) {
+                // no need to copy as AP doesn't modify the object
+                final ImmutableDcopSharedInformation msg = (ImmutableDcopSharedInformation) value;
+                builder.put(sourceRegion, msg);
             } else if (value instanceof Tuple) {
                 final Tuple valueT = (Tuple) value;
                 if (valueT.isEmpty()) {
@@ -751,7 +904,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             }
         }
         synchronized (dcopSharedInformationLock) {
-            allDcopSharedInformation = builder.build();
+            allDcopSharedInformation = builder;
             logger.debug("Set new DCOP shared information {}", allDcopSharedInformation);
         }
     }
@@ -780,6 +933,11 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     private static final double WEIGHT_SUM_TOLERANCE = 1E-6;
 
+    @Override
+    @Nonnull
+    public RegionalTopology getRegionTopology() {
+        return networkServices.getTA2Interface().getRegionTopology();
+    }
     // ---- end DcopInfoProvider
 
     /**
@@ -866,100 +1024,42 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         return getRegionIdentifier();
     }
 
-    @Override
-    public boolean isServiceAvailable(final RegionIdentifier region, final ServiceIdentifier<?> service) {
-        synchronized (availableServicesLock) {
-            return allNetworkAvailableServices.isServiceAvailable(region, service);
-        }
-    }
+    private final Object dcopDataLock = new Object();
 
-    private final Object rlgSharedInformationLock = new Object();
+    private ResourceSummary dcopResourceSummary = null;
 
-    private RlgSharedInformation localRlgSharedInformation = new RlgSharedInformation();
-
-    /**
-     * AP uses this to determine what to share with the rest of the network.
-     * 
-     * @return the RLG shared information for this node
-     */
-    @Nonnull
-    public RlgSharedInformation getLocalRlgSharedInformation() {
-        synchronized (rlgSharedInformationLock) {
-            return localRlgSharedInformation;
-        }
-    }
-
-    @Override
-    public void setLocalRlgSharedInformation(@Nonnull final RlgSharedInformation v) {
-        synchronized (rlgSharedInformationLock) {
-            localRlgSharedInformation = v;
-        }
-    }
-
-    private ImmutableMap<RegionIdentifier, RlgSharedInformation> allRlgSharedInformation = ImmutableMap.of();
-
-    /**
-     * This method should be used by RLG to get the most recent shared state.
-     * 
-     * @return the RLG shared information
-     */
     @Override
     @Nonnull
-    public ImmutableMap<RegionIdentifier, RlgSharedInformation> getAllRlgSharedInformation() {
-        synchronized (rlgSharedInformationLock) {
-            return allRlgSharedInformation;
-        }
-    }
-
-    /**
-     * This method is to be used by AP to set the new shared state.
-     * 
-     * @param newInfo
-     *            the new RLG shared information
-     */
-    public void setAllRlgSharedInformation(final Tuple newInfo) {
-        ImmutableMap.Builder<RegionIdentifier, RlgSharedInformation> builder = ImmutableMap.builder();
-        // TODO: this conversion seems super-awkward.
-        for (Object entry : newInfo) {
-            final Tuple pair = (Tuple) entry;
-            final RegionIdentifier sourceRegion = (RegionIdentifier) pair.get(0);
-            final Object value = pair.get(1);
-            if (value instanceof RlgSharedInformation) {
-                builder.put(sourceRegion, (RlgSharedInformation) value);
-            } else if (value instanceof Tuple) {
-                final Tuple valueT = (Tuple) value;
-                if (valueT.isEmpty()) {
-                    // ignore
-                    if (logger.isTraceEnabled()) {
-                        logger.trace("Got default RLG shared value, ignoring: " + value);
-                    }
+    public ResourceSummary getDcopResourceSummary() {
+        synchronized (dcopDataLock) {
+            if (null == dcopResourceSummary) {
+                final ImmutableSet<ResourceReport> reports = getDcopResourceReports();
+                if (reports.isEmpty()) {
+                    dcopResourceSummary = getNullSummary(getRegion(), EstimationWindow.LONG);
                 } else {
-                    logger.error("Got unexpected tuple as RLG shared value, ignoring: " + value);
+                    dcopResourceSummary = computeResourceSummary(getRegion(), regionLookupService,
+                            getDcopResourceReports());
                 }
-            } else {
-                logger.error("Got unexpected value as RLG shared value, ignoring: " + value);
             }
-        }
-        synchronized (rlgSharedInformationLock) {
-            allRlgSharedInformation = builder.build();
+
+            logResourceSummaryDelay("DCOP", dcopResourceSummary);
+
+            return dcopResourceSummary;
         }
     }
 
-    @Override
-    @Nonnull
-    public ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow) {
-        final long now = getResourceManager().getClock().getCurrentTime();
+    private void logResourceSummaryDelay(final String label, final ResourceSummary summary) {
+        if (logger.isDebugEnabled()) {
+            final long now = getResourceManager().getClock().getCurrentTime();
 
-        ResourceSummary summary = getNetworkState().getRegionSummary(estimationWindow);
-        final long minDelay = now - summary.getMinTimestamp();
-        final long maxDelay = now - summary.getMaxTimestamp();
+            final long minDelay = now - summary.getMinTimestamp();
+            final long maxDelay = now - summary.getMaxTimestamp();
 
-        logger.debug(
-                "getRegionSummary: Retrieving {} with timestamp range {}-{} at time {} after delay range of {}-{} ms",
-                ResourceSummary.class.getSimpleName(), summary.getMinTimestamp(), summary.getMaxTimestamp(), now,
-                minDelay, maxDelay);
-
-        return summary;
+            logger.debug(
+                    "ResourceSummary {}: Retrieving {} with timestamp range {}-{} at time {} after delay range of {}-{} ms",
+                    label, ResourceSummary.class.getSimpleName(), summary.getMinTimestamp(), summary.getMaxTimestamp(),
+                    now, minDelay, maxDelay);
+        }
     }
 
     @Override
@@ -967,13 +1067,13 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
     public RegionPlan getDcopPlan() {
         final long now = getResourceManager().getClock().getCurrentTime();
 
-        RegionPlan plan = getNetworkState().getRegionPlan();
+        final RegionPlan plan = getNetworkState().getRegionPlan();
         final long delay = now - plan.getTimestamp();
 
         logger.debug("getDcopPlan: Retrieving {} with timestamp {} at time {} after delay of {} ms",
                 RegionPlan.class.getSimpleName(), plan.getTimestamp(), now, delay);
 
-        return getNetworkState().getRegionPlan();
+        return plan;
     }
 
     @Override
@@ -1015,11 +1115,109 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     @Override
     @Nonnull
-    public ImmutableSet<ResourceReport> getNodeResourceReports() {
-        return getRegionNodeState().getNodeResourceReports();
+    public ImmutableSet<ResourceReport> getRlgResourceReports() {
+        synchronized (rlgDataLock) {
+            return rlgResourceReports;
+        }
+    }
+
+    private final Object rlgDataLock = new Object();
+    private ResourceSummary rlgResourceSummary = null;
+
+    @Override
+    @Nonnull
+    public ResourceSummary getRlgResourceSummary() {
+        synchronized (rlgDataLock) {
+            if (null == rlgResourceSummary) {
+                final ImmutableSet<ResourceReport> reports = getRlgResourceReports();
+                if (reports.isEmpty()) {
+                    rlgResourceSummary = getNullSummary(getRegion(), EstimationWindow.SHORT);
+                } else {
+                    rlgResourceSummary = computeResourceSummary(getRegion(), regionLookupService, reports);
+                }
+            }
+
+            logResourceSummaryDelay("RLG", rlgResourceSummary);
+
+            return rlgResourceSummary;
+        }
     }
 
     // ---- end RLGInfoProvider
+
+    private ImmutableSet<ResourceReport> rlgResourceReports = ImmutableSet.of();
+
+    /**
+     * Called from AP.
+     * 
+     * @param tuple
+     *            the resource reports
+     */
+    public void setRlgResourceReports(final Tuple tuple) {
+        synchronized (rlgDataLock) {
+            rlgResourceReports = apResourceReportsToImmutableSet(tuple);
+            rlgResourceSummary = null;
+        }
+    }
+
+    private ImmutableSet<ResourceReport> dcopResourceReports = ImmutableSet.of();
+
+    /**
+     * Called from AP.
+     * 
+     * @param tuple
+     *            the resource reports
+     */
+    public void setDcopResourceReports(final Tuple tuple) {
+        synchronized (dcopDataLock) {
+            dcopResourceReports = apResourceReportsToImmutableSet(tuple);
+            localTotalDemand = null;
+            dcopResourceSummary = null;
+        }
+    }
+
+    private ImmutableSet<ResourceReport> getDcopResourceReports() {
+        synchronized (dcopDataLock) {
+            return dcopResourceReports;
+        }
+    }
+
+    private ImmutableSet<ResourceReport> apResourceReportsToImmutableSet(final Tuple tuple) {
+        final long time = getResourceManager().getClock().getCurrentTime();
+
+        if (logger.isTraceEnabled()) {
+            logger.trace("Setting region resource reports. Region: " + getRegionIdentifier());
+        }
+
+        final Map<NodeIdentifier, ResourceReport> reportMap = new HashMap<>();
+        for (final Object entry : tuple) {
+            final ResourceReport report = (ResourceReport) entry;
+            final long propagationDelay = time - report.getTimestamp();
+
+            logger.debug(
+                    "Received ResourceReport with timestamp {} from {} at time {} after a propagation delay of {} ms.",
+                    report.getTimestamp(), report.getNodeName(), time, propagationDelay);
+
+            if (reportMap.containsKey(report.getNodeName())) {
+                final long oneTimestamp = reportMap.get(report.getNodeName()).getTimestamp();
+                final long twoTimestamp = report.getTimestamp();
+                logger.warn(
+                        "Saw duplicate resource report from {}, using the one with the latest timestamp. timestamp one: {} timestamp two: {}",
+                        report.getNodeName(), oneTimestamp, twoTimestamp);
+                if (oneTimestamp < twoTimestamp) {
+                    reportMap.put(report.getNodeName(), report);
+                }
+            } else {
+                reportMap.put(report.getNodeName(), report);
+            }
+
+            if (logger.isTraceEnabled()) {
+                logger.trace("Adding report for " + report.getNodeName());
+            }
+        }
+
+        return ImmutableSet.copyOf(reportMap.values());
+    }
 
     private final Object rlgListenerLock = new Object();
     private final List<Consumer<LoadBalancerPlan>> rlgListeners = new LinkedList<>();
@@ -1050,6 +1248,301 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
         synchronized (rlgListenerLock) {
             rlgListeners.forEach(callback -> callback.accept(plan));
         }
+    }
+
+    private final RegionLookupService regionLookupService;
+
+    /**
+     * Public visibility for testing only.
+     * 
+     * @param thisRegion
+     *            the region for the summary
+     * @param regionLookupService
+     *            how to convert nodes to regions
+     * @param resourceReports
+     *            the reports to summarize
+     * @return the summary
+     * @throws IllegalArgumentException
+     *             if {@code resourceReports} is empty or contains reports with
+     *             different windows
+     */
+    @Nonnull
+    public static ResourceSummary computeResourceSummary(final RegionIdentifier thisRegion,
+            final RegionLookupService regionLookupService,
+            final ImmutableSet<ResourceReport> resourceReports) {
+
+        if (resourceReports.isEmpty()) {
+            throw new IllegalArgumentException("No reports to summarize");
+        }
+
+        final Set<EstimationWindow> windows = resourceReports.stream().map(ResourceReport::getDemandEstimationWindow)
+                .collect(Collectors.toSet());
+        if (windows.size() > 1) {
+            throw new IllegalArgumentException("All resource reports must have the same estimation window");
+        }
+        final EstimationWindow window = windows.iterator().next();
+
+        long minTimestamp = Long.MAX_VALUE;
+        long maxTimestamp = Long.MIN_VALUE;
+
+        final Map<NodeAttribute, Double> serverCapacity = new HashMap<>();
+        final Map<ServiceIdentifier<?>, Map<RegionIdentifier, Map<NodeAttribute, Double>>> serverLoad = new HashMap<>();
+        final Map<ServiceIdentifier<?>, Map<RegionIdentifier, Map<NodeAttribute, Double>>> serverDemand = new HashMap<>();
+        final Map<ServiceIdentifier<?>, Integer> serverAverageProcessingTimeCount = new HashMap<>();
+        final Map<ServiceIdentifier<?>, Double> serverAverageProcessingTimeSum = new HashMap<>();
+        final Map<RegionIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> networkLoad = new HashMap<>();
+        final Map<RegionIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> networkDemand = new HashMap<>();
+        int maximumServiceContainers = 0;
+        int allocatedServiceContainers = 0;
+
+        final Map<RegionIdentifier, Double> linkDelayAvgSum = new HashMap<>();
+        final Map<RegionIdentifier, Integer> linkDelayAvgCount = new HashMap<>();
+        final Map<RegionIdentifier, Double> linkDelayMin = new HashMap<>();
+        final Map<RegionIdentifier, Map<LinkAttribute, Double>> networkCapacity = new HashMap<>();
+
+        for (final ResourceReport report : resourceReports) {
+            minTimestamp = Math.min(minTimestamp, report.getTimestamp());
+            maxTimestamp = Math.max(maxTimestamp, report.getTimestamp());
+
+            // serverCapacity
+            report.getNodeComputeCapacity().forEach((attr, value) -> {
+                serverCapacity.merge(attr, value, Double::sum);
+            });
+
+            // serverLoad
+            report.getComputeLoad().forEach((service, serviceData) -> {
+                final Map<RegionIdentifier, Map<NodeAttribute, Double>> mergedServiceData = serverLoad
+                        .computeIfAbsent(service, k -> new HashMap<>());
+                serviceData.forEach((sourceNode, nodeData) -> {
+                    final RegionIdentifier sourceRegion = regionLookupService.getRegionForNode(sourceNode);
+
+                    final Map<NodeAttribute, Double> mergedNodeData = mergedServiceData.computeIfAbsent(sourceRegion,
+                            k -> new HashMap<>());
+                    nodeData.forEach((attr, value) -> {
+                        mergedNodeData.merge(attr, value, Double::sum);
+                    });
+                });
+            });
+
+            // serverDemand
+            report.getComputeDemand().forEach((service, serviceData) -> {
+                final Map<RegionIdentifier, Map<NodeAttribute, Double>> mergedServiceData = serverDemand
+                        .computeIfAbsent(service, k -> new HashMap<>());
+                serviceData.forEach((sourceNode, nodeData) -> {
+                    final RegionIdentifier sourceRegion = regionLookupService.getRegionForNode(sourceNode);
+
+                    final Map<NodeAttribute, Double> mergedNodeData = mergedServiceData.computeIfAbsent(sourceRegion,
+                            k -> new HashMap<>());
+                    nodeData.forEach((attr, value) -> {
+                        mergedNodeData.merge(attr, value, Double::sum);
+                    });
+                });
+            });
+
+            // average processing time
+            report.getAverageProcessingTime().forEach((service, avg) -> {
+                serverAverageProcessingTimeSum.merge(service, avg, Double::sum);
+                serverAverageProcessingTimeCount.merge(service, 1, Integer::sum);
+            });
+
+            // use node network capacity as the summaries don't care about the
+            // containers
+            convertInterfaceToRegion(thisRegion, regionLookupService, report.getNetworkCapacity(), networkCapacity,
+                    linkDelayAvgSum, linkDelayAvgCount, linkDelayMin);
+
+            final Set<NodeIdentifier> containersOnReportNode = getContainersRunningOnReportNode(report);
+
+            // network load
+            mergeNetworkLoadDemand(thisRegion, report.getNodeName(), containersOnReportNode, regionLookupService,
+                    report.getNetworkLoad(), networkLoad);
+
+            // network demand
+            mergeNetworkLoadDemand(thisRegion, report.getNodeName(), containersOnReportNode, regionLookupService,
+                    report.getNetworkDemand(), networkDemand);
+
+            maximumServiceContainers += report.getMaximumServiceContainers();
+            allocatedServiceContainers += report.getAllocatedServiceContainers();
+        }
+
+        // add in link delay attribute
+        final LinkDelayAlgorithm linkDelayAlgorithm = AgentConfiguration.getInstance().getLinkDelayAlgorithm();
+        networkCapacity.forEach((region, regionData) -> {
+            if (linkDelayAvgCount.containsKey(region)) {
+                final double linkDelay;
+                switch (linkDelayAlgorithm) {
+                case AVERAGE:
+                    linkDelay = linkDelayAvgSum.getOrDefault(region, 0D) / linkDelayAvgCount.getOrDefault(region, 0);
+                    break;
+                case MINIMUM:
+                    linkDelay = linkDelayMin.getOrDefault(region, 0D);
+                    break;
+                default:
+                    throw new RuntimeException("Unknown link delay algorithm " + linkDelayAlgorithm);
+                }
+
+                regionData.put(LinkAttribute.DELAY, linkDelay);
+            }
+        });
+
+        // compute after processing time
+        final ImmutableMap.Builder<ServiceIdentifier<?>, Double> serverAverageProcessingTime = ImmutableMap.builder();
+        serverAverageProcessingTimeCount.forEach((service, count) -> {
+            final double sum = serverAverageProcessingTimeSum.getOrDefault(service, 0D);
+            if (sum > 0 && count > 0) {
+                final double average = sum / count;
+                serverAverageProcessingTime.put(service, average);
+            }
+        });
+
+        final ResourceSummary summary = new ResourceSummary(thisRegion, minTimestamp, maxTimestamp, window, //
+                ImmutableMap.copyOf(serverCapacity), ImmutableUtils.makeImmutableMap3(serverLoad),
+                ImmutableUtils.makeImmutableMap3(serverDemand), serverAverageProcessingTime.build(), //
+                ImmutableUtils.makeImmutableMap2(networkCapacity), ImmutableUtils.makeImmutableMap4(networkLoad),
+                ImmutableUtils.makeImmutableMap4(networkDemand), //
+                maximumServiceContainers, allocatedServiceContainers);
+        return summary;
+
+    }
+
+    /**
+     * Create a null summary object. Is used when there is no resource reports
+     * to summarize. Uses {@link ResourceReport#NULL_TIMESTAMP} as the minimum
+     * and maximum timestamps.
+     * 
+     * @param region
+     *            the region
+     * @param estimationWindow
+     *            the window over which demand is estimated
+     * @return empty summary for a region
+     */
+    public static ResourceSummary getNullSummary(@Nonnull final RegionIdentifier region,
+            @Nonnull final ResourceReport.EstimationWindow estimationWindow) {
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> serverLoad = ImmutableMap
+                .of();
+        final ImmutableMap<NodeAttribute, Double> serverCapacity = ImmutableMap.of();
+        final ImmutableMap<RegionIdentifier, ImmutableMap<LinkAttribute, Double>> networkCapacity = ImmutableMap.of();
+        final ImmutableMap<RegionIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = ImmutableMap
+                .of();
+
+        return new ResourceSummary(region, ResourceReport.NULL_TIMESTAMP, ResourceReport.NULL_TIMESTAMP,
+                estimationWindow, serverCapacity, serverLoad, serverLoad, ImmutableMap.of(), networkCapacity,
+                networkLoad, networkLoad, 0, 0);
+    }
+
+    private static Set<NodeIdentifier> getContainersRunningOnReportNode(final ResourceReport report) {
+        return report.getContainerReports().entrySet().stream() //
+                .map(Map.Entry::getValue) //
+                .map(ContainerResourceReport::getContainerName) //
+                .collect(Collectors.toSet());
+    }
+
+    private static void mergeNetworkLoadDemand(RegionIdentifier thisRegion,
+            final NodeIdentifier reportNode,
+            final Set<NodeIdentifier> containersOnReportNode,
+            final RegionLookupService nodeToRegion,
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> source,
+            final Map<RegionIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> dest) {
+
+        source.forEach((neighborInterface, neighborData) -> {
+
+            final Set<RegionIdentifier> regions = neighborInterface.getNeighbors().stream()
+                    .map(nodeToRegion::getRegionForNode).collect(Collectors.toSet());
+
+            regions.forEach(neighborRegion -> {
+                if (null != neighborRegion) {
+                    final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> destNeighborData = dest
+                            .computeIfAbsent(neighborRegion, k -> new HashMap<>());
+
+                    neighborData.forEach((nodeFlow, sourceData) -> {
+                        final NodeIdentifier nodeSource = nodeFlow.getSource();
+                        final NodeIdentifier nodeDest = nodeFlow.getDestination();
+                        final RegionIdentifier regionSource = nodeToRegion.getRegionForNode(nodeSource);
+                        final RegionIdentifier regionDest = nodeToRegion.getRegionForNode(nodeDest);
+                        final NodeIdentifier serverNode = nodeFlow.getServer();
+
+                        final RegionIdentifier serverRegion;
+                        if (serverNode.equals(NodeIdentifier.UNKNOWN)) {
+                            serverRegion = RegionIdentifier.UNKNOWN;
+                        } else {
+                            serverRegion = nodeToRegion.getRegionForNode(serverNode);
+                        }
+
+                        final RegionNetworkFlow regionFlow = new RegionNetworkFlow(regionSource, regionDest,
+                                serverRegion);
+                        final Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>> destSourceData = destNeighborData
+                                .computeIfAbsent(regionFlow, k -> new HashMap<>());
+
+                        final boolean includeBandwidth;
+                        if (regionSource.equals(regionDest)) {
+                            // only include bandwidth if the node generating the
+                            // report is running the container that is the
+                            // server
+                            includeBandwidth = containersOnReportNode.contains(serverNode)
+                                    || reportNode.equals(serverNode);
+                        } else {
+                            includeBandwidth = true;
+                        }
+
+                        sourceData.forEach((service, serviceData) -> {
+                            final Map<LinkAttribute, Double> destServiceData = destSourceData.computeIfAbsent(service,
+                                    k -> new HashMap<>());
+
+                            serviceData.forEach((attr, value) -> {
+                                if (includeBandwidth || (!LinkAttribute.DATARATE_TX.equals(attr)
+                                        && !LinkAttribute.DATARATE_RX.equals(attr))) {
+                                    destServiceData.merge(attr, value, Double::sum);
+                                }
+                            }); // foreach attribute
+
+                        }); // foreach service
+                    }); // foreach source
+                } else {
+                    LOGGER.warn("Unable to find region for neighbor a node in {}, found {}",
+                            neighborInterface.getNeighbors(), regions);
+                }
+            });
+
+        }); // foreach neighbor
+    }
+
+    /**
+     * Convert the map of InterfaceIdentifiers to RegionIdentifiers.
+     */
+    private static <T> void convertInterfaceToRegion(final RegionIdentifier thisRegion,
+            final RegionLookupService nodeToRegion,
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<T, Double>> source,
+            final Map<RegionIdentifier, Map<T, Double>> dest,
+            final Map<RegionIdentifier, Double> linkDelayAvgSum,
+            final Map<RegionIdentifier, Integer> linkDelayAvgCount,
+            final Map<RegionIdentifier, Double> linkDelayMin) {
+
+        source.forEach((ifce, v) -> {
+            final Set<RegionIdentifier> regions = ifce.getNeighbors().stream().map(nodeToRegion::getRegionForNode)
+                    .collect(Collectors.toSet());
+
+            regions.forEach(region -> {
+                if (null != region) {
+                    final Map<T, Double> values = dest.computeIfAbsent(region, k -> new HashMap<>());
+                    v.forEach((attr, value) -> {
+
+                        if (LinkAttribute.DELAY.equals(attr)) {
+                            if (!thisRegion.equals(region)) {
+                                // consider link delay only when it's
+                                // with another region
+                                linkDelayAvgCount.merge(region, 1, Integer::sum);
+                                linkDelayAvgSum.merge(region, value, Double::sum);
+                                linkDelayMin.merge(region, value, Double::min);
+                            }
+                        } else {
+                            values.merge(attr, value, Double::sum);
+                        }
+                    });
+                } else {
+                    LOGGER.warn("Unable to find region for a node in {} found: {}", ifce.getNeighbors(), regions);
+                }
+            });
+
+        });
     }
 
     /**
@@ -1264,7 +1757,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 if (isExecuting()) {
                     final Duration lDumpInterval = getDumpInterval();
 
-                    if (isDumpState()) {
+                    if (isDumpState() && algorithmsRunning) {
                         final Path nodeOutputDirectory = getNodeOutputDirectory();
                         if (null != nodeOutputDirectory) {
                             if (!agentConfigWritten) {
@@ -1331,6 +1824,15 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             mapper.writeValue(writer, state);
         }
 
+        // available services for debugging issues looking up which services are
+        // running where
+        final Path availableServicesPath = outputDir.resolve("availableServices.txt");
+        try (BufferedWriter writer = Files.newBufferedWriter(availableServicesPath)) {
+            synchronized (availableServicesLock) {
+                writer.write(String.valueOf(allNetworkAvailableServices));
+            }
+        }
+
         final ResourceManager<?> manager = getResourceManager();
         // resource report
         for (final EstimationWindow window : EstimationWindow.values()) {
@@ -1346,8 +1848,14 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             final Path resourceSummaryFilename = outputDir
                     .resolve(String.format("resourceSummary-%s.json", EstimationWindow.LONG));
             try (BufferedWriter writer = Files.newBufferedWriter(resourceSummaryFilename, Charset.defaultCharset())) {
-                final ResourceSummary summary = getNetworkState().getRegionSummary(EstimationWindow.LONG);
+                final ResourceSummary summary = getDcopResourceSummary();
                 mapper.writeValue(writer, summary);
+            }
+
+            try (BufferedWriter writer = Files.newBufferedWriter(
+                    outputDir.resolve(String.format("regionResourceReports-%s.json", EstimationWindow.LONG)),
+                    Charset.defaultCharset())) {
+                mapper.writeValue(writer, getDcopResourceReports());
             }
 
             // RegionPlan
@@ -1356,6 +1864,12 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                 final RegionPlan plan = getNetworkState().getRegionPlan();
                 mapper.writeValue(writer, plan);
             }
+
+            final Path totalDemandFilename = outputDir.resolve("totalDemand.json");
+            try (BufferedWriter writer = Files.newBufferedWriter(totalDemandFilename, Charset.defaultCharset())) {
+                mapper.writeValue(writer, globalTotalDemand);
+            }
+
         }
 
         if (isRLGRunning()) {
@@ -1363,8 +1877,14 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             final Path resourceSummaryFilename = outputDir
                     .resolve(String.format("resourceSummary-%s.json", EstimationWindow.SHORT));
             try (BufferedWriter writer = Files.newBufferedWriter(resourceSummaryFilename, Charset.defaultCharset())) {
-                final ResourceSummary summary = getNetworkState().getRegionSummary(EstimationWindow.SHORT);
+                final ResourceSummary summary = getRlgResourceSummary();
                 mapper.writeValue(writer, summary);
+            }
+
+            try (BufferedWriter writer = Files.newBufferedWriter(
+                    outputDir.resolve(String.format("regionResourceReports-%s.json", EstimationWindow.SHORT)),
+                    Charset.defaultCharset())) {
+                mapper.writeValue(writer, getRlgResourceReports());
             }
 
             // RegionPlan
@@ -1372,13 +1892,6 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             try (BufferedWriter writer = Files.newBufferedWriter(regionPlanFilename, Charset.defaultCharset())) {
                 final RegionPlan plan = getNetworkState().getRegionPlan();
                 mapper.writeValue(writer, plan);
-            }
-
-            // RegionNodeState
-            final Path regionNodeStateFilename = outputDir.resolve("regionNodeState.json");
-            try (BufferedWriter writer = Files.newBufferedWriter(regionNodeStateFilename, Charset.defaultCharset())) {
-                final RegionNodeState nodeState = getRegionNodeState();
-                mapper.writeValue(writer, nodeState);
             }
         }
 
@@ -1549,4 +2062,209 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
 
     }
 
+    private abstract static class ManagementThread extends Thread {
+        private static final Logger LOGGER = LoggerFactory.getLogger(ManagementThread.class);
+        private boolean newData;
+        private final Object lock = new Object();
+
+        protected final Object getLock() {
+            return lock;
+        }
+
+        private boolean done = false;
+
+        /* package */ ManagementThread(final String name) {
+            super(name);
+            this.newData = false;
+        }
+
+        /** must hold {@code lock} */
+        protected final void notifyNewData() {
+            this.newData = true;
+            this.lock.notifyAll();
+        }
+
+        /**
+         * Notify the thread to stop executing.
+         */
+        public final void stopExecuting() {
+            synchronized (lock) {
+                done = true;
+                this.lock.notifyAll();
+            }
+        }
+
+        @Override
+        public final void run() {
+            while (!done) {
+                synchronized (lock) {
+                    while (!done && !newData) {
+                        try {
+                            lock.wait();
+                        } catch (final InterruptedException e) {
+                            LOGGER.debug("Got interrupted, checking for done at the top of the loop", e);
+                        }
+                    }
+
+                    newData = false;
+                }
+
+                if (!done) {
+                    doWork();
+                }
+            }
+        }
+
+        protected abstract void doWork();
+
+    }
+
+    private static final class DnsManagementThread extends ManagementThread {
+
+        private LoadBalancerPlan newLoadBalancerPlan;
+        private RegionServiceState newRegionServiceState;
+        private final Controller controller;
+
+        /* package */ DnsManagementThread(final Controller controller) {
+            super("DnsMangement for " + controller.getName());
+            this.controller = controller;
+            this.newLoadBalancerPlan = null;
+            this.newRegionServiceState = null;
+        }
+
+        /**
+         * @param newLoadBalancerPlan
+         *            new plan to act on
+         * @param newRegionServiceState
+         *            new service state
+         */
+        public void updateData(final LoadBalancerPlan newLoadBalancerPlan,
+                final RegionServiceState newRegionServiceState) {
+            synchronized (getLock()) {
+                this.newLoadBalancerPlan = newLoadBalancerPlan;
+                this.newRegionServiceState = newRegionServiceState;
+                notifyNewData();
+            }
+        }
+
+        @Override
+        protected void doWork() {
+            this.controller.updateDnsInformation(newLoadBalancerPlan, newRegionServiceState);
+        }
+    }
+
+    private static final class ContainerManagementThread extends ManagementThread {
+
+        private LoadBalancerPlan newLoadBalancerPlan;
+        private final Controller controller;
+
+        /* package */ ContainerManagementThread(final Controller controller) {
+            super("ContainerMangement for " + controller.getName());
+            this.controller = controller;
+            this.newLoadBalancerPlan = null;
+        }
+
+        /**
+         * @param newLoadBalancerPlan
+         *            new plan to act on
+         */
+        public void updateData(final LoadBalancerPlan newLoadBalancerPlan) {
+            synchronized (getLock()) {
+                this.newLoadBalancerPlan = newLoadBalancerPlan;
+                notifyNewData();
+            }
+        }
+
+        @Override
+        protected void doWork() {
+            this.controller.manageContainers(newLoadBalancerPlan);
+        }
+    }
+
+    /**
+     * Used by Protelis to get the list of services. This list must contain the
+     * same elements in the same order across all nodes.
+     * 
+     * @return {@link ApplicationCoordinates} for all known services in sorted
+     *         order
+     */
+    public Tuple getAllServices() {
+        // get all planned services
+        return new ArrayTupleImpl(applicationManager.getAllApplicationSpecifications().stream() //
+                .map(ApplicationSpecification::getCoordinates)//
+                .filter(c -> !MAPServices.UNPLANNED_SERVICES.contains(c)) //
+                .sorted().collect(Collectors.toList()).toArray());
+    }
+
+    private ImmutableMap<ServiceIdentifier<?>, TotalDemand> localTotalDemand = null;
+
+    /**
+     * Local information about total demand. This uses the
+     * {@link EstimationWindow#LONG} estimation window. This is based on the
+     * latest {@link ResourceSummary} and is used by AP to compute
+     * {@link #getTotalDemandForService(ServiceIdentifier)}.
+     * 
+     * @param service
+     *            the service to get the demand for
+     * @return demand for the service, {@link TotalDemand#nullTotalDemand()} if
+     *         there is no known demand for the service
+     */
+    public TotalDemand getLocalTotalDemandForService(final @Nonnull ServiceIdentifier<?> service) {
+        synchronized (rlgDataLock) {
+            if (null == localTotalDemand) {
+                localTotalDemand = TotalDemand.fromSummary(getDcopResourceSummary());
+            }
+            return localTotalDemand.getOrDefault(service, TotalDemand.nullTotalDemand());
+        }
+    }
+
+    /**
+     * @param service
+     *            the service we are interested in
+     * @return is this node the leader for AP sharing of {@link TotalDemand} for
+     *         the specified service
+     */
+    public boolean isTotalDemandLeaderForService(final @Nonnull ServiceIdentifier<?> service) {
+        if (isRunDCOP()) {
+            final ApplicationSpecification appSpec = AppMgrUtils.getApplicationSpecification(applicationManager,
+                    service);
+            if (null == appSpec.getServiceDefaultRegion()) {
+                logger.error("Got null default region for service {}", service);
+                return false;
+            } else {
+                return appSpec.getServiceDefaultRegion().equals(getRegion());
+            }
+        } else {
+            return false;
+        }
+    }
+
+    private final Map<ServiceIdentifier<?>, TotalDemand> globalTotalDemand = new HashMap<>();
+
+    @Override
+    public TotalDemand getTotalDemandForService(final @Nonnull ServiceIdentifier<?> service) {
+        return globalTotalDemand.getOrDefault(service, TotalDemand.nullTotalDemand());
+    }
+
+    /**
+     * 
+     * @param service
+     *            the service
+     * @param totalDemand
+     *            the new total demand for the service in the topology
+     * @see #getTotalDemandForService(ServiceIdentifier)
+     */
+    public void setTotalDemandForService(final @Nonnull ServiceIdentifier<?> service,
+            final @Nonnull TotalDemand totalDemand) {
+        globalTotalDemand.put(service, totalDemand);
+    }
+
+    /**
+     * This makes it easy for AP to check the parameter.
+     * 
+     * @return {@link AgentConfiguration#getDcopShareDirect()}
+     */
+    public boolean getDcopShareDirect() {
+        return AgentConfiguration.getInstance().getDcopShareDirect();
+    }
 }

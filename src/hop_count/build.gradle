@@ -1,0 +1,88 @@
+import org.gradle.internal.os.OperatingSystem
+
+// Plugins
+plugins {
+    id 'java-library'
+    id 'application'    
+    id "com.github.ben-manes.versions" version "0.21.0"
+}
+apply plugin: 'com.github.johnrengelman.shadow'
+
+def props = new Properties()
+file("../P2Protelis/gradle.properties").withInputStream { props.load(it) }
+file("../gradle.common.properties").withInputStream { props.load(it) }
+
+group = 'com.bbn.map'
+version = props.getProperty("map_lofi_version")
+
+mainClassName = 'com.bbn.map.hopcount.HopCount'
+
+description = """Hop Count"""
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+}
+
+configurations {
+    providedRuntime
+    
+    all {
+        exclude group: 'ch.qos.logback'
+    }
+}
+
+dependencies {
+    api project(':MAP-Agent')
+    
+    implementation group: 'org.apache.commons', name: 'commons-csv', version: props.getProperty("commons_csv_version")
+    
+}
+
+checkstyle {
+    configDirectory = file("$projectDir")
+    configFile = file("style.xml")
+    showViolations = true
+    ignoreFailures = true
+    toolVersion = "8.18"
+}
+
+task sourceJar(type: Jar) {
+  classifier "sources"
+  from sourceSets.main.allJava
+}
+
+publishing {
+    repositories {
+        mavenLocal()
+    }
+
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact sourceJar
+        }
+    }
+}
+
+shadowJar {
+    classifier = 'executable'
+    
+    // for some reason including the Log4j2 dat file causes problems
+    // excluding the file causes log4j4 to scan for plugins and everything works 
+    exclude 'META-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat'
+}
+
+dependencyUpdates.resolutionStrategy {
+    componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+            boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'preview', 'b', 'ea'].any { qualifier ->
+                selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-+]*/
+            }
+            if (rejected) {
+               selection.reject('Release candidate')
+            }
+        }
+    }
+}

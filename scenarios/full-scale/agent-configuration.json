@@ -1,0 +1,10 @@
+{
+  "dcopCapacityThreshold": "0.75",
+  "dcopRoundDuration": "PT10M",
+  "dcopAlgorithm": "FINAL_RCDIFF",
+  "extraIftopArguments": [
+    "-f",
+    "port 7000"
+  ],
+  "demandComputationAlgorithm" : "EXPONENTIAL_DECAY"
+}

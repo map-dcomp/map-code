@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -53,9 +53,7 @@ import java.util.stream.IntStream;
 import javax.annotation.Nonnull;
 
 import org.apache.logging.log4j.CloseableThreadContext;
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.experimental.theories.DataPoints;
 import org.junit.experimental.theories.Theories;
@@ -71,7 +69,6 @@ import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.simulator.SimUtils;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
-import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.utils.SimpleClock;
@@ -124,17 +121,6 @@ public class LeaderElectionTests {
         @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
         @Rule
         public RuleChain chain = TestUtils.getStandardRuleChain();
-
-        /**
-         * Ensure that the changes made to the agent configuration are undone
-         * before other tests.
-         */
-        @Before
-        @After
-        public void resetAgentConfiguration() {
-            AgentConfiguration.resetToDefaults();
-            GlobalNetworkConfiguration.resetToDefaults();
-        }
 
         /**
          * Number of times to run the test.
@@ -470,17 +456,6 @@ public class LeaderElectionTests {
         @SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD", justification = "Used by the JUnit framework")
         @Rule
         public RuleChain chain = TestUtils.getStandardRuleChain();
-
-        /**
-         * Ensure that the changes made to the agent configuration are undone
-         * before other tests.
-         */
-        @Before
-        @After
-        public void resetAgentConfiguration() {
-            AgentConfiguration.resetToDefaults();
-            GlobalNetworkConfiguration.resetToDefaults();
-        }
 
         /**
          * Number of times to run the test.

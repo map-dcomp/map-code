@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "compute",
+    "name": "Xhighserver3",
+    "region": "Xhigh",
+    "router": false,
+    "underlay": false
+}

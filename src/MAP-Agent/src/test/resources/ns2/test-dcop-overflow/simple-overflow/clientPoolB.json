@@ -19,7 +19,7 @@
   },
   {
     "startTime": 20000,
-    "serverDuration": 180000,
+    "serverDuration": 360000,
     "networkDuration": 180000,
     "numClients": 3,
     "service": {

@@ -1,5 +1,7 @@
 package com.bbn.map.dcop.rdiff;
 
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -19,16 +21,14 @@ import com.bbn.map.dcop.DcopInfoProvider;
 import com.bbn.map.dcop.DcopSharedInformation;
 import com.bbn.map.dcop.GeneralDcopMessage;
 import com.bbn.map.dcop.ServerClientService;
+import com.bbn.map.dcop.ServerClientServiceLoad;
 import com.bbn.map.dcop.DcopReceiverMessage;
 import com.bbn.map.dcop.rdiff.RdiffDcopMessage.RdiffMessageType;
-import com.bbn.map.utils.MAPServices;
+import com.bbn.map.ta2.RegionalTopology;
 import com.bbn.map.utils.MapUtils;
-import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
@@ -41,48 +41,47 @@ import com.google.common.collect.ImmutableMap;
 public class RdiffAlgorithm extends AbstractDcopAlgorithm {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RdiffAlgorithm.class);
-                    
-    private Map<ServerClientService, Double> serverClientServiceMapToThisServer = new HashMap<>();
-    
-    private Map<ServiceIdentifier<?>, Double> totalGlobalServerDemand = new HashMap<>();
-    
+                            
     // Send <ServerClientService -> Double> between regions
-    private Map<RegionIdentifier, Map<ServerClientService, Double>> parentExcessLoadMap = new HashMap<>();
+    private final Map<RegionIdentifier, Set<ServerClientServiceLoad>> excessLoadMapBackToParent = new HashMap<>();
     
-    private Map<RegionIdentifier, Map<ServerClientService, Double>> childrenLoadMap = new HashMap<>();
-        
-    
-    private Map<ServerClientService, RdiffTree> rdiffTreeMap = new HashMap<>();
-    
-    private final Map<ServiceIdentifier<?>, RdiffTree> dataCenterTreeMap = new HashMap<>();
-    
-    /** Store the number of messages to wait for */
-    private final SortedMap<ServiceIdentifier<?>, Set<ServerClientService>> sortedServiceTupleMapToProcess = new TreeMap<>(new SortServiceByPriorityComparator());
-    private final SortedMap<ServiceIdentifier<?>, Set<ServerClientService>> sortedServiceTupleMapHasReceived = new TreeMap<>(new SortServiceByPriorityComparator());
-    private final Map<ServerClientService, RegionIdentifier> serverClientServiceSenderMap = new HashMap<>();
-    private final Map<ServerClientService, Double> serverClientServiceLoadMap = new HashMap<>();
+    private final Map<RegionIdentifier, Set<ServerClientServiceLoad>> loadMapToChildren = new HashMap<>();
+                
+    // Store all tuples that region receives in a single DCOP iteration
+    private final SortedSet<ServerClientServiceLoad> sortedServiceTupleMapHasReceived = new TreeSet<>(new SortServiceInTuple());
     
     private int newIteration;
     
-    private ResourceSummary summary;
+    private final ResourceSummary summary;
+    
+    private final RegionalTopology topology;
     
     private DcopSharedInformation inbox;
         
     private int lastIteration;
     
-    /**
-     * This is the region that has a clientPool asking for a service to some remote server
-     */
-    private boolean isRoot;
-
+    // Only modified by non-root regions. Root regions can compare regionID with getServer to determine if it is the root of the tuple or not
+    private final Map<ServerClientService, RegionIdentifier> parentTreeMap = new HashMap<>();
+    
+    private final Map<ServerClientService, RegionIdentifier> pathToClients = new HashMap<>();
+    
+    private final Set<ServiceIdentifier<?>> selfRegionServices = new HashSet<>();
+    
+    private final SortedSet<ServerClientServiceLoad> keepLoadSet = new TreeSet<>(new SortServiceInTuple());
+    
+    private final Set<ServerClientServiceLoad> finalExcessLoad = new HashSet<>();
 
     /**
      * @param regionID .
      * @param dcopInfoProvider .
      * @param applicationManager .
+     * @param summary .
+     * @param topology .
      */
-    public RdiffAlgorithm(RegionIdentifier regionID, DcopInfoProvider dcopInfoProvider, ApplicationManagerApi applicationManager) {
+    public RdiffAlgorithm(RegionIdentifier regionID, DcopInfoProvider dcopInfoProvider, ApplicationManagerApi applicationManager, ResourceSummary summary, RegionalTopology topology) {
         super(regionID, dcopInfoProvider, applicationManager);
+        this.summary = summary;
+        this.topology = topology;
     }
 
 
@@ -90,7 +89,8 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
      *  @return 0 (or more if more than second DCOP run)
      */
     private void initialize() {        
-        inbox = getDcopInfoProvider().getAllDcopSharedInformation().get(getRegionID());
+        this.inbox = getDcopInfoProvider().getAllDcopSharedInformation().get(getRegionID());
+
         LOGGER.info("Region {} has inbox {}", getRegionID(), inbox);
         
         if (inbox != null) {
@@ -100,11 +100,10 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
                 newIteration = 0;
             }
         }
-                
-        summary = getDcopInfoProvider().getRegionSummary(ResourceReport.EstimationWindow.LONG);
-        
+                        
         retrieveAggregateCapacity(summary);
         retrieveNeighborSetFromNetworkLink(summary);
+        retrieveAllService(summary);
         
         LOGGER.info("Iteration {} Region {} has Region Capacity {}", newIteration, getRegionID(), getAvailableCapacity());
     }
@@ -118,148 +117,113 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         initialize();
 
         readPreviousDataCenterTree();
+        
         writeDataCenterTreeInformation(); // To write the last iteration
         
         // Not running the first DCOP run due to incomplete neighbor information
         if (newIteration == 0) {
-            return defaultPlan(summary);
+//            return defaultPlan(summary);
+            RegionPlan defaultRegionPlan = defaultPlan(summary, 0);
+            LOGGER.info("DCOP Run {} Region Plan Region {}: {}", newIteration, getRegionID(), defaultRegionPlan);
+            return defaultRegionPlan;
         }
         
-        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = allocateComputeBasedOnNetwork(
-                summary.getServerDemand(), summary.getNetworkDemand());
+        selfRegionServices.addAll(summary.getServerDemand().keySet());
         
-//        
-//        for (Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> entry : summary.getServerDemand().entrySet()) {
-//            ImmutableMap.Builder<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> regionBuilder = ImmutableMap.builder();
-//
-//            for (Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> innerEntry : entry.getValue().entrySet()) {
-//                regionBuilder.put(new StringRegionIdentifier("D"), innerEntry.getValue());
-//            }
-//            
-//            finalCompute.put(entry.getKey(), regionBuilder.build());
-//        }
-//        
-//        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = finalCompute.build();  
-        
-        LOGGER.info("*Iteration {} Server Demand REGION {}: {}", newIteration, getRegionID(), summary.getServerDemand());
-        LOGGER.info("*Iteration {} Server Demand Inferred REGION {}: {}", newIteration, getRegionID(), inferredServerDemand);
-//        LOGGER.info("Iteration {} Server Load: {}", newIteration, summary.getServerLoad());
-        LOGGER.info("Iteration {} Server Capacity: {}", newIteration, summary.getServerCapacity());
-        LOGGER.info("*Iteration {} Network Demand REGION {}: {}", newIteration, getRegionID(), summary.getNetworkDemand());
-//        LOGGER.info("Iteration {} Network Load: {}", newIteration, summary.getNetworkLoad());
-        LOGGER.info("Iteration {} Network Capacity: {}", newIteration, summary.getNetworkCapacity());
-                
-//        readPreviousDataCenterTree();
-              
-        computeTotalGLOBALServerDemand(summary, inferredServerDemand);
-        setRoot();
-        
-        initSortedServiceTupleMapToProcessFromServerDemand(summary);
-        
-        // Create children map from the server demand
-        if (isRoot) {
-            // Will be used later for inferred demand
-            initServerClientServiceMapToThisServer(summary, inferredServerDemand);
-            processServerDemand(serverClientServiceMapToThisServer, summary);
-        }
+        // Get inferred demand for old services
+        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredDemand = inferTotalDemand(getDcopInfoProvider(), selfRegionServices);
 
-        // Network Demand REGION B: {A={C <-> X={AppCoordinates {com.bbn.map, app1, 1.0}={LinkAttribute {DATARATE_TX, false}=0.027845454545454524, LinkAttribute {DATARATE_RX, false}=0.027845454545454524}}}, 
-        //                           C={C <-> X={AppCoordinates {com.bbn.map, app1, 1.0}={LinkAttribute {DATARATE_TX, false}=0.027845454545454524, LinkAttribute {DATARATE_RX, false}=0.027845454545454524}}}}                        
-        LOGGER.info("Iteration {} Region {} has serverClientServiceMapToThisServer {}", newIteration, getRegionID(), serverClientServiceMapToThisServer);
-        
-        for (int iteration = newIteration; iteration < DCOP_ITERATION_LIMIT + newIteration; iteration++) {            
-            LOGGER.info("Iteration {} Region {} has sortedServiceTupleMapToProcess {}", iteration, getRegionID(), sortedServiceTupleMapToProcess);
-            LOGGER.info("Iteration {} Region {} has sortedServiceTupleMapHasReceived {}", iteration, getRegionID(), sortedServiceTupleMapHasReceived);
-            LOGGER.info("Iteration {} Region {} has ParentMap {}", iteration, getRegionID(), parentExcessLoadMap);
-            LOGGER.info("Iteration {} Region {} has ChildrenMap {}", iteration, getRegionID(), childrenLoadMap);
-            LOGGER.info("Iteration {} Region {} has rdiffTreeMap {}", iteration, getRegionID(), rdiffTreeMap);
-            LOGGER.info("Iteration {} Region {} has dataCenterTreeMap {}", iteration, getRegionID(), dataCenterTreeMap);
+        LOGGER.info("Iteration {} Region {} has Server Demand {}", newIteration, getRegionID(), summary.getServerDemand());
+        LOGGER.info("Iteration {} Region {} has Server Demand Inferred {}", newIteration, getRegionID(), inferredDemand);
+
+        LOGGER.info("Iteration {} Region {} has Network Demand {}", newIteration, getRegionID(), summary.getNetworkDemand());
+        LOGGER.info("Iteration {} Region {} has Server Capacity {}", newIteration, getRegionID(), summary.getServerCapacity());
+        LOGGER.info("Iteration {} Region {} has Network Capacity {}", newIteration, getRegionID(), summary.getNetworkCapacity());
+                                                     
+        processServerDemand(inferredDemand, summary);
+                    
+        for (int iteration = newIteration; iteration < DCOP_ITERATION_LIMIT + newIteration; iteration++) {                        
+            LOGGER.info("Iteration {} Region {} has ParentMap {}", iteration, getRegionID(), excessLoadMapBackToParent);
+            LOGGER.info("Iteration {} Region {} has ChildrenMap {}", iteration, getRegionID(), loadMapToChildren);
+            LOGGER.info("Iteration {} Region {} has pathToClients {}", iteration, getRegionID(), pathToClients);
+            LOGGER.info("Iteration {} Region {} has dataCenterTreeMap {}", iteration, getRegionID(), parentTreeMap);
+            LOGGER.info("Iteration {} Region {} has selfRegionServices {}", iteration, getRegionID(), selfRegionServices);
+            
+            sortedServiceTupleMapHasReceived.clear();
                         
-            sendAllMessages(iteration); // REVIEWED
+            sendAllMessages(iteration);
             
             // waiting for messages from neighbors
             final Map<RegionIdentifier, RdiffDcopMessage> receivedRdiffMessageMap = new HashMap<>();
             try {
                 Map<RegionIdentifier, GeneralDcopMessage> receivedGeneralMessageMap = waitForMessagesFromNeighbors(iteration);
                 for (Entry<RegionIdentifier, GeneralDcopMessage> entry : receivedGeneralMessageMap.entrySet()) {
-                    GeneralDcopMessage rdiffMessage = entry.getValue();
-                    
+                    GeneralDcopMessage rdiffMessage = entry.getValue();                   
                     if (rdiffMessage instanceof RdiffDcopMessage) {
                         receivedRdiffMessageMap.put(entry.getKey(), new RdiffDcopMessage((RdiffDcopMessage) rdiffMessage));
-                    }
+                    }                    
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
                 LOGGER.warn("InterruptedException when waiting for messages. Return the default DCOP plan: {} ",
                         e.getMessage(), e);
-                return defaultPlan(summary);
+                return defaultPlan(summary, iteration);
             }
             
             for (Entry<RegionIdentifier, RdiffDcopMessage> entry : receivedRdiffMessageMap.entrySet()) {
                 LOGGER.info("Iteration {} Region {} receives message from Region {}: {}", iteration, getRegionID(), entry.getKey(), entry.getValue());
             }
-
             processParentToChildrenMessages(iteration, receivedRdiffMessageMap, summary);
-            processLoad();
+            processLoad(iteration);
             processChildrenToParentMessages(iteration, receivedRdiffMessageMap, summary);
-            processLoad();
+            processLoad(iteration);
+            
+            LOGGER.info("Iteration {} Region {} has finalExcessLoad {}", iteration, getRegionID(), finalExcessLoad);
+            // Update incoming load map from parent
+            for (ServerClientServiceLoad swappedTuple : finalExcessLoad) {
+                ServerClientService scsTuple = new ServerClientService(swappedTuple.getServer(), swappedTuple.getClient(), swappedTuple.getService());
+                excessLoadMapBackToParent.computeIfAbsent(parentTreeMap.get(scsTuple), k -> new HashSet<>()).add(swappedTuple);
+                updateKeyKeyLoadMap(getFlowLoadMap(), parentTreeMap.get(scsTuple), swappedTuple.getService(), -swappedTuple.getLoad(), true);
+            }
+            finalExcessLoad.clear();
 
-            LOGGER.info("Iteration {} Region {} has flowLoadMap {}", iteration, getRegionID(), getFlowLoadMap());
-            LOGGER.info("Iteration {} Region {} has getClientLoadMap {}", iteration, getRegionID(), getClientKeepLoadMap());
+            LOGGER.info("Iteration {} Region {} has flowMap {}", iteration, getRegionID(), getFlowLoadMap());
         } // end of DCOP iterations
         
         LOGGER.info("AFTER DCOP FOR LOOP, Iteration {} Region {} has flowLoadMap {}", lastIteration, getRegionID(), getFlowLoadMap());
         LOGGER.info("AFTER DCOP FOR LOOP, Iteration {} Region {} has getClientLoadMap {}", lastIteration, getRegionID(), getClientKeepLoadMap());
 
-        RegionPlan rplan = computeRegionDcopPlan(summary, lastIteration, false);
+        RegionPlan rplan = computeRegionDcopPlan(summary, lastIteration, true);
 
         return rplan;
+        
+//      
+//      for (Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> entry : summary.getServerDemand().entrySet()) {
+//          ImmutableMap.Builder<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> regionBuilder = ImmutableMap.builder();
+//
+//          for (Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> innerEntry : entry.getValue().entrySet()) {
+//              regionBuilder.put(new StringRegionIdentifier("D"), innerEntry.getValue());
+//          }
+//          
+//          finalCompute.put(entry.getKey(), regionBuilder.build());
+//      }
+//      
+//      final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = finalCompute.build();  
     }
-    
+
     /** 
      * Process all the stored message from the top service
-     * Delete the key from sortedServiceTupleMapToProcess if the entry is empty (has processed all) 
-     * If the topProcess is empty, then continue processing the next priority
      */
-    private void processLoad() {
-        SortedSet<ServiceIdentifier<?>> sortedService = new TreeSet<>(new SortServiceByPriorityComparator());
-        sortedService.addAll(sortedServiceTupleMapToProcess.keySet());
+    private void processLoad(int iteration) {
+        LOGGER.info("Iteration {} Region {} has sortedServiceTupleMapHasReceived {}", iteration, getRegionID(), sortedServiceTupleMapHasReceived);
         
-        for (ServiceIdentifier<?> currentTopService : sortedService) {            
-            // Process each received ServerClientService 
-            for (ServerClientService storedServerClientService : new HashSet<>(sortedServiceTupleMapHasReceived.getOrDefault(currentTopService, new HashSet<>()))) {
-                if (rdiffTreeMap.getOrDefault(storedServerClientService, new RdiffTree()).hasParent()) {
-                    regionProcessWithRdiffParent(storedServerClientService, serverClientServiceLoadMap.get(storedServerClientService), serverClientServiceSenderMap.get(storedServerClientService), storedServerClientService.getClient()); 
-                } else {
-                    regionProcessWithoutRdiffParent(storedServerClientService.getService(), serverClientServiceLoadMap.get(storedServerClientService), serverClientServiceSenderMap.get(storedServerClientService), storedServerClientService.getClient());
-                }
-                
-                serverClientServiceLoadMap.remove(storedServerClientService);
-                serverClientServiceSenderMap.remove(storedServerClientService);
-                sortedServiceTupleMapToProcess.get(currentTopService).remove(storedServerClientService);
-                sortedServiceTupleMapHasReceived.get(currentTopService).remove(storedServerClientService);
-            }
-            
-            // If empty, remove topPriorityService in sortedServiceTupleMapHasReceived
-            if (sortedServiceTupleMapHasReceived.getOrDefault(currentTopService, new HashSet<>()).isEmpty()) {
-                sortedServiceTupleMapHasReceived.remove(currentTopService);
-            }
-            
-            // If empty, remove topPriorityService in sortedServiceTupleMapToProcess
-            // And continue to process the next topService
-            if (sortedServiceTupleMapToProcess.get(currentTopService).isEmpty()) {
-                sortedServiceTupleMapToProcess.remove(currentTopService);
-            } 
-            // Otherwise, break to exit
-            else {
-                break;
-            }
+        for (ServerClientServiceLoad tuple : sortedServiceTupleMapHasReceived) {
+            processLoadWithSwapping(tuple, iteration);
         }
+        
+        sortedServiceTupleMapHasReceived.clear();
     }
     
-    // Build rdiffTree
-//  updateRdiffTree(serverClientService, parent, MofityTreeType.ADD_PARENT);
-//  updateDataCenterTree(demandService, parent);
 
     private void processParentToChildrenMessages(int iteration, Map<RegionIdentifier, RdiffDcopMessage> receivedMessageMap, ResourceSummary summaryInput) {
         // Traverse the receivedMessages with client = getRegionID()
@@ -270,86 +234,73 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         
         for (Map.Entry<RegionIdentifier, RdiffDcopMessage> msgEntry : receivedMessageMap.entrySet()) {
             RegionIdentifier parent = msgEntry.getKey();
-            Map<ServerClientService, Double> demandFromOtherRegion = msgEntry.getValue().getMsgTypeClientServiceMap()
-                                                                    .getOrDefault(RdiffMessageType.PARENT_TO_CHILDREN, new HashMap<>());
-            for (Entry<ServerClientService, Double> entry : demandFromOtherRegion.entrySet()) {
-               ServerClientService serverClientService = entry.getKey();
-               RegionIdentifier demandClient = serverClientService.getClient();
-               ServiceIdentifier<?> demandService = serverClientService.getService();
-               double load = entry.getValue();
+            Set<ServerClientServiceLoad> receivedDemandTuples = msgEntry.getValue().getMessages(RdiffMessageType.PARENT_TO_CHILDREN);
+            
+            for (ServerClientServiceLoad tuple : receivedDemandTuples) {
+               RegionIdentifier demandClient = tuple.getClient();
+               ServiceIdentifier<?> demandService = tuple.getService();
                
-               // Build rdiffTree and DataCenter tree
-               updateRdiffTree(serverClientService, parent);      
-               updateDataCenterTree(demandService, serverClientService.getServer(), parent);
+               updateParentTreeMap(new ServerClientService(tuple.getServer(), demandClient, demandService), parent);
                
                // If this region is the client
-               // Then store first, then process below
+               // Add to sortedServiceTupleMapHasReceived to process later
                if (getRegionID().equals(demandClient)) {
-                   Set<ServerClientService> serverClientServiceToStore = sortedServiceTupleMapHasReceived.getOrDefault(demandService, new HashSet<>());
-                   serverClientServiceToStore.add(serverClientService);
-                   sortedServiceTupleMapHasReceived.put(demandService, serverClientServiceToStore);
-                   serverClientServiceLoadMap.put(serverClientService, load);
-                   serverClientServiceSenderMap.put(serverClientService, parent);                   
+                   sortedServiceTupleMapHasReceived.add(tuple);
+                   updateKeyKeyLoadMap(getFlowLoadMap(), getRegionID(), tuple.getService(), tuple.getLoad(), true);
                } 
                // If this region is not the client
                // Then forward the message to the children found from network demand 
                else {
-                   findChildrenAndSendMessage(serverClientService, load, summaryInput, parent);
+//                   findChildrenToForwardDemand(tuple, summaryInput);
+                   findChildrenToForwardRdiffDemand(tuple, iteration, parent);
                }
             }
         } // end traversing <sender -> message>        
     }
+    
+    private void findChildrenToForwardRdiffDemand(ServerClientServiceLoad tuple, int iteration, RegionIdentifier parentRegion) {
+        RegionIdentifier child  = findNeighbor(tuple.getServer(), tuple.getClient(), iteration, topology, parentRegion);
+        
+        if (child != null) {
+            loadMapToChildren.computeIfAbsent(child, k -> new HashSet<>()).add(ServerClientServiceLoad.deepCopy(tuple));
+            updatePathToClient(tuple, child);
+        }
+        
+        // Stop looking if found one
+        return ;
+    }
 
 
     /**
-     * Create sortedServiceTupleMapToProcess based on incoming networkDemand or demandToThisServer
+     * 
+     * @param iteration
+     * @param receivedMessageMap <sender -> message>
      * @param summaryInput
      */
-    private void initSortedServiceTupleMapToProcessFromServerDemand(ResourceSummary summaryInput) {
-        for (Entry<RegionIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkEntry : summaryInput.getNetworkDemand().entrySet()) {
-            for (Entry<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> flowEntry : networkEntry.getValue().entrySet()) {
-                RegionIdentifier clientFlow = getClient(flowEntry.getKey());
-                RegionIdentifier serverFlow = getServer(flowEntry.getKey());
-                
-                for (Entry<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> serviceEntry : flowEntry.getValue().entrySet()) {
-                    ServiceIdentifier<?> service = serviceEntry.getKey();
-                    
-                    // Skip if this is the AP or UNMANGED service
-                    if (MAPServices.UNPLANNED_SERVICES.contains(service)) {
-                        continue;
-                    }
-                    
-                    // Ignore if the flow has RX = TX = 0
-                    if (!isNonZeroFlow(serviceEntry.getValue())) {
-                        continue;
-                    }
-                    
-                    // If this is the server, then consider incoming flow
-                    if (getRegionID().equals(serverFlow)) {
-                        // Only store incoming flow
-//                        if (isIncomingFlowUsingTrafficType(service, serviceEntry.getValue(), applicationManager)) {
-                        if (isIncomingFlowUsingFlow(flowEntry.getKey())) {
-                            ServerClientService serverClientService = new ServerClientService(serverFlow, clientFlow, service);
-                            
-                            Set<ServerClientService> serverClientServiceSet = sortedServiceTupleMapToProcess.getOrDefault(service, new HashSet<>());
-                            serverClientServiceSet.add(serverClientService);
-                            sortedServiceTupleMapToProcess.put(service, serverClientServiceSet);
-                        }
-                    }
-                    // Otherwise, consider outgoing flow
-                    else {
-//                        if (!isIncomingFlowUsingTrafficType(service, serviceEntry.getValue(), applicationManager)) {
-                        if (!isIncomingFlowUsingFlow(flowEntry.getKey())) {
-                            ServerClientService serverClientService = new ServerClientService(serverFlow, clientFlow, service);
-                            
-                            Set<ServerClientService> serverClientServiceSet = sortedServiceTupleMapToProcess.getOrDefault(service, new HashSet<>());
-                            serverClientServiceSet.add(serverClientService);
-                            sortedServiceTupleMapToProcess.put(service, serverClientServiceSet);
-                        }
-                    }
-                }
+    private void processChildrenToParentMessages(int iteration, Map<RegionIdentifier, RdiffDcopMessage> receivedMessageMap, ResourceSummary summaryInput) {        
+        // Store all Children-To-Parent messages
+        // Build RdiffTree or DataCenter tree
+        for (Map.Entry<RegionIdentifier, RdiffDcopMessage> msgEntry : receivedMessageMap.entrySet()) {
+            RegionIdentifier child = msgEntry.getKey();
+            
+            Set<ServerClientServiceLoad> demandFromOtherRegion = msgEntry.getValue().getMsgTypeClientServiceMap().getOrDefault(RdiffMessageType.CHILDREN_TO_PARENT, new HashSet<>());
+            for (ServerClientServiceLoad entry : demandFromOtherRegion) {
+               ServiceIdentifier<?> demandService = entry.getService();
+               
+               // Keep all if this region is the data center
+               if (getRegionID().equals(entry.getServer())) {
+                   LOGGER.info("Iteration {} Region {} adds {} to keepLoadSet {} because it is the server", iteration, getRegionID(), entry, sortedServiceTupleMapHasReceived);
+                   keepLoadSet.add(entry);
+               }
+               else {
+                   LOGGER.info("Iteration {} Region {} adds {} to sortedServiceTupleMapHasReceived {}", iteration, getRegionID(), entry, sortedServiceTupleMapHasReceived);
+                   sortedServiceTupleMapHasReceived.add(entry);
+                   LOGGER.info("Iteration {} Region {} has sortedServiceTupleMapHasReceived {}", iteration, getRegionID(), sortedServiceTupleMapHasReceived);
+               }
+               
+               updateKeyKeyLoadMap(getFlowLoadMap(), child, demandService, entry.getLoad(), true);
             }
-        }        
+        } // end storing messages  
     }
 
     /**
@@ -360,9 +311,9 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         inbox.removeMessageAtIteration(iteration - 2);
         
         // forward load message to children
-        for (Entry<RegionIdentifier, Map<ServerClientService, Double>> entry : childrenLoadMap.entrySet()) {
+        for (Entry<RegionIdentifier, Set<ServerClientServiceLoad>> entry : loadMapToChildren.entrySet()) {
             RegionIdentifier children = entry.getKey();
-            Map<ServerClientService, Double> msgSendToChildren = entry.getValue();
+            Set<ServerClientServiceLoad> msgSendToChildren = entry.getValue();
             
             DcopReceiverMessage rdiffMsgPerIteration = inbox.getMessageAtIterationOrDefault(iteration, new DcopReceiverMessage(getRegionID(), iteration));
             RdiffDcopMessage rdiffDcopMsg = (RdiffDcopMessage) rdiffMsgPerIteration.getMessageForThisReceiverOrDefault(children, new RdiffDcopMessage());
@@ -376,9 +327,9 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         }
         
         // send excess load message back to parent
-        for (Entry<RegionIdentifier, Map<ServerClientService, Double>> entry : parentExcessLoadMap.entrySet()) {
+        for (Entry<RegionIdentifier, Set<ServerClientServiceLoad>> entry : excessLoadMapBackToParent.entrySet()) {
             RegionIdentifier parent = entry.getKey();
-            Map<ServerClientService, Double> msgSendToChildren = entry.getValue();
+            Set<ServerClientServiceLoad> msgSendToChildren = entry.getValue();
             
             DcopReceiverMessage rdiffMsgPerIteration = inbox.getMessageAtIterationOrDefault(iteration, new DcopReceiverMessage(getRegionID(), iteration));
             RdiffDcopMessage rdiffDcopMsg = (RdiffDcopMessage) rdiffMsgPerIteration.getMessageForThisReceiverOrDefault(parent, new RdiffDcopMessage());
@@ -393,14 +344,14 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         
         // send empty message to other neighbor
         Set<RegionIdentifier> nonParentChildren = new HashSet<>(getNeighborSet());
-        nonParentChildren.removeAll(childrenLoadMap.keySet());
-        nonParentChildren.removeAll(parentExcessLoadMap.keySet());
+        nonParentChildren.removeAll(loadMapToChildren.keySet());
+        nonParentChildren.removeAll(excessLoadMapBackToParent.keySet());
         
         for (RegionIdentifier receiver : nonParentChildren) {
             DcopReceiverMessage rdiffMsgPerIteration = inbox.getMessageAtIterationOrDefault(iteration, new DcopReceiverMessage(getRegionID(), iteration));
             RdiffDcopMessage rdiffDcopMsg = (RdiffDcopMessage) rdiffMsgPerIteration.getMessageForThisReceiverOrDefault(receiver, new RdiffDcopMessage());
             
-            rdiffDcopMsg.addMessage(RdiffMessageType.EMPTY, new HashMap<>());
+            rdiffDcopMsg.addMessage(RdiffMessageType.EMPTY, new HashSet<>());
             rdiffMsgPerIteration.setMessageToTheReceiver(receiver, rdiffDcopMsg);
             
             inbox.setMessageAtIteration(iteration, rdiffMsgPerIteration);
@@ -408,15 +359,12 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
             LOGGER.info("Iteration {} Region {} sends Region {} EMPTY message {}", iteration, getRegionID(), receiver, rdiffDcopMsg);
         }
         
-        parentExcessLoadMap.clear();
-        childrenLoadMap.clear();
+        excessLoadMapBackToParent.clear();
+        loadMapToChildren.clear();
         
-//        if (iteration == lastIteration) {
-            writeDataCenterTreeInformation();
-//        }
+        writeDataCenterTreeInformation();
         
-        final DcopSharedInformation messageToSend = new DcopSharedInformation(inbox);
-        getDcopInfoProvider().setLocalDcopSharedInformation(messageToSend);
+        getDcopInfoProvider().setLocalDcopSharedInformation(inbox);
     }
 
     /**
@@ -431,57 +379,21 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
                 
                 if (abstractDcopMsg instanceof RdiffDcopMessage) {
                     RdiffDcopMessage msg = (RdiffDcopMessage) abstractDcopMsg;
-                    dataCenterTreeMap.putAll(msg.getDataCenterTreeMap());
+                    pathToClients.putAll(msg.getPathToClientMap());
+                    selfRegionServices.addAll(msg.getServiceSet());
                 }
             }
         }
     }
-    
-    /**
-     * Compute the total load received from serverDemand per service will be equivalent to value received in GLOBAL
-     * THIS FUNCTION HAS BEEN REVIEWED
-     * @param summary
-     * @return
-     */
-    private void computeTotalGLOBALServerDemand(final ResourceSummary summary,
-            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand) {
-        // from serverDemand
-        for (Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> serviceEntry : inferredServerDemand
-                .entrySet()) {
-            ServiceIdentifier<?> service = serviceEntry.getKey();
-
-            // Ignore the special demand
-            if (MAPServices.UNPLANNED_SERVICES.contains(service)) {
-                continue;
-            }
-            
-            double totalLoad = totalGlobalServerDemand.getOrDefault(service, 0.0);
-
-            for (Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> clientEntry : serviceEntry.getValue()
-                    .entrySet()) {
-                totalLoad += clientEntry.getValue().getOrDefault(MapUtils.COMPUTE_ATTRIBUTE, 0.0);
-                totalGlobalServerDemand.put(service, totalLoad);
-            } // end for
-        } // end for
-    }
-    
-    /**
-     * Set the agent to root if there is some server demand
-     * THIS FUNCTION HAS BEEN REVIEWED
-     */
-    private void setRoot() {
-        isRoot = compareDouble(sumValues(totalGlobalServerDemand), 0) > 0; 
-    }
 
     /**
-     * THIS FUNCTION HAS BEEN REVIEWED. <br>
-     * Compute {@link #serverClientServiceMapToThisServer} from serverDemand. <br>
-     * Compute {@link #flowLoadMap} from serverDemand <br>
-     *  
-     * @param summary
+     * @param inferredServerDemand .
+     * @param summaryInput .
      */
-    private void initServerClientServiceMapToThisServer(final ResourceSummary summary,
-            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand) {
+    private void processServerDemand(final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand, ResourceSummary summaryInput) {
+        SortedMap<ServiceIdentifier<?>, Set<ServerClientServiceLoad>> sortedDemand = new TreeMap<>(new SortServiceByPriorityComparator());
+        Set<ServerClientServiceLoad> demandFromOtherClientRegion = new HashSet<>();
+
         // traverse the serverDemand
         for (Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> serviceEntry : inferredServerDemand.entrySet()) {
             ServiceIdentifier<?> service = serviceEntry.getKey();
@@ -490,19 +402,48 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
             for (Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> clientEntry : serviceEntry.getValue().entrySet()) {
                 RegionIdentifier client = clientEntry.getKey();
                 
-                double loadValue = 0;
+                double loadValue = clientEntry.getValue().get(MapUtils.COMPUTE_ATTRIBUTE);
                 
-                // Make sure that server still send 0 out
-                // In case clients have non-zero actual demand where inferred demand has 0, it might wait for service with higher priority
-                if (null != clientEntry.getValue().get(MapUtils.COMPUTE_ATTRIBUTE)) {
-                    loadValue = clientEntry.getValue().get(MapUtils.COMPUTE_ATTRIBUTE);
-                } 
-                
-                ServerClientService serverClientService = new ServerClientService(getRegionID(), client, service);
-                
-                updateKeyLoadMap(serverClientServiceMapToThisServer, serverClientService, loadValue, true);
+                ServerClientServiceLoad tuple = ServerClientServiceLoad.of(getRegionID(), client, service, loadValue);
+                sortedDemand.computeIfAbsent(service, k -> new HashSet<>()).add(tuple);                
             }
         }
+        
+       LOGGER.info("Iteration {} Region {} has sorted self demand {}", newIteration, getRegionID(), sortedDemand);
+        
+        // Loop through sorted demand
+        for (Entry<ServiceIdentifier<?>, Set<ServerClientServiceLoad>> entry : sortedDemand.entrySet()) {
+            for (ServerClientServiceLoad tuple : entry.getValue()) {                                       
+                // Skip if the demand value is 0
+                if (compareDouble(tuple.getLoad(), 0D) == 0) {
+                    continue;
+                }
+                
+                // Add all services from inferred server demand
+                // Query the aggregate demand and ignore null total demand
+//                selfRegionServices.add(tuple.getService());
+                
+                // If the demand comes from the region itself
+                if (getRegionID().equals(tuple.getClient())) {
+                    // Keep all demand in this data center
+                    keepLoadSet.add(tuple);
+                    updateKeyKeyLoadMap(getFlowLoadMap(), getRegionID(), tuple.getService(), tuple.getLoad(), true);
+                } 
+                // Update the demandFromOtherRegion
+                else {
+                    demandFromOtherClientRegion.add(ServerClientServiceLoad.deepCopy(tuple));
+                }
+                
+                // Add positive load to positive incoming self flowLoadMap
+//                updateKeyKeyLoadMap(getFlowLoadMap(), getRegionID(), tuple.getService(), tuple.getLoad(), true);
+            }
+        }
+                        
+        // Find children and forward the demand
+        for (ServerClientServiceLoad entry : demandFromOtherClientRegion) {
+//            findChildrenToForwardDemand(entry, summaryInput);
+            findChildrenToForwardRdiffDemand(entry, newIteration, getRegionID());
+        }        
     }
     
     /**
@@ -513,55 +454,43 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
      *               from the serverDemand or from the message Parent-To-Children
      * @param summaryInput
      */
-    /**
-     * @param clientServiceDemandMap
-     * @param summaryInput
-     */
-    private void processServerDemand(Map<ServerClientService, Double> clientServiceDemandMap, ResourceSummary summaryInput) {
-        Map<ServerClientService, Double> demandFromOtherRegion = new HashMap<>();
-        
-        LOGGER.info("Iteration {} Region {} has clientServiceDemandMap {}", newIteration, getRegionID(), clientServiceDemandMap);
-        
-        // Update the above maps
-        for (Entry<ServerClientService, Double> serverClientServiceLoadEntry : clientServiceDemandMap.entrySet()) {
-            ServerClientService serverClientService = serverClientServiceLoadEntry.getKey();
-            RegionIdentifier demandClient = serverClientService.getClient();
-                        
-            ServiceIdentifier<?> demandService = serverClientService.getService();
-            double demandLoad = serverClientServiceLoadEntry.getValue();
-            
-            // Skip if the demand value is 0
-            if (compareDouble(demandLoad, 0) == 0) {
-                continue;
-            }
-            
-            // If the demand comes from the region itself
-            if (getRegionID().equals(demandClient)) {
-                // Store the demand to sortedServiceTupleMapToProcess
-                Set<ServerClientService> serverClientServiceToProcess = sortedServiceTupleMapToProcess.getOrDefault(demandService, new HashSet<>());
-                serverClientServiceToProcess.add(serverClientService);
-                sortedServiceTupleMapToProcess.put(demandService, serverClientServiceToProcess);
-
-                // Store the demand to sortedServiceTupleMapHasReceived
-                Set<ServerClientService> serverClientServiceToStore = sortedServiceTupleMapHasReceived.getOrDefault(demandService, new HashSet<>());
-                serverClientServiceToStore.add(serverClientService);
-                sortedServiceTupleMapHasReceived.put(demandService, serverClientServiceToStore);
-                serverClientServiceLoadMap.put(serverClientService, demandLoad);
-                serverClientServiceSenderMap.put(serverClientService, getRegionID()); 
-            } 
-            // Update the demandFromOtherRegion
-            else {
-                demandFromOtherRegion.put(serverClientService, demandLoad);
-            }
-        }
-        
-        processLoad();
-                
-        // Find children and forward the demand
-        for (Entry<ServerClientService, Double> entry : demandFromOtherRegion.entrySet()) {
-            findChildrenAndSendMessage(entry.getKey(), entry.getValue(), summaryInput, getRegionID());
-        }
-    }
+//    private void processServerDemand(SortedMap<ServiceIdentifier<?>, Set<ServerClientServiceLoad>> sortedDemand, ResourceSummary summaryInput) {
+//        Set<ServerClientServiceLoad> demandFromOtherClientRegion = new HashSet<>();
+//        
+//        LOGGER.info("Iteration {} Region {} has clientServiceDemandMap {}", newIteration, getRegionID(), sortedDemand);
+//        
+//        // Loop through the sorted map
+//        for (Entry<ServiceIdentifier<?>, Set<ServerClientServiceLoad>> entry : sortedDemand.entrySet()) {
+//                for (ServerClientServiceLoad tuple : entry.getValue()) {                                       
+//                // Skip if the demand value is 0
+//                if (compareDouble(tuple.getLoad(), 0D) == 0) {
+//                    continue;
+//                }
+//                
+//                // Add all services to self region services
+//                selfRegionServices.add(tuple.getService());
+//                
+//                // If the demand comes from the region itself
+//                if (getRegionID().equals(tuple.getClient())) {
+//                    // Region keeps all the load since it is the data center
+////                    updateKeyKeyLoadMap(getClientKeepLoadMap(), getRegionID(), tuple.getService(), tuple.getLoad(), true);
+//                    keepLoadSet.add(tuple);
+//                } 
+//                // Update the demandFromOtherRegion
+//                else {
+//                    demandFromOtherClientRegion.add(ServerClientServiceLoad.deepCopy(tuple));
+//                }
+//                
+//                // Add positive load to positive incoming self flowLoadMap
+//                updateKeyKeyLoadMap(getFlowLoadMap(), getRegionID(), tuple.getService(), tuple.getLoad(), true);
+//            }
+//        }
+//                        
+//        // Find children and forward the demand
+//        for (ServerClientServiceLoad entry : demandFromOtherClientRegion) {
+//            findChildrenAndSendMessage(entry, summaryInput);
+//        }
+//    }
     
 
     /**
@@ -569,90 +498,181 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
      * @param service
      * @param load
      */
-    private void regionProcessWithoutRdiffParent(ServiceIdentifier<?> service, double load, RegionIdentifier loadOrigin, RegionIdentifier client) {
-        updateKeyKeyLoadMap(getFlowLoadMap(), loadOrigin, service, load, true);
-
-        RdiffTree dcTreeGivenService = dataCenterTreeMap.get(service);
-
-        // If there is no data center tree
-        // Or this region is the root of the data center tree
-        // Then keep all the load
-        if (null == dcTreeGivenService || getRegionID().equals(dcTreeGivenService.getRoot())) {
-            // keep all the load
-            updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, load, true);
+//    private void regionProcessWithoutRdiffParent(ServiceIdentifier<?> service, double load, RegionIdentifier client) {
+//        RdiffTree dcTreeGivenService = parentTreeMap.get(service);
+//
+//        // If there is no data center tree
+//        // Or this region is the root of the data center tree
+//        // Then keep all the load
+//        if (null == dcTreeGivenService || getRegionID().equals(dcTreeGivenService.getRoot())) {
+//            // keep all the load
+//            updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, load, true);
+//            
+//            // Create the tree if there isn't any
+//            if (null == dcTreeGivenService) {
+//                RdiffTree dcTree = new RdiffTree();
+//                dcTree.setRoot(getRegionID());
+//                parentTreeMap.put(service, dcTree);
+//            }
+//        }
+//        // Has data center tree and this region is not the root
+//        else {
+////            RegionIdentifier dataCenter = dcTreeGivenService.getRoot();
+//            RegionIdentifier parentInDC = dcTreeGivenService.getParent();
+//            double availableCapacity = getAvailableCapacity();
+//
+//            // load <= availableCapacity and availableCapacity >= 0 (implicitly)
+//            // Can keep all the load
+//            if (compareDouble(load, availableCapacity) <= 0) {
+//                updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, load, true);
+//            }
+//            // availableCapacity < 0 or load > availableCapacity
+//            else {
+//                double loadToDataCenterRoot = -Double.MAX_VALUE;
+//
+//                // Don't have capacity
+//                if (compareDouble(availableCapacity, 0) < 0) {
+//                    loadToDataCenterRoot = load;
+//                }
+//                // Have capacity and can server partial
+//                else {
+//                    loadToDataCenterRoot = load - availableCapacity;
+//                    updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, availableCapacity, true);
+//                }
+//
+//                // send the load to data center
+//                updateKeyKeyLoadMap(parentExcessLoadMap, parentInDC, new ServerClientService(getRegionID(), client, service),  loadToDataCenterRoot, true);
+//                updateKeyKeyLoadMap(getFlowLoadMap(), parentInDC, service, -loadToDataCenterRoot, true);
+//            } // end checking if can/cannot serve all or just partial load
+//        } // end if of checking tree and parent        
+//    }
+    
+    /**
+     * @precondition self region is not the server of the tuple
+     * @param tuple .
+     * @param iteration .
+     */
+    private void processLoadWithSwapping(ServerClientServiceLoad tuple, int iteration) {        
+        RegionIdentifier client = tuple.getClient();
+        ServiceIdentifier<?> service = tuple.getService();
+        double load = tuple.getLoad();
+        double availableCapacity = getAvailableCapacity();
+        
+        LOGGER.info("Iteration {} Region {} processes {} with keepLoadSet {}", iteration, getRegionID(), tuple, keepLoadSet);
+        
+        // If load < availableCapacity => keep all the load
+        if (compareDouble(load, availableCapacity) <= 0) {
+            keepLoadSet.add(tuple);
+            LOGGER.info("Iteration {} Region {} has keepLoadSet {}", iteration, getRegionID(), tuple, keepLoadSet);
+        }
+        // load > availableCapacity
+        // keep availableCapacity and send load - availableCapacity
+        else {
+            double loadToParent = load - availableCapacity;
+            // Only keep if availableCapacity > 0
+            if (compareDouble(availableCapacity, 0) > 0) {
+                keepLoadSet.add(ServerClientServiceLoad.of(tuple.getServer(), client, service, availableCapacity));
+            }
             
-            // Create the tree if there isn't any
-            if (null == dcTreeGivenService) {
-                RdiffTree dcTree = new RdiffTree();
-                dcTree.setRoot(getRegionID());
-                dataCenterTreeMap.put(service, dcTree);
+            ServerClientServiceLoad excessTuple = ServerClientServiceLoad.of(tuple.getServer(), client, service, loadToParent);
+            
+            LOGGER.info("Iteration {} Region {} has keepLoadSet before swapping {}", iteration, getRegionID(), keepLoadSet);
+            
+            // Swap the excess tuple with current keep tuple
+            // Add the swapped tuple to finalExcessLoad
+            Set<ServerClientServiceLoad> excessTuplesAfterSwapping = swapPriorityService(keepLoadSet, excessTuple, iteration);
+            
+            finalExcessLoad.addAll(excessTuplesAfterSwapping);
+        } // end checking if can/cannot serve all or just partial load
+    }
+
+    //Swap higher with lower priority tuples and return lower priority tuples as excess load map to parent
+    private Set<ServerClientServiceLoad> swapPriorityService(SortedSet<ServerClientServiceLoad> keepLoad, ServerClientServiceLoad tuple, int iteration) {
+        Set<ServerClientServiceLoad> excessTupleSet = new HashSet<>();
+        SortedSet<ServerClientServiceLoad> sortedKeepSet = new TreeSet<>(Collections.reverseOrder(new SortServiceInTuple()));
+        sortedKeepSet.addAll(keepLoad);
+        SortedSet<ServerClientServiceLoad> copyStoredKeepSet = new TreeSet<>(Collections.reverseOrder(new SortServiceInTuple()));
+        copyStoredKeepSet.addAll(keepLoad);
+        
+        ServerClientServiceLoad leftOver = ServerClientServiceLoad.deepCopy(tuple);
+        
+        // Traverse from lower to higher keep tuple
+        for (ServerClientServiceLoad keepTuple : sortedKeepSet) {
+            if (getPriority(keepTuple) >= getPriority(leftOver)) {
+                LOGGER.info("Iteration {} Region {} cannot find tuple with lower priority than {} from copyStoredKeepSet {}", iteration, getRegionID(), leftOver, copyStoredKeepSet);
+                LOGGER.info("Iteration {} Region {} adds tuple {} to excessTupleSet {}", iteration, getRegionID(), leftOver, excessTupleSet);
+                excessTupleSet.add(ServerClientServiceLoad.deepCopy(leftOver));
+                
+                LOGGER.info("Iteration {} Region {} has copyStoredKeepSet after swapping {}", iteration, getRegionID(), copyStoredKeepSet);
+                LOGGER.info("Iteration {} Region {} has excessTupleSet after swapping {}", iteration, getRegionID(), excessTupleSet);
+
+                break;
+            }
+            
+            LOGGER.info("Iteration {} Region {} finds keep tuple with priority={}: {} smaller than left over tuple priority={}: {} from sortedKeepSet {}",
+                    iteration, getRegionID(), getPriority(keepTuple), keepTuple, getPriority(leftOver), leftOver, copyStoredKeepSet);
+            
+            // Found a keep tuple with larger load than the leftOver
+            if (compareDouble(leftOver.getLoad(), keepTuple.getLoad()) <= 0) {
+                LOGGER.info("Iteration {} Region {} removes tuple {} from copyStoredKeepSet {}", iteration, getRegionID(), keepTuple, copyStoredKeepSet);
+                copyStoredKeepSet.remove(keepTuple);
+                
+                LOGGER.info("Iteration {} Region {} adds tuple {} to copyStoredKeepSet {}", iteration, getRegionID(), leftOver, copyStoredKeepSet);
+                copyStoredKeepSet.add(leftOver);
+                
+                if (compareDouble(leftOver.getLoad(), keepTuple.getLoad()) < 0) {
+                    ServerClientServiceLoad modifiedKeepTuple = ServerClientServiceLoad.of(keepTuple.getServer(), keepTuple.getClient(), keepTuple.getService(), keepTuple.getLoad() - leftOver.getLoad());
+                    LOGGER.info("Iteration {} Region {} adds tuple {} to copyStoredKeepSet {}", iteration, getRegionID(), modifiedKeepTuple, copyStoredKeepSet);
+                    copyStoredKeepSet.add(modifiedKeepTuple);
+                }
+
+                ServerClientServiceLoad excessTuple = ServerClientServiceLoad.of(keepTuple.getServer(), keepTuple.getClient(), keepTuple.getService(), leftOver.getLoad());
+                LOGGER.info("Iteration {} Region {} adds tuple {} to excessTupleSet {}", iteration, getRegionID(), excessTuple, excessTupleSet);
+                excessTupleSet.add(excessTuple);
+                leftOver = ServerClientServiceLoad.of(null, null, null, 0D);
+                LOGGER.info("Iteration {} Region {} has changed left over tuple to {}", iteration, getRegionID(), leftOver);
+                
+                LOGGER.info("Iteration {} Region {} has copyStoredKeepSet after swapping {}", iteration, getRegionID(), copyStoredKeepSet);
+                LOGGER.info("Iteration {} Region {} has excessTupleSet after swapping {}", iteration, getRegionID(), excessTupleSet);
+
+                break;
+            }
+            else {
+                LOGGER.info("Iteration {} Region {} removes tuple {} from copyStoredKeepSet {}", iteration, getRegionID(), keepTuple, copyStoredKeepSet);
+                copyStoredKeepSet.remove(keepTuple);
+                
+                ServerClientServiceLoad modifiedKeepTuple = ServerClientServiceLoad.of(leftOver.getServer(), leftOver.getClient(), leftOver.getService(), keepTuple.getLoad());
+                LOGGER.info("Iteration {} Region {} adds tuple {} to copyStoredKeepSet {}", iteration, getRegionID(), modifiedKeepTuple, copyStoredKeepSet);
+                copyStoredKeepSet.add(modifiedKeepTuple);
+                
+                LOGGER.info("Iteration {} Region {} adds tuple {} to excessTupleSet {}", iteration, getRegionID(), keepTuple, excessTupleSet);
+                excessTupleSet.add(keepTuple);
+                
+                leftOver = ServerClientServiceLoad.of(leftOver.getServer(), leftOver.getClient(), leftOver.getService(), leftOver.getLoad() - keepTuple.getLoad());
+                LOGGER.info("Iteration {} Region {} has changed left over tuple to {}", iteration, getRegionID(), leftOver);
+                                 
+                LOGGER.info("Iteration {} Region {} has copyStoredKeepSet after swapping {}", iteration, getRegionID(), copyStoredKeepSet);
+                LOGGER.info("Iteration {} Region {} has excessTupleSet after swapping {}", iteration, getRegionID(), excessTupleSet);
             }
         }
-        // Has data center tree and this region is not the root
-        else {
-//            RegionIdentifier dataCenter = dcTreeGivenService.getRoot();
-            RegionIdentifier parentInDC = dcTreeGivenService.getParent();
-            double availableCapacity = getAvailableCapacity();
-
-            // load <= availableCapacity and availableCapacity >= 0 (implicitly)
-            // Can keep all the load
-            if (compareDouble(load, availableCapacity) <= 0) {
-                updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, load, true);
-            }
-            // availableCapacity < 0 or load > availableCapacity
-            else {
-                double loadToDataCenterRoot = -Double.MAX_VALUE;
-
-                // Don't have capacity
-                if (compareDouble(availableCapacity, 0) < 0) {
-                    loadToDataCenterRoot = load;
-                }
-                // Have capacity and can server partial
-                else {
-                    loadToDataCenterRoot = load - availableCapacity;
-                    updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, availableCapacity, true);
-                }
-
-                // send the load to data center
-                updateKeyKeyLoadMap(parentExcessLoadMap, parentInDC, new ServerClientService(getRegionID(), client, service),  loadToDataCenterRoot, true);
-                updateKeyKeyLoadMap(getFlowLoadMap(), parentInDC, service, -loadToDataCenterRoot, true);
-            } // end checking if can/cannot serve all or just partial load
-        } // end if of checking tree and parent        
+        
+        if (compareDouble(leftOver.getLoad(), 0D) > 0 && !excessTupleSet.contains(leftOver)) {
+            LOGGER.info("Iteration {} Region {} adds tuple {} to excessTupleSet {}", iteration, getRegionID(), leftOver, excessTupleSet);
+            excessTupleSet.add(leftOver);
+        }
+        
+        keepLoadSet.clear();
+        keepLoadSet.addAll(copyStoredKeepSet);
+        
+        LOGGER.info("Iteration {} Region {} has keepLoadSet after swapping {}", iteration, getRegionID(), keepLoadSet);
+        
+        // Temporary return the input tuple
+//        excessTuples.add(ServerClientServiceLoad.deepCopy(tuple));
+        return excessTupleSet;
     }
     
-    private void regionProcessWithRdiffParent(ServerClientService serverClientServiceFromParent, double load, RegionIdentifier loadOrigin, RegionIdentifier client) {
-        RegionIdentifier parent = rdiffTreeMap.get(serverClientServiceFromParent).getParent();
-        ServiceIdentifier<?> service = serverClientServiceFromParent.getService();
-        
-        updateKeyKeyLoadMap(getFlowLoadMap(), loadOrigin, service, load, true);
-        
-        double availableCapacity = getAvailableCapacity();
-
-        // load <= availableCapacity and availableCapacity >= 0 (implicitly)
-        // Can keep all the load
-        if (compareDouble(load, availableCapacity) <= 0) {
-            updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, load, true);
-            updateKeyKeyLoadMap(parentExcessLoadMap, parent, serverClientServiceFromParent,  0, true);
-        }
-        // availableCapacity < 0 or load > availableCapacity
-        else {
-            double loadToParent = -Double.MAX_VALUE;
-
-            // Don't have capacity
-            if (compareDouble(availableCapacity, 0) < 0) {
-                loadToParent = load;
-            }
-            // Have capacity and can server partial
-            else {
-                loadToParent = load - availableCapacity;
-                updateKeyKeyLoadMap(getClientKeepLoadMap(), client, service, availableCapacity, true);
-            }
-
-            // update parentExcessLoadMap and outgoingLoadMap
-            ServerClientService serverClientService = new ServerClientService(serverClientServiceFromParent);
-            updateKeyKeyLoadMap(parentExcessLoadMap, parent, serverClientService,  loadToParent, true);
-            updateKeyKeyLoadMap(getFlowLoadMap(), parent, service, -loadToParent, true);
-        } // end checking if can/cannot serve all or just partial load
+    private int getPriority(ServerClientServiceLoad tuple) {
+        return getPriority(tuple.getService());
     }
 
 
@@ -662,121 +682,214 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
      * @param demandLoad
      * @param summaryInput
      */
-    private void findChildrenAndSendMessage(ServerClientService serverClientServiceDemand, double demandLoad, ResourceSummary summaryInput, RegionIdentifier loadOrigin) {
-        RegionIdentifier demandServer = serverClientServiceDemand.getServer();
-        RegionIdentifier demandClient = serverClientServiceDemand.getClient();
-        ServiceIdentifier<?> demandService = serverClientServiceDemand.getService();
-
-        // update incoming load map
-        updateKeyKeyLoadMap(getFlowLoadMap(), loadOrigin, demandService, demandLoad, true);
-        
-        for (Entry<RegionIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkNeighborEntry : summaryInput.getNetworkDemand().entrySet()) {    
-            RegionIdentifier networkNeighbor = networkNeighborEntry.getKey();
-            
-            // Skip self networkDemand
-            if (networkNeighbor.equals(getRegionID())) {
-                continue;
-            }
-            
-            for (Entry<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> networkClientEntry : networkNeighborEntry.getValue().entrySet()) {
-                RegionNetworkFlow flow = networkClientEntry.getKey();
-                RegionIdentifier networkClient = getClient(networkClientEntry.getKey());
-                ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> networkServiceMap = networkClientEntry.getValue();
-                RegionIdentifier networkServer = getServer(flow);
-                
-                for (Entry<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> networkServiceEntry : networkServiceMap.entrySet()) {
-                    ServiceIdentifier<?> networkService = networkServiceEntry.getKey();
-                    
-                    // Skip if this is not an incoming flow
-//                    if (!isIncomingFlowUsingTrafficType(networkService, networkServiceEntry.getValue(), applicationManager)) {
+//    private void findChildrenToForwardDemand(ServerClientServiceLoad serverClientServiceDemand, ResourceSummary summaryInput) {
+//        RegionIdentifier demandServer = serverClientServiceDemand.getServer();
+//        RegionIdentifier demandClient = serverClientServiceDemand.getClient();
+//        ServiceIdentifier<?> demandService = serverClientServiceDemand.getService();
+//        double demandLoad = serverClientServiceDemand.getLoad();
+//        
+//        for (Entry<RegionIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkNeighborEntry : summaryInput.getNetworkDemand().entrySet()) {    
+//            RegionIdentifier networkNeighbor = networkNeighborEntry.getKey();
+//            
+//            // Skip self networkDemand
+//            if (networkNeighbor.equals(getRegionID())) {
+//                continue;
+//            }
+//            
+//            // Check if this tuple is in the pathToClients
+//            if (pathToClients.containsKey(new ServerClientService(demandServer, demandClient, demandService))) {
+//                RegionIdentifier child = pathToClients.get(new ServerClientService(demandServer, demandClient, demandService));
+//                loadMapToChildren.computeIfAbsent(child, k -> new HashSet<>()).add(ServerClientServiceLoad.deepCopy(serverClientServiceDemand));
+//                // Adding load to the negative outgoing flowLoadMap
+//                updateKeyKeyLoadMap(getFlowLoadMap(), child, demandService, -demandLoad, true);
+//                // Stop looking if found one
+//                return ;
+//            }
+//            
+//            // Otherwise, look for the child in the network demand
+//            for (Entry<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> networkClientEntry : networkNeighborEntry.getValue().entrySet()) {
+//                RegionNetworkFlow flow = networkClientEntry.getKey();
+//                RegionIdentifier networkClient = getClient(networkClientEntry.getKey());
+//                ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> networkServiceMap = networkClientEntry.getValue();
+//                RegionIdentifier networkServer = getServer(flow);
+//                
+//                for (Entry<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>> networkServiceEntry : networkServiceMap.entrySet()) {
+//                    ServiceIdentifier<?> networkService = networkServiceEntry.getKey();
+//                      
+//                    if (!isIncomingFlowUsingFlow(flow)) {
 //                        continue;
 //                    }
-                    
-                    if (!isIncomingFlowUsingFlow(flow)) {
-                        continue;
-                    }
+//
+//                    // FOUND THE MATCH <service, client> in both serverDemand and networkDemand
+//                    // Send all load to this neighbor which is a children
+//                    // Update the incomingLoadMap, and outgoingLoadMap
+//                    if (demandClient.equals(networkClient) && demandService.equals(networkService) && demandServer.equals(networkServer)) {  
+//                        // If the flow is 0, then keep all the load
+//                        if (!isNonZeroFlow(networkServiceEntry.getValue())) {
+//                            updateKeyKeyLoadMap(getClientKeepLoadMap(), demandClient, demandService, demandLoad, true);
+//                            continue;
+//                        }
+//                        
+//                        loadMapToChildren.computeIfAbsent(networkNeighbor, k -> new HashSet<>()).add(ServerClientServiceLoad.deepCopy(serverClientServiceDemand));
+//                        
+//                        updateKeyKeyLoadMap(getFlowLoadMap(), networkNeighbor, demandService, -demandLoad, true);
+//                        
+//                        // Add new 
+//                        updatePathToClient(serverClientServiceDemand, networkNeighbor);
+//                        
+//                        // Stop looking if found one
+//                        return ;
+//                    } // end of if matching source and service
+//                } // end for loop serviceNetworkMap
+//            } // end for loop neighborNetworkEntry 
+//        } // end for loop summaryInput        
+//    }
 
-                    // FOUND THE MATCH <service, client> in both serverDemand and networkDemand
-                    // Send all load to this neighbor which is a children
-                    // Update the incomingLoadMap, and outgoingLoadMap
-                    if (demandClient.equals(networkClient) && demandService.equals(networkService) && demandServer.equals(networkServer)) {  
-                        // If the flow is 0, then keep all the load
-                        if (!isNonZeroFlow(networkServiceEntry.getValue())) {
-                            updateKeyKeyLoadMap(getClientKeepLoadMap(), demandClient, demandService, demandLoad, true);
-                            continue;
-                        }
-                        
-                        ServerClientService serverClientService = new ServerClientService(networkServer, demandClient, demandService);
-                        updateKeyKeyLoadMap(childrenLoadMap, networkNeighbor, serverClientService, demandLoad, true);
-                        updateKeyKeyLoadMap(getFlowLoadMap(), networkNeighbor, demandService, -demandLoad, true);
-//                        updateRdiffTree(serverClientService, networkNeighbor, MofityTreeType.ADD_CHILD);
-                    } // end of if matching source and service
-                } // end for loop serviceNetworkMap
-            } // end for loop neighborNetworkEntry 
-        } // end for loop summaryInput        
-    }
 
-
-    private void updateRdiffTree(ServerClientService service, RegionIdentifier parent) { 
-        RdiffTree rdiffTree = rdiffTreeMap.getOrDefault(service, new RdiffTree());
-        
-        rdiffTree.setParent(parent);
-        
-        rdiffTreeMap.put(service, rdiffTree);
-    }
-    
     /**
-     * 
-     * @param iteration
-     * @param receivedMessageMap <sender -> message>
-     * @param summaryInput
+     * If first time see this service, client => create the tree and adds path to client
+     * @param service
+     * @param parent
      */
-    private void processChildrenToParentMessages(int iteration, Map<RegionIdentifier, RdiffDcopMessage> receivedMessageMap, ResourceSummary summaryInput) {
-//        SortedMap<ServiceIdentifier<?>, Set<ServerClientService>> receivedFromDataCenterTree = new TreeMap<>(new SortServiceByPriorityComparator());
+    private void updatePathToClient(ServerClientServiceLoad tuple, RegionIdentifier child) { 
+        ServerClientService s2s = new ServerClientService(tuple.getServer(), tuple.getClient(), tuple.getService());
         
-        // Store all Children-To-Parent messages
-        // Build RdiffTree or DataCenter tree
-        for (Map.Entry<RegionIdentifier, RdiffDcopMessage> msgEntry : receivedMessageMap.entrySet()) {
-            RegionIdentifier sender = msgEntry.getKey();
-            
-            Map<ServerClientService, Double> demandFromOtherRegion = msgEntry.getValue().getMsgTypeClientServiceMap()
-                                                                    .getOrDefault(RdiffMessageType.CHILDREN_TO_PARENT, new HashMap<>());
-            for (Entry<ServerClientService, Double> entry : demandFromOtherRegion.entrySet()) {
-               ServerClientService serverClientService = entry.getKey();
-               ServiceIdentifier<?> demandService = serverClientService.getService();
-               double loadService = entry.getValue();
-                  
-               // Store the information to sortedServiceTupleMapHasReceived first
-               // If this request is in sortedServiceTupleMapToProcess
-               // The else condition never happens
-               // If receive such tuple, then ignore
-               if (sortedServiceTupleMapToProcess.getOrDefault(demandService, new HashSet<>()).contains(serverClientService)) {
-                   Set<ServerClientService> serverClientServiceStoredSet = sortedServiceTupleMapHasReceived.getOrDefault(demandService, new HashSet<>());
-                   serverClientServiceStoredSet.add(serverClientService);
-                   sortedServiceTupleMapHasReceived.put(demandService, serverClientServiceStoredSet);
-                   serverClientServiceLoadMap.put(serverClientService, loadService);
-                   serverClientServiceSenderMap.put(serverClientService, sender);
-               }
-            }
-        } // end storing messages  
+        if (!pathToClients.containsKey(s2s)) {
+            pathToClients.put(s2s, child);
+        }
     }
-
 
     /**
      * Add root to the DC tree if there is not one
-     * @param service
+     * @param tuple
      * @param root
      */
-    private void updateDataCenterTree(ServiceIdentifier<?> service, RegionIdentifier root, RegionIdentifier parent) {
-        // Build the DataCenter
-        RdiffTree dataCenterTree = dataCenterTreeMap.getOrDefault(service, new RdiffTree());
-        if (!dataCenterTree.hasRoot()) {
-            dataCenterTree.setRoot(root);
+    private void updateParentTreeMap(ServerClientService tuple, RegionIdentifier parent) {
+        parentTreeMap.putIfAbsent(new ServerClientService(tuple), parent);        
+    }
+    
+    /**
+     * @param summary .
+     * @param lastIteration .
+     * @param isRootKeepTheRest If true, let the overloaded region keeps all the remaining load if can't shed all. Used in timeout case.
+     * @return DCOP plan
+     */
+//    private RegionPlan computeRdiffRegionPlan(ResourceSummary summary, int lastIteration) {        
+//        // Return default plan if totalLoads coming is 0
+//        Map<ServiceIdentifier<?>, Double> incomingLoadMap = new HashMap<>();
+//        Map<ServiceIdentifier<?>, Map<RegionIdentifier, Double>> outgoingLoadMap = new HashMap<>();
+//        
+//        for (Entry<RegionIdentifier, Map<ServiceIdentifier<?>, Double>> neighborEntry : getFlowLoadMap().entrySet()) {
+//            RegionIdentifier neighbor = neighborEntry.getKey();
+//            for (Entry<ServiceIdentifier<?>, Double> serviceEntry : neighborEntry.getValue().entrySet()) {
+//                ServiceIdentifier<?> service = serviceEntry.getKey();
+//                double load = serviceEntry.getValue();
+//                
+//                // incomingLoad
+//                if (compareDouble(load, 0) > 0) {
+//                    updateKeyLoadMap(incomingLoadMap, service, load, true);
+//                } 
+//                // outgoingLoadMap
+//                else {
+//                    updateKeyKeyLoadMap(outgoingLoadMap, service, neighbor, -load, true);
+//                }
+//            }
+//        }        
+//        
+//        if (compareDouble(sumValues(incomingLoadMap), 0) == 0) {
+//            RegionPlan defaultRegionPlan = defaultPlan(summary);
+//            LOGGER.info("DCOP Run {} Region Plan Region {}: {}", lastIteration, getRegionID(), defaultRegionPlan);
+//            return defaultRegionPlan;
+//        }
+//    
+//        Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> servicePlanBuilder = new Builder<>();
+//        Builder<RegionIdentifier, Double> regionPlanBuilder;
+//    
+//        for (Entry<ServiceIdentifier<?>, Double> serviceEntry : incomingLoadMap.entrySet()) {
+//            ServiceIdentifier<?> service = serviceEntry.getKey();
+//            double totalLoadFromThisService = serviceEntry.getValue();
+//    
+//            regionPlanBuilder = new Builder<>();
+//            if (!outgoingLoadMap.containsKey(service) || compareDouble(totalLoadFromThisService, 0) == 0) {
+//                for (RegionIdentifier neighbor : getNeighborSet()) {
+//                    regionPlanBuilder.put(neighbor, 0.0);
+//                }
+//                regionPlanBuilder.put(getRegionID(), 1.0);
+//            } 
+//            else {
+//                
+//                double totalRatio = 0;
+//                
+//                for (RegionIdentifier neighbor : getNeighborSet()) {
+//                    double load = outgoingLoadMap.get(service).getOrDefault(neighbor, 0.0);
+//                    regionPlanBuilder.put(neighbor, load / totalLoadFromThisService);
+//                    totalRatio += load / totalLoadFromThisService;
+//                }
+//                
+//                regionPlanBuilder.put(getRegionID(), 1 - totalRatio);
+////                else {
+////                    regionPlanBuilder.put(getRegionID(), keepLoadMap.getOrDefault(service, 0D) / totalLoadFromThisService);
+////                }
+//            }
+//            ImmutableMap<RegionIdentifier, Double> regionPlan = regionPlanBuilder.build();
+//            
+//            if (compareDouble(sumValues(regionPlan), 1) != 0) {
+//                LOGGER.info("DCOP Run {} Region Plan Region {} DOES NOT ADD UP TO ONE: {}", lastIteration, getRegionID(), regionPlan);
+//            }
+//    
+//            servicePlanBuilder.put(service, regionPlan);
+//        }
+//        
+//        // Create DCOP plan for services that are not in servicePlanBuilder
+//        Set<ServiceIdentifier<?>> serviceNotInDcopPlan = new HashSet<>(getAllServiceSet());
+//        serviceNotInDcopPlan.removeAll(servicePlanBuilder.build().keySet());
+//        
+//        for (ServiceIdentifier<?> service : serviceNotInDcopPlan) {
+//            Builder<RegionIdentifier, Double> planBuilder = new Builder<>();
+//            planBuilder.put(getRegionID(), 1D);
+//            getNeighborSet().forEach(neighbor -> planBuilder.put(neighbor, 0D));
+//            
+//            ImmutableMap<RegionIdentifier, Double> regionPlan = planBuilder.build();
+//            servicePlanBuilder.put(service, regionPlan);
+//        }
+//    
+//        ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> dcopPlan = servicePlanBuilder
+//                .build();
+//    
+//        LOGGER.info("DCOP Run {} Region Plan Region {}: {}", lastIteration, getRegionID(), dcopPlan);
+//    
+//        final RegionPlan rplan = new RegionPlan(summary.getRegion(), dcopPlan);
+//    
+//        return rplan;
+//    }
+    
+
+    /**
+     * Sort tuple by service priority from higher to lower
+     * @author khoihd
+     *
+     */
+    private class SortServiceInTuple implements Comparator<ServerClientServiceLoad> {
+        @Override
+        public int compare(ServerClientServiceLoad o1, ServerClientServiceLoad o2) {
+            int compareServicePriority = Integer.compare(getPriority(o2.getService()), getPriority(o1.getService()));
+            int compareLoad = compareDouble(o2.getLoad(), o1.getLoad()); 
+            int compareClient = o2.getClient().getName().compareTo(o1.getClient().getName());
+            int compareServer = o2.getServer().getName().compareTo(o1.getServer().getName());
+            
+            if (compareServicePriority != 0) {
+                return compareServicePriority;
+            }
+            else if (compareLoad != 0) {
+                return compareLoad;
+            }
+            else if (compareClient != 0) {
+                return compareClient;
+            }
+            else {
+                return compareServer;
+            }
         }
-        if (!dataCenterTree.hasParent()) {
-            dataCenterTree.setParent(parent);
-        }
-        dataCenterTreeMap.put(service, dataCenterTree);        
     }
     
     /**
@@ -788,16 +901,21 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         DcopReceiverMessage abstractTreeMsg = inbox.getMessageAtIterationOrDefault(TREE_ITERATION, new DcopReceiverMessage());
         if (abstractTreeMsg != null) {
             abstractTreeMsg.setIteration(lastIteration);
-            abstractTreeMsg.addMessageToReceiver(getRegionID(), new RdiffDcopMessage(dataCenterTreeMap));
+            abstractTreeMsg.addMessageToReceiver(getRegionID(), new RdiffDcopMessage(new HashMap<>(), parentTreeMap, pathToClients, selfRegionServices));
             inbox.putMessageAtIteration(TREE_ITERATION, abstractTreeMsg);
         }
         
-        final DcopSharedInformation messageToSend = new DcopSharedInformation(inbox);
-        getDcopInfoProvider().setLocalDcopSharedInformation(messageToSend);
+        getDcopInfoProvider().setLocalDcopSharedInformation(inbox);
     }
 
     @Override
     protected double getAvailableCapacity() {
-        return getRegionCapacity() - sumKeyKeyValues(getClientKeepLoadMap());
+        double totalLoad = 0D;
+        
+        for (ServerClientServiceLoad tuple : keepLoadSet) {
+            totalLoad += tuple.getLoad();
+        }
+        
+        return Math.max(getRegionCapacity() - totalLoad, 0D);        
     }
 }

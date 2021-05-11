@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "Jserver12",
+    "region": "J",
+    "router": false,
+    "underlay": false
+}

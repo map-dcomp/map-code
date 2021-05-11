@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -36,12 +36,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
 
 import javax.annotation.Nonnull;
 
 import com.bbn.map.utils.JsonUtils;
 import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
+import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -61,12 +64,14 @@ public final class AgentConfiguration {
      * @return the singleton instance
      */
     public static AgentConfiguration getInstance() {
-        synchronized (INSTANCE_LOCK) {
-            if (null == instance) {
-                instance = new AgentConfiguration();
+        if (null == instance) {
+            synchronized (INSTANCE_LOCK) {
+                if (null == instance) {
+                    instance = new AgentConfiguration();
+                }
             }
-            return instance;
         }
+        return instance;
     }
 
     /**
@@ -158,15 +163,38 @@ public final class AgentConfiguration {
         apRoundDuration = v;
     }
 
+    private static final int DEFAULT_RESOURCE_REPORT_INTERVAL_MS = 500;
+    private Duration resourceReportInterval = Duration.ofMillis(DEFAULT_RESOURCE_REPORT_INTERVAL_MS);
+
+    /**
+     * @return the time interval between building of new {@link ResourceReport}
+     *         objects
+     */
+    @Nonnull
+    public Duration getResourceReportInterval() {
+        return resourceReportInterval;
+    }
+
+    /**
+     *
+     * @param v
+     *            see {@link #getResourceReportInterval()}
+     */
+    public void setResourceReportInterval(@Nonnull final Duration v) {
+        resourceReportInterval = v;
+    }
+
     private static final int DEFAULT_RLG_ESTIMATION_WINDOW_SECONDS = 3;
     private Duration rlgEstimationWindow = Duration.ofSeconds(DEFAULT_RLG_ESTIMATION_WINDOW_SECONDS);
 
     /**
      *
      * @return the time period over which estimates for the
-     *         {@link ResourceReport} objects passed to RLG is computed. This
-     *         should match {@link #getRlgRoundDuration()}.
+     *         {@link ResourceReport} objects passed to RLG is computed when
+     *         using
+     *         {@link AgentConfiguration.DemandComputationAlgorithm#MOVING_AVERAGE}.
      * @see ResourceReport#getDemandEstimationWindow()
+     * @see #getDemandComputationAlgorithm()
      */
     @Nonnull
     public Duration getRlgEstimationWindow() {
@@ -202,18 +230,17 @@ public final class AgentConfiguration {
         rlgRoundDuration = v;
     }
 
-    private static final int DEFAULT_DCOP_ESTIMATION_WINDOW_MINUTES = 1;
+    private static final int DEFAULT_DCOP_ESTIMATION_WINDOW_MINUTES = 3;
     private Duration dcopEstimationWindow = Duration.ofMinutes(DEFAULT_DCOP_ESTIMATION_WINDOW_MINUTES);
-    // private static final int DEFAULT_DCOP_ESTIMATION_WINDOW_MINUTES = 45;
-    // private Duration dcopEstimationWindow =
-    // Duration.ofSeconds(DEFAULT_DCOP_ESTIMATION_WINDOW_MINUTES);
 
     /**
      *
      * @return the time period over which estimates for the
-     *         {@link ResourceReport} objects passed to DCOP is computed. This
-     *         should match {@link #getDcopRoundDuration()}.
+     *         {@link ResourceReport} objects passed to DCOP is computed when
+     *         using
+     *         {@link AgentConfiguration.DemandComputationAlgorithm#MOVING_AVERAGE}.
      * @see ResourceReport#getDemandEstimationWindow()
+     * @see #getDemandComputationAlgorithm()
      */
     @Nonnull
     public Duration getDcopEstimationWindow() {
@@ -229,7 +256,8 @@ public final class AgentConfiguration {
         dcopEstimationWindow = v;
     }
 
-    private Duration dcopRoundDuration = dcopEstimationWindow;
+    private static final int DEFAULT_DCOP_ROUND_DURATION_MINUTES = 5;
+    private Duration dcopRoundDuration = Duration.ofMinutes(DEFAULT_DCOP_ROUND_DURATION_MINUTES);
 
     /**
      *
@@ -248,7 +276,7 @@ public final class AgentConfiguration {
         dcopRoundDuration = v;
     }
 
-    private static final Duration DEFAULT_DCOP_ACDIFF_TIME_OUT = Duration.ofSeconds(25);
+    private static final Duration DEFAULT_DCOP_ACDIFF_TIME_OUT = Duration.ofSeconds(45);
 
     private Duration dcopAcdiffTimeOut = DEFAULT_DCOP_ACDIFF_TIME_OUT;
 
@@ -357,7 +385,7 @@ public final class AgentConfiguration {
         dcopIterationLimit = v;
     }
 
-    private static final double DEFAULT_DCOP_CAPACITY_THRESHOLD = 0.5;
+    private static final double DEFAULT_DCOP_CAPACITY_THRESHOLD = 0.8;
     private double dcopCapacityThreshold = DEFAULT_DCOP_CAPACITY_THRESHOLD;
 
     /**
@@ -379,7 +407,7 @@ public final class AgentConfiguration {
         dcopCapacityThreshold = v;
     }
 
-    private static final DcopAlgorithm DEFAULT_DCOP_ALGORITHM = DcopAlgorithm.RC_DIFF;
+    private static final DcopAlgorithm DEFAULT_DCOP_ALGORITHM = DcopAlgorithm.FINAL_RCDIFF;
     private DcopAlgorithm dcopAlgorithm = DEFAULT_DCOP_ALGORITHM;
 
     /**
@@ -501,9 +529,56 @@ public final class AgentConfiguration {
          */
         MODULAR_RCDIFF,
         /**
+         * RCDIFF in block designed.
+         */
+        FINAL_RCDIFF,
+        /**
          * Return default plans in all cases. Used for comparison.
          */
         DEFAULT_PLAN,
+    }
+
+    private static final long DEFAULT_DCOP_SYNCHRONOUS_MESSAGE_TIMEOUT_MINUTES = 30;
+    private Duration dcopSynchronousMessageTimeout = Duration
+            .ofMinutes(DEFAULT_DCOP_SYNCHRONOUS_MESSAGE_TIMEOUT_MINUTES);
+
+    /**
+     * @return The maximum amount of time that the synchronous DCOP algorithms
+     *         will wait for messages from neighboring DCOP processes
+     */
+    public Duration getDcopSynchronousMessageTimeout() {
+        return dcopSynchronousMessageTimeout;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getDcopSynchronousMessageTimeout()}
+     */
+    public void setDcopSynchronousMessageTimeout(final Duration v) {
+        dcopSynchronousMessageTimeout = v;
+    }
+
+    private static final Duration DEFAULT_RCDIFF_TIMER_THRESHOLD = Duration.ofSeconds(10);
+
+    private Duration rcdiffTimerThreshold = DEFAULT_RCDIFF_TIMER_THRESHOLD;
+
+    /**
+     * This should be 2 times the communication delay between two neighboring regions.
+     * 
+     * @return how long RC-DIFF will wait for messages from neighboring regions
+     */
+    public Duration getRcdiffTimerThreshold() {
+        return rcdiffTimerThreshold;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getRcdiffTimerThreshold()}
+     */
+    public void setRcdiffTimerThreshold(final Duration v) {
+        rcdiffTimerThreshold = v;
     }
 
     private boolean rlgNullOverflowPlan = false;
@@ -719,7 +794,7 @@ public final class AgentConfiguration {
         rlgStubChoose = v;
     }
 
-    private static final double DEFAULT_RLG_LOAD_THRESHOLD = 0.75;
+    private static final double DEFAULT_RLG_LOAD_THRESHOLD = 0.6;
     private double rlgLoadThreshold = DEFAULT_RLG_LOAD_THRESHOLD;
 
     /**
@@ -779,12 +854,32 @@ public final class AgentConfiguration {
         rlgUnderloadThreshold = v;
     }
 
-    
+    private static final int DEFAULT_RLG_ALLOCATIONS_FOR_DCOP = 1;
+    private int rlgAllocationsForDcop = DEFAULT_RLG_ALLOCATIONS_FOR_DCOP;
+
+    /**
+     * @return the number of containers to start in a region when DCOP specifies
+     *         a new service for the region
+     */
+    public int getRlgAllocationsForDcop() {
+        return rlgAllocationsForDcop;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getRlgAllocationsForDcop()}
+     */
+    public void setRlgAllocationsForDcop(final int v) {
+        rlgAllocationsForDcop = v;
+    }
+
     private static final int DEFAULT_RLG_MAX_ALLOCATIONS_PER_ROUND_PER_SERVICE = 1;
     private int rlgMaxAllocationsPerRoundPerService = DEFAULT_RLG_MAX_ALLOCATIONS_PER_ROUND_PER_SERVICE;
 
     /**
-     * @return the maximum number of containers to allocate per round per service
+     * @return the maximum number of containers to allocate per round per
+     *         service
      */
     public int getRlgMaxAllocationsPerRoundPerService() {
         return rlgMaxAllocationsPerRoundPerService;
@@ -798,14 +893,13 @@ public final class AgentConfiguration {
     public void setRlgMaxAllocationsPerRoundPerService(final int v) {
         rlgMaxAllocationsPerRoundPerService = v;
     }
-    
-    
-    
+
     private static final int DEFAULT_RLG_MAX_SHUTDOWNS_PER_ROUND_PER_SERVICE = 1;
     private int rlgMaxShutdownsPerRoundPerService = DEFAULT_RLG_MAX_SHUTDOWNS_PER_ROUND_PER_SERVICE;
 
     /**
-     * @return the maximum number of shutdowns to allow per RLG round per service
+     * @return the maximum number of shutdowns to allow per RLG round per
+     *         service
      */
     public int getRlgMaxShutdownsPerRoundPerService() {
         return rlgMaxShutdownsPerRoundPerService;
@@ -819,13 +913,14 @@ public final class AgentConfiguration {
     public void setRlgMaxShutdownsPerRoundPerService(final int v) {
         rlgMaxShutdownsPerRoundPerService = v;
     }
-    
-    
+
     private static final long DEFAULT_RLG_SERVICE_UNDERLOADED_TO_CONTAINER_SHUTDOWN_DELAY = 3;
-    private Duration rlgServiceUnderloadedToContainerShutdownDelay = Duration.ofSeconds(DEFAULT_RLG_SERVICE_UNDERLOADED_TO_CONTAINER_SHUTDOWN_DELAY);
+    private Duration rlgServiceUnderloadedToContainerShutdownDelay = Duration
+            .ofSeconds(DEFAULT_RLG_SERVICE_UNDERLOADED_TO_CONTAINER_SHUTDOWN_DELAY);
 
     /**
-     * @return the delay between a container being scheduled for shutdown due to service underload and a container being shutdown
+     * @return the delay between a container being scheduled for shutdown due to
+     *         service underload and a container being shutdown
      */
     public Duration getRlgServiceUnderloadedToContainerShutdownDelay() {
         return rlgServiceUnderloadedToContainerShutdownDelay;
@@ -834,12 +929,12 @@ public final class AgentConfiguration {
     /**
      * 
      * @param v
-     *            see {@link #getRlgServiceUnderloadedToContainerShutdownDelay()}
+     *            see
+     *            {@link #getRlgServiceUnderloadedToContainerShutdownDelay()}
      */
-    public void setRlgServiceUnderloadedToContainerShutdownDelay(final long v) {
-        rlgServiceUnderloadedToContainerShutdownDelay = Duration.ofSeconds(v);
+    public void setRlgServiceUnderloadedToContainerShutdownDelay(final Duration v) {
+        rlgServiceUnderloadedToContainerShutdownDelay = v;
     }
-    
 
     private static final long DEFAULT_DNS_WEIGHT_PRECISION = 100;
     private long dnsWeightPrecision = DEFAULT_DNS_WEIGHT_PRECISION;
@@ -1030,9 +1125,10 @@ public final class AgentConfiguration {
          * load).
          */
         PROPORTIONAL,
-        
+
         /**
-         * Weights each container in the region as an exponential decay of its current load.
+         * Weights each container in the region as an exponential decay of its
+         * current load.
          */
         EXPONENTIAL_DECAY
     }
@@ -1104,6 +1200,543 @@ public final class AgentConfiguration {
      */
     public void setRlgFixedTargetActiveServiceLoadPercentageThreshold(final double v) {
         rlgFixedTargetActiveServiceLoadPercentageThreshold = v;
+    }
+
+    /**
+     * Types of DNS implementations.
+     * 
+     * @author jschewe
+     *
+     */
+    public enum DnsResolutionType {
+        /**
+         * A delegation to a region can result in a delegation to another
+         * region.
+         */
+        RECURSIVE,
+        /**
+         * Once a delegation to a region is seen, the request must be resolved
+         * in that region.
+         */
+        NON_RECURSIVE,
+
+        /**
+         * Like {@link #RECURSIVE}, except the region and containers are
+         * separate lookups.
+         */
+        RECURSIVE_TWO_LAYER;
+    }
+
+    private static final DnsResolutionType DEFAULT_DNS_RESOLUTION_TYPE = DnsResolutionType.RECURSIVE;
+
+    private DnsResolutionType dnsResolutionType = DEFAULT_DNS_RESOLUTION_TYPE;
+
+    /**
+     * 
+     * @return how delegate DNS records are handled
+     */
+    public DnsResolutionType getDnsResolutionType() {
+        return dnsResolutionType;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getDnsResolutionType()}
+     */
+    public void setDnsResolutionType(final DnsResolutionType v) {
+        dnsResolutionType = v;
+    }
+
+    private static final boolean DEFAULT_RANDOMIZE_DNS_RECORDS = false;
+
+    private boolean randomizeDnsRecords = DEFAULT_RANDOMIZE_DNS_RECORDS;
+
+    /**
+     * @return true if the list of DNS records should be randomized before
+     *         sending to the DNS server
+     */
+    public boolean getRandomizeDnsRecords() {
+        return randomizeDnsRecords;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getRandomizeDnsRecords()}
+     */
+    public void setRandomizeDnsRecords(final boolean v) {
+        randomizeDnsRecords = v;
+    }
+
+    private static final boolean DEFAULT_AP_CONTROL_NETWORK = true;
+    private boolean apControlNetwork = DEFAULT_AP_CONTROL_NETWORK;
+
+    /**
+     * 
+     * @return if true, use the control network for AP traffic, otherwise use
+     *         the experiment network
+     */
+    public boolean getApUsesControlNetwork() {
+        return apControlNetwork;
+    }
+
+    /**
+     * @param v
+     *            see {@link #getApUsesControlNetwork()}
+     */
+    public void setApUsesControlNetwork(final boolean v) {
+        apControlNetwork = v;
+    }
+
+    private static final int MIN_IFTOP_PRIORITY = -20;
+    private static final int MAX_IFTOP_PRIORITY = 19;
+    private static final int DEFAULT_IFTOP_PRIORITY = -10;
+    private int iftopPriority = DEFAULT_IFTOP_PRIORITY;
+
+    /**
+     * 
+     * @return the Linux scheduler priority to run iftop at. Valid range is -20
+     *         (high priority) to 19 (low priority), per the documentation on
+     *         the nice command.
+     */
+    public int getIftopPriority() {
+        return iftopPriority;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getIftopPriority()}, clamped to a valid value
+     */
+    public void setIftopPriority(final int v) {
+        iftopPriority = Math.max(Math.min(v, MAX_IFTOP_PRIORITY), MIN_IFTOP_PRIORITY);
+    }
+
+    private final List<String> extraIftopArguments = new LinkedList<>();
+
+    /**
+     * This is mostly used for debugging.
+     * 
+     * @return extra arguments to pass to iftop
+     */
+    public List<String> getExtraIftopArguments() {
+        return extraIftopArguments;
+    }
+
+    /**
+     * 
+     * @param v
+     *            see {@link #getExtraIftopArguments()}
+     */
+    public void setExtraIftopArguments(final List<String> v) {
+        extraIftopArguments.clear();
+        extraIftopArguments.addAll(v);
+    }
+
+    private static final boolean DCOP_SHARE_DIRECT_DEFAULT = false;
+
+    private boolean dcopShareDirect = DCOP_SHARE_DIRECT_DEFAULT;
+
+    /**
+     * 
+     * @return true if DCOP should bypass AP and share information directly
+     */
+    public boolean getDcopShareDirect() {
+        return dcopShareDirect;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getDcopShareDirect()}
+     */
+    public void setDcopShareDirect(final boolean v) {
+        dcopShareDirect = v;
+    }
+
+    /**
+     * 
+     * @return {@link GlobalNetworkConfiguration#getUseJavaSerialization()}
+     */
+    public boolean getUseJavaSerialization() {
+        return GlobalNetworkConfiguration.getInstance().getUseJavaSerialization();
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getUseJavaSerialization()}
+     */
+    public void setUseJavaSerialization(final boolean v) {
+        GlobalNetworkConfiguration.getInstance().setUseJavaSerialization(v);
+    }
+
+    /**
+     * Algorithms to use for the round robin implementation.
+     * 
+     * @author jschewe
+     *
+     */
+    public enum RoundRobinAlgorithm {
+        /**
+         * Use a counter in each record based on the
+         * {@link AgentConfiguration#getDnsWeightPrecision()}.
+         */
+        COUNTERS,
+
+        /** Used multiple records in a randomized list. */
+        RANDOM_RECORDS;
+    }
+
+    private static final RoundRobinAlgorithm DEFAULT_ROUND_ROBIN_ALGORITHM = RoundRobinAlgorithm.RANDOM_RECORDS;
+
+    private RoundRobinAlgorithm roundRobinAlgorithm = DEFAULT_ROUND_ROBIN_ALGORITHM;
+
+    /**
+     * 
+     * @return algorithm to use for weighted round robin
+     */
+    public RoundRobinAlgorithm getRoundRobinAlgorithm() {
+        return roundRobinAlgorithm;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getRoundRobinAlgorithm()}
+     */
+    public void setRoundRobinAlgorithm(final RoundRobinAlgorithm v) {
+        this.roundRobinAlgorithm = v;
+    }
+
+    /**
+     * 
+     * @return {@link GlobalNetworkConfiguration#getUseCompression()}
+     */
+    public boolean getApUseGzipCompression() {
+        return GlobalNetworkConfiguration.getInstance().getUseCompression();
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getApUseGzipCompression}
+     */
+    public void setApUseGzipCompression(final boolean v) {
+        GlobalNetworkConfiguration.getInstance().setUseCompression(v);
+    }
+
+    /**
+     * 
+     * @return {@link GlobalNetworkConfiguration#getUseDeltaCompression()}
+     */
+    public boolean getApUseDeltaCompression() {
+        return GlobalNetworkConfiguration.getInstance().getUseDeltaCompression();
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getApUseDeltaCompression}
+     */
+    public void setApUseDeltaCompression(final boolean v) {
+        GlobalNetworkConfiguration.getInstance().setUseDeltaCompression(v);
+    }
+
+    private static final boolean DEFAULT_MONITOR_TESTBED_CONTROL_NETWORK = false;
+    private boolean monitorTestbedControlNetwork = DEFAULT_MONITOR_TESTBED_CONTROL_NETWORK;
+
+    /**
+     * 
+     * @return if true, then monitor the testbed control network for network
+     *         traffic
+     */
+    public boolean getMonitorTestbedControlNetwork() {
+        return monitorTestbedControlNetwork;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@Link #getMonitorTestbedControlNetwork()}
+     */
+    public void setMonitorTestbedControlNetwork(final boolean v) {
+        monitorTestbedControlNetwork = v;
+    }
+
+    private static final boolean DEFAULT_MONITOR_MAP_CONTROL_NETWORK = false;
+    private boolean monitorMapControlNetwork = DEFAULT_MONITOR_MAP_CONTROL_NETWORK;
+
+    /**
+     * 
+     * @return if true, then monitor the MAP control network for network traffic
+     */
+    public boolean getMonitorMapControlNetwork() {
+        return monitorMapControlNetwork;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@Link #getMonitorMapControlNetwork()}
+     */
+    public void setMonitorMapControlNetwork(final boolean v) {
+        monitorMapControlNetwork = v;
+    }
+
+    private static final boolean DEFAULT_RANDOM_ROUND_ROBIN_PREFER_UNUSED = true;
+    private boolean randomRoundRobinPreferUnused = DEFAULT_RANDOM_ROUND_ROBIN_PREFER_UNUSED;
+
+    /**
+     * When using randomized round robin, prefer the records that were not used
+     * in the previous cycle.
+     * 
+     * @return if {@link #getRandomizeDnsRecords()} is true, then prefer records
+     *         that were not used in the previous cycle
+     */
+    public boolean getRandomRoundRobinPreferUnused() {
+        return randomRoundRobinPreferUnused;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getRandomRoundRobinPreferUnused()}
+     */
+    public void setRandomRoundRobinPreferUnused(final boolean v) {
+        randomRoundRobinPreferUnused = v;
+    }
+
+    private static final int DEFAULT_RANDOM_ROUND_ROBIN_NUM_SHUFFLES = 3;
+    private int randomRoundRobinNumShuffles = DEFAULT_RANDOM_ROUND_ROBIN_NUM_SHUFFLES;
+
+    /**
+     * @return if {@link #getRandomizeDnsRecords()} is true, the number of time
+     *         to find the "best" sequence
+     */
+    public int getRandomRoundRobinNumShuffles() {
+        return randomRoundRobinNumShuffles;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getRandomRoundRobinNumShuffles()}
+     */
+    public void setRandomRoundRobinNumShuffles(final int v) {
+        randomRoundRobinNumShuffles = v;
+    }
+
+    private static final boolean DEFAULT_USE_FAILED_REQUESTS_IN_DEMAND = true;
+
+    private boolean useFailedRequestsInDemand = DEFAULT_USE_FAILED_REQUESTS_IN_DEMAND;
+
+    /**
+     * If {code true} the computation of server and network demand will take
+     * into account information about failed requests, if the service provides
+     * this information.
+     * 
+     * @return if failed requests are used in the demand computation
+     */
+    public boolean getUseFailedRequestsInDemand() {
+        return useFailedRequestsInDemand;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@Link #getUseFailedRequestsInDemand()}
+     */
+    public void setUseFailedRequestsInDemand(final boolean v) {
+        useFailedRequestsInDemand = v;
+    }
+
+    private static final boolean DEFAULT_DNS_DELEGATION_USE_TCP = true;
+    private boolean dnsDelegationUseTcp = DEFAULT_DNS_DELEGATION_USE_TCP;
+
+    /**
+     * 
+     * @return true if DNS delegation should use TCP instead of UDP
+     */
+    public boolean getDnsDelegationUseTcp() {
+        return dnsDelegationUseTcp;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getDnsDelegationUseTcp()}
+     */
+    public void setDnsDelegationUseTcp(final boolean v) {
+        dnsDelegationUseTcp = v;
+    }
+
+    private static final boolean DEFAULT_RLG_STOP_FOR_DCOP = true;
+    private boolean rlgStopForDcop = DEFAULT_RLG_STOP_FOR_DCOP;
+
+    /**
+     * 
+     * @return true if RLG should stop all containers in regions where DCOP is
+     *         not sending traffic.
+     */
+    public boolean getRlgStopForDcop() {
+        return rlgStopForDcop;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getDnsDelegationUseTcp()}
+     */
+    public void setRlgStopForDcop(final boolean v) {
+        rlgStopForDcop = v;
+    }
+
+    /**
+     * Algorithm to use to compute link delay.
+     * 
+     * @author jschewe
+     *
+     */
+    public enum LinkDelayAlgorithm {
+
+        /**
+         * Compute the average link delay for links between the same region.
+         */
+        AVERAGE,
+        /**
+         * Use the minimum link delay for links between the same region.
+         */
+        MINIMUM;
+    }
+
+    private static final LinkDelayAlgorithm DEFAULT_LINK_DELAY_ALGORITHM = LinkDelayAlgorithm.AVERAGE;
+
+    private LinkDelayAlgorithm linkDelayAlgorithm = DEFAULT_LINK_DELAY_ALGORITHM;
+
+    /**
+     * 
+     * @return the algorithm to use for computing link delay
+     */
+    public LinkDelayAlgorithm getLinkDelayAlgorithm() {
+        return linkDelayAlgorithm;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getLinkDelayAlgorithm()}
+     */
+    public void setLinkDelayAlgorithm(final LinkDelayAlgorithm v) {
+        linkDelayAlgorithm = v;
+    }
+
+    private static final boolean DEFAULT_IFTOP_USE_CUSTOM = true;
+
+    private boolean iftopUseCustom = DEFAULT_IFTOP_USE_CUSTOM;
+
+    /**
+     * 
+     * @return if true, use the custom iftop binary
+     */
+    public boolean getIftopUseCustom() {
+        return iftopUseCustom;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getIftopUseCustom()}
+     */
+    public void setIftopUseCustom(final boolean v) {
+        iftopUseCustom = v;
+    }
+
+    /**
+     * Demand computation algorithms.
+     */
+    public enum DemandComputationAlgorithm {
+        /**
+         * Simple moving average using {@link EstimationWindow} to determine the
+         * duration over which to compute the average.
+         * 
+         * @see AgentConfiguration#getRlgEstimationWindow()
+         * @see AgentConfiguration#getDcopEstimationWindow()
+         */
+        MOVING_AVERAGE,
+        /**
+         * Exponential decay algorithm. At each sample the new value is equal to
+         * {@code oldValue + alpha * (value - oldValue)}.
+         * 
+         * @see AgentConfiguration#getRlgExponentialDemandDecay()
+         * @see AgentConfiguration#getDcopExponentialDemandDecay()
+         */
+        EXPONENTIAL_DECAY,
+    }
+
+    private static final DemandComputationAlgorithm DEFAULT_DEMAND_COMPUTATION_ALGORITHM = DemandComputationAlgorithm.EXPONENTIAL_DECAY;
+    private DemandComputationAlgorithm demandComputationAlgorithm = DEFAULT_DEMAND_COMPUTATION_ALGORITHM;
+
+    /**
+     * 
+     * @return the algorithm used to compute demand.
+     */
+    public DemandComputationAlgorithm getDemandComputationAlgorithm() {
+        return demandComputationAlgorithm;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getDemandComputationAlgorithm()}
+     */
+    public void setDemandComputationAlgorithm(final DemandComputationAlgorithm v) {
+        demandComputationAlgorithm = v;
+    }
+
+    private static final double DEFAULT_RLG_EXPONENTIAL_DEMAND_DECAY = 0.45;
+    private double rlgExponentialDemandDecay = DEFAULT_RLG_EXPONENTIAL_DEMAND_DECAY;
+
+    /**
+     * 
+     * @return the decay value to use for RLG when the
+     *         {@link #getDemandComputationAlgorithm()} is
+     *         {@link AgentConfiguration.DemandComputationAlgorithm#EXPONENTIAL_DECAY}.
+     */
+    public double getRlgExponentialDemandDecay() {
+        return rlgExponentialDemandDecay;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getRlgExponentialDemandDecay()}
+     */
+    public void setRlgExponentialDemandDecay(final double v) {
+        rlgExponentialDemandDecay = v;
+    }
+
+    private static final double DEFAULT_DCOP_EXPONENTIAL_DEMAND_DECAY = 0.01;
+    private double dcopExponentialDemandDecay = DEFAULT_DCOP_EXPONENTIAL_DEMAND_DECAY;
+
+    /**
+     * 
+     * @return the decay value to use for DCOP when the
+     *         {@link #getDemandComputationAlgorithm()} is
+     *         {@link AgentConfiguration.DemandComputationAlgorithm#EXPONENTIAL_DECAY}.
+     */
+    public double getDcopExponentialDemandDecay() {
+        return dcopExponentialDemandDecay;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getDcopExponentialDemandDecay()}
+     */
+    public void setDcopExponentialDemandDecay(final double v) {
+        dcopExponentialDemandDecay = v;
     }
 
 }

@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Qrtr1",
+    "region": "Q",
+    "router": true,
+    "underlay": false
+}

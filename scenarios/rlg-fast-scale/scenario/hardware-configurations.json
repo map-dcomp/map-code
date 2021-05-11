@@ -1,0 +1,22 @@
+[
+  {
+    "name": "large",
+    "capacity": {
+      "CPU": 3,
+      "MEMORY": 6
+    },
+    "maximumServiceContainers": 3,
+    "emulabConfig": "d710",
+    "dcompConfig": "mergexp.machine.memory >= mergexp.unit.gb(4)"
+  },
+  {
+    "name": "no_containers",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0,
+    "emulabConfig": "d710",
+    "dcompConfig": "mergexp.machine.memory >= mergexp.unit.gb(4)"
+  }
+]

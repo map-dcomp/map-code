@@ -1,6 +1,7 @@
 package com.bbn.map.dcop;
 
 import java.io.Serializable;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -8,11 +9,16 @@ import java.util.Objects;
 import org.protelis.vm.CodePath;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.map.Controller;
 
 /**
  * Information shared between DCOP instances in other regions.
+ * 
+ * Class is final because
+ * {@link Controller#setLocalDcopSharedInformation(DcopSharedInformation)} uses
+ * the copy constructor in this class and this will break subclasses.
  */
-public class DcopSharedInformation implements Serializable {
+public final class DcopSharedInformation implements Serializable {
 
     /**
      * 
@@ -22,6 +28,14 @@ public class DcopSharedInformation implements Serializable {
     private final Map<Integer, DcopReceiverMessage> iterationMessageMap = new HashMap<>();
 
     private DcopReceiverMessage asynchronousMessage = new DcopReceiverMessage();
+
+    private final LocalDateTime constructionTime = LocalDateTime.now();
+    
+    /**
+     * DCOP Run -> Construction time of this object
+     * Used by DCOP regions to get the construction time for the current DCOP run 
+     */
+    private final Map<Integer, LocalDateTime> constructionTimeMap = new HashMap<>();
 
     /**
      * Default constructor.
@@ -42,6 +56,9 @@ public class DcopSharedInformation implements Serializable {
                 this.putMessageAtIteration(entry.getKey(),
                         new DcopReceiverMessage(msg, AgentConfiguration.getInstance().getDcopAlgorithm()));
             }
+            
+            // Copy construction time map when copying the object
+            constructionTimeMap.putAll(o.getConstructionTimeMap());
 
             asynchronousMessage = new DcopReceiverMessage(o.getAsynchronousMessage(),
                     AgentConfiguration.getInstance().getDcopAlgorithm());
@@ -157,13 +174,19 @@ public class DcopSharedInformation implements Serializable {
         builder.append(iterationMessageMap);
         builder.append(", asynchronousMessage=");
         builder.append(asynchronousMessage);
+        builder.append(", constructed at=");
+        builder.append(constructionTime);
+        builder.append(", constructionTimeMap=");
+        builder.append(constructionTimeMap);
+        builder.append(", protelisState=");
+        builder.append(protelisState);
         builder.append("]");
         return builder.toString();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(iterationMessageMap, asynchronousMessage);
+        return Objects.hash(iterationMessageMap, asynchronousMessage, protelisState);
     }
 
     @Override
@@ -174,8 +197,9 @@ public class DcopSharedInformation implements Serializable {
             return false;
         } else {
             final DcopSharedInformation other = (DcopSharedInformation) obj;
-            return Objects.equals(getIterationMessageMap(), other.getIterationMessageMap())
-                    && Objects.equals(getAsynchronousMessage(), other.getAsynchronousMessage());
+            return Objects.equals(getIterationMessageMap(), other.getIterationMessageMap()) //
+                    && Objects.equals(getAsynchronousMessage(), other.getAsynchronousMessage()) //
+                    && Objects.equals(this.protelisState, other.protelisState);
         }
     }
 
@@ -204,5 +228,12 @@ public class DcopSharedInformation implements Serializable {
      */
     public Map<CodePath, Object> getProtelisState() {
         return protelisState;
+    }
+
+    /**
+     * @return construction time map
+     */
+    public Map<Integer, LocalDateTime> getConstructionTimeMap() {
+        return constructionTimeMap;
     }
 }

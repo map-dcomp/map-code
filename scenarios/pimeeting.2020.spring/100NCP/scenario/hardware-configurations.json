@@ -1,0 +1,28 @@
+[
+    {
+	"name": "minnow",
+	"capacity": {
+	    "CPU": 1,
+	    "MEMORY": 2
+	},
+	"maximumServiceContainers": 1
+    },
+    {
+	"name": "rohu",
+	"capacity": {
+	    "CPU": 2,
+	    "MEMORY": 2
+	},
+	"maximumServiceContainers": 0,
+	"emulabConfig": "d710",
+        "dcompConfig": "mergexp.machine.memory >= mergexp.unit.gb(4)"
+    },
+    {
+	"name": "no_containers",
+	"capacity": {
+	    "CPU": 0,
+	    "MEMORY": 0
+	},
+	"maximumServiceContainers": 0
+    }
+]

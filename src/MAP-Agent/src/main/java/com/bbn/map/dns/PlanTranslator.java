@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -34,8 +34,10 @@ package com.bbn.map.dns;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -43,11 +45,8 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.appmgr.util.AppMgrUtils;
-import com.bbn.map.common.ApplicationManagerApi;
-import com.bbn.map.common.value.ApplicationCoordinates;
-import com.bbn.map.common.value.ApplicationSpecification;
-import com.bbn.map.utils.MAPServices;
+import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.DnsResolutionType;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -63,7 +62,7 @@ import com.google.common.collect.ImmutableMap;
  * shared across multiple nodes if desired. The object itself is immutable and
  * does not contain any region specific information.
  */
-public class PlanTranslator {
+public abstract class PlanTranslator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PlanTranslator.class);
 
@@ -102,37 +101,57 @@ public class PlanTranslator {
         final RegionIdentifier localRegion = loadBalancerPlan.getRegion();
         final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowDetails = loadBalancerPlan
                 .getOverflowPlan();
+        final Map<ServiceIdentifier<?>, Map<RegionIdentifier, Double>> normalizedOverflowPlan = computeNormalizedOverflow(
+                overflowDetails);
 
         // if a container is running, but told to stop traffic or to shutdown,
         // don't create a DNS entry for it
         // node -> containers
         final Map<NodeIdentifier, Set<NodeIdentifier>> containersToIgnore = new HashMap<>();
 
-        // stores the weight for each container
+        // container -> weight
         final Map<NodeIdentifier, Double> containerWeights = new HashMap<>();
+
+        // container -> service
         final Map<NodeIdentifier, ServiceIdentifier<?>> containerToServiceMap = new HashMap<>();
+
+        // service -> sum of container weights
         final Map<ServiceIdentifier<?>, Double> serviceTotalContainerWeights = new HashMap<>();
 
         loadBalancerPlan.getServicePlan().forEach((node, containers) -> {
             containers.forEach(info -> {
-                if (info.isStop() || info.isStopTrafficTo()) {
+                if (info.isStop() || info.isStopTrafficTo() || info.getWeight() <= 0) {
                     containersToIgnore.computeIfAbsent(node, k -> new HashSet<>()).add(info.getId());
+                } else if (null != info.getId()) {
+                    // ignore plan for new containers that don't exist yet
+                    containerToServiceMap.put(info.getId(), info.getService());
+                    containerWeights.merge(info.getId(), info.getWeight(), Double::sum);
+                    serviceTotalContainerWeights.merge(info.getService(), info.getWeight(), Double::sum);
                 }
-
-                containerToServiceMap.put(info.getId(), info.getService());
-                containerWeights.computeIfAbsent(info.getId(), k -> info.getWeight());
-                serviceTotalContainerWeights.merge(info.getService(), info.getWeight(), Double::sum);
             });
         });
 
-        for (NodeIdentifier nodeId : containerWeights.keySet()) {
-            containerWeights.compute(nodeId,
-                    (id, w) -> w / serviceTotalContainerWeights.get(containerToServiceMap.get(nodeId)));
-        }
+        // container -> weight normalized by total service weight and multiplied
+        // by the local region weight
+        final Map<NodeIdentifier, Double> globalNormalizedContainerWeights = new HashMap<>();
+        final Map<NodeIdentifier, Double> normalizedContainerWeights = new HashMap<>();
+        containerWeights.forEach((container, weight) -> {
+            final ServiceIdentifier<?> containerService = containerToServiceMap.get(container);
+            final Map<RegionIdentifier, Double> serviceOverflow = normalizedOverflowPlan.getOrDefault(containerService,
+                    ImmutableMap.of());
+            final double localregionServiceWeight = serviceOverflow.getOrDefault(localRegion, 1D);
 
+            final double normalizedWeight = weight / serviceTotalContainerWeights.get(containerService);
+            normalizedContainerWeights.put(container, normalizedWeight);
+
+            final double globalNormalizedWeight = normalizedWeight * localregionServiceWeight;
+            globalNormalizedContainerWeights.put(container, globalNormalizedWeight);
+        });
         LOGGER.debug("serviceTotalContainerWeights: {}", serviceTotalContainerWeights);
-        LOGGER.debug("convertToDns: containerWeights: {}, loadBalancerPlan: {}", containerWeights, loadBalancerPlan);
+        LOGGER.debug("convertToDns: global normalized containerWeights: {}, loadBalancerPlan: {}",
+                globalNormalizedContainerWeights, loadBalancerPlan);
 
+        // containers to add DNS records for
         final Map<ServiceIdentifier<?>, Set<NodeIdentifier>> containersRunningServices = new HashMap<>();
         regionServiceState.getServiceReports().forEach(serviceReport -> {
             final NodeIdentifier node = serviceReport.getNodeName();
@@ -162,150 +181,158 @@ public class PlanTranslator {
         });
 
         LOGGER.trace("Containers running services {}", containersRunningServices);
+        LOGGER.trace("normalizedOverflowPlan: {}", normalizedOverflowPlan);
+        LOGGER.trace("normalizedContainerWeights: {}", normalizedContainerWeights);
+        LOGGER.trace("globalNormalizedContainerWeights: {}", globalNormalizedContainerWeights);
 
-        final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords = ImmutableList.builder();
+        final List<Pair<DnsRecord, Double>> records = createDnsRecords(localRegion, normalizedOverflowPlan,
+                normalizedContainerWeights, globalNormalizedContainerWeights, containersRunningServices);
 
-        // determine which containers are running which services and should be
-        // entered into DNS
-        final ApplicationManagerApi appManager = AppMgrUtils.getApplicationManager();
-        for (final ApplicationSpecification spec : appManager.getAllApplicationSpecifications()) {
-            final ApplicationCoordinates service = spec.getCoordinates();
-            if (!MAPServices.UNPLANNED_SERVICES.contains(service)) {
-                final RegionIdentifier defaultNodeRegion = spec.getServiceDefaultRegion();
-
-                final Set<NodeIdentifier> serviceNodes = containersRunningServices.getOrDefault(service,
-                        Collections.emptySet());
-
-                final ImmutableMap<RegionIdentifier, Double> regionServicePlan = overflowDetails.get(service);
-                LOGGER.trace("Region service plan: {}", regionServicePlan);
-                if (null == regionServicePlan) {
-                    // no region plan for this service
-
-                    if (serviceNodes.isEmpty()) {
-                        // no local nodes for this service, just add the default
-                        if (localRegion.equals(defaultNodeRegion)) {
-                            LOGGER.error(
-                                    "Attempting to add a delegate to the current region ({}). This means that all of the nodes for service {} are stopped in this region and it is the default region for the service.",
-                                    localRegion, service);
-                            // don't make DNS changes here, just leave things in
-                            // place as they are
-                            return null;
-                        } else {
-                            if (null == defaultNodeRegion) {
-                                LOGGER.warn("Default region for service {} is null, cannot add a delegate record",
-                                        service);
-                            } else {
-                                addDelegateRecord(dnsRecords, service, defaultNodeRegion, 1);
-                            }
-                        }
-                    } else {
-                        // add a record for each node that should be running the
-                        // service
-                        serviceNodes.forEach(containerId -> {
-                            Double weight = containerWeights.get(containerId);
-
-                            if (weight == null) {
-                                weight = 1.0;
-                                LOGGER.warn(
-                                        "No weight found in plan for container '{}' running service '{}'. Weight defaulting to {}.",
-                                        containerId, service, weight);
-                            }
-
-                            addNameRecord(dnsRecords, service, containerId, weight);
-                        });
-                    }
-                } else {
-                    createRecordsForService(localRegion, service, defaultNodeRegion, regionServicePlan,
-                            containerWeights, serviceNodes, dnsRecords);
-                }
-            } // planned service
-        } // foreach known service
-
-        return dnsRecords.build();
-    }
-
-    private void createRecordsForService(@Nonnull final RegionIdentifier localRegion,
-            @Nonnull final ServiceIdentifier<?> service,
-            final RegionIdentifier serviceDefaultRegion,
-            @Nonnull final ImmutableMap<RegionIdentifier, Double> regionServicePlan,
-            @Nonnull final Map<NodeIdentifier, Double> containerWeights,
-            @Nonnull final Set<NodeIdentifier> serviceNodes,
-            @Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords) {
-
-        final int numServicesInLocalRegion = serviceNodes.size();
-
-        // multiple the weight by the number of services to balance things out
-        // if there are no services, then multiple by 1
-        final double weightMultiplier = Math.max(1D, numServicesInLocalRegion);
-
-        final double regionWeightSum = regionServicePlan.entrySet().stream().mapToDouble(Map.Entry::getValue).sum();
-
-        for (final ImmutableMap.Entry<RegionIdentifier, Double> regionEntry : regionServicePlan.entrySet()) {
-            final RegionIdentifier destRegion = regionEntry.getKey();
-            final double destRegionWeight = regionEntry.getValue() / regionWeightSum;
-
-            if (destRegion.equals(localRegion)) {
-                // need to add entries to specific nodes
-                if (serviceNodes.isEmpty()) {
-                    // delegate to the region that contains the default node,
-                    // that DNS will know which container to talk to
-                    if (null == serviceDefaultRegion) {
-                        LOGGER.warn("Default region for service {} is null, cannot add a delegate record", service);
-                    } else {
-                        // only add a single record since there are no other
-                        // nodes to round robin with
-                        addDelegateRecord(dnsRecords, service, serviceDefaultRegion, 1 * destRegionWeight);
-                    }
-                } else {
-
-                    serviceNodes.forEach(containerId -> {
-                        Double weight = containerWeights.get(containerId);
-
-                        if (weight == null) {
-                            weight = 1.0;
-                            LOGGER.warn(
-                                    "No weight found in plan for container '{}' running service '{}'. Weight defaulting to {}.",
-                                    containerId, service, weight);
-                        }
-
-                        addNameRecord(dnsRecords, service, containerId, weight * destRegionWeight);
-                    });
-                }
-            } else {
-                // need to add delegate entries
-                addDelegateRecord(dnsRecords, service, destRegion, destRegionWeight * weightMultiplier);
-            }
-        } // foreach regionServicePlan entry
-    }
-
-    private void addDelegateRecord(@Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords,
-            @Nonnull final ServiceIdentifier<?> service,
-            @Nonnull final RegionIdentifier delegateRegion,
-            final double weight) {
-        if (null != delegateRegion) {
-            // for now the source region is always null. If we decide to do
-            // source based routing, then we'll need to add in the region
-            // information and defaults for the null region
-            final DelegateRecord record = new DelegateRecord(null, ttl, service, delegateRegion);
-            dnsRecords.add(Pair.of(record, weight));
+        LOGGER.trace("Sending records: {}", records);
+        if (null == records) {
+            return null;
         } else {
-            LOGGER.warn("Skipping adding delegate record for service because it's default region is null", service);
+            if (AgentConfiguration.getInstance().getRandomizeDnsRecords()) {
+                // mix name and delegate records
+                Collections.shuffle(records);
+            }
+            return ImmutableList.copyOf(records);
         }
     }
 
-    private void addNameRecord(@Nonnull final ImmutableCollection.Builder<Pair<DnsRecord, Double>> dnsRecords,
+    /**
+     * Create an overflow plan that has weights normalized based on the sum of
+     * all weights for the service.
+     */
+    private Map<ServiceIdentifier<?>, Map<RegionIdentifier, Double>> computeNormalizedOverflow(
+            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowPlan) {
+        final Map<ServiceIdentifier<?>, Map<RegionIdentifier, Double>> normalized = new HashMap<>();
+        overflowPlan.forEach((service, serviceOverflow) -> {
+
+            final double sum = serviceOverflow.entrySet().stream() //
+                    .mapToDouble(Map.Entry::getValue) //
+                    .sum();
+
+            final Map<RegionIdentifier, Double> normalizedServiceOverflow = serviceOverflow.entrySet().stream() //
+                    .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue() / sum));
+
+            normalized.put(service, normalizedServiceOverflow);
+        });
+
+        return normalized;
+    }
+
+    /**
+     * Create DNS records.
+     * 
+     * @param localRegion
+     *            the local region
+     * @param normalizedOverflow
+     *            overflow plan normalized to sum to 1
+     * @param globalNormalizedContainerWeights
+     *            {@code normalizedContainerWeights} multiplied by the local
+     *            region weight, need to check {@code containersRunningServices}
+     *            to determine which containers goto which services
+     * @param normalizedContainerWeights
+     *            weights normalized based on the sum of the weights for the
+     *            service, need to check {@code containersRunningServices} to
+     *            determine which containers goto which services
+     * @param containersRunningServices
+     *            which containers are running each service
+     * @return the DNS records
+     */
+    protected abstract List<Pair<DnsRecord, Double>> createDnsRecords(RegionIdentifier localRegion,
+            Map<ServiceIdentifier<?>, Map<RegionIdentifier, Double>> normalizedOverflow,
+            Map<NodeIdentifier, Double> normalizedContainerWeights,
+            Map<NodeIdentifier, Double> globalNormalizedContainerWeights,
+            Map<ServiceIdentifier<?>, Set<NodeIdentifier>> containersRunningServices);
+
+    /**
+     * Add a delegate record. If the weight is less than or equal to zero the
+     * method does nothing.
+     * 
+     * @param dnsRecords
+     *            where to add the record
+     * @param service
+     *            the service to add the delegate for
+     * @param delegateRegion
+     *            the region to delegate to
+     * @param weight
+     *            the weight for the record.
+     */
+    protected final void addDelegateRecord(@Nonnull final List<Pair<DnsRecord, Double>> dnsRecords,
+            @Nonnull final ServiceIdentifier<?> service,
+            @Nonnull final RegionIdentifier delegateRegion,
+            final double weight) {
+        if (weight > 0) {
+            if (null != delegateRegion) {
+                // for now the source region is always null. If we decide to do
+                // source based routing, then we'll need to add in the region
+                // information and defaults for the null region
+                final DelegateRecord record = new DelegateRecord(null, ttl, service, delegateRegion);
+                dnsRecords.add(Pair.of(record, weight));
+            } else {
+                LOGGER.warn("Skipping adding delegate record for service because it's default region is null", service);
+            }
+        } else {
+            LOGGER.trace("Skipping delegate record with zero weight. service: {} delegateRegion: {}", service,
+                    delegateRegion);
+        }
+    }
+
+    /**
+     * Add a name record. If the weight is less than or equal to zero the method
+     * does nothing.
+     * 
+     * @param dnsRecords
+     *            where to add the record
+     * @param service
+     *            the service to create the record for
+     * @param nodeId
+     *            the node to resolve to
+     * @param weight
+     *            the weight of the record
+     */
+    protected final void addNameRecord(@Nonnull final List<Pair<DnsRecord, Double>> dnsRecords,
             @Nonnull final ServiceIdentifier<?> service,
             @Nonnull final NodeIdentifier nodeId,
             final double weight) {
-
-        if (null != service) {
-            // for now the source region is always null. If we decide to do
-            // source based routing, then we'll need to add in the region
-            // information and defaults for the null region
-            final NameRecord record = new NameRecord(null, ttl, service, nodeId);
-            dnsRecords.add(Pair.of(record, weight));
+        if (weight > 0) {
+            if (null != service) {
+                // for now the source region is always null. If we decide to do
+                // source based routing, then we'll need to add in the region
+                // information and defaults for the null region
+                final NameRecord record = new NameRecord(null, ttl, service, nodeId);
+                dnsRecords.add(Pair.of(record, weight));
+            } else {
+                LOGGER.warn("Not adding name record for service to container {} because it's FQDN is null", nodeId);
+            }
         } else {
-            LOGGER.warn("Not adding name record for service to container {} because it's FQDN is null", nodeId);
+            LOGGER.trace("Skipping name record with zero weight. service: {} node: {}", service, nodeId);
+        }
+    }
+
+    /**
+     * Create the appropriate {@link PlanTranslator} and throw
+     * {@link RuntimeException} if the {@code dnsResolutionType} is not
+     * recognized.
+     * 
+     * @param dnsResolutionType
+     *            which type of DNS resolution to use
+     * @param ttl
+     *            the TTL for the DNS records
+     * @return the appropriate {@link PlanTranslator{
+     */
+    public static PlanTranslator constructPlanTranslator(final DnsResolutionType dnsResolutionType, final int ttl) {
+        switch (dnsResolutionType) {
+        case RECURSIVE:
+            return new PlanTranslatorRecurse(ttl);
+        case NON_RECURSIVE:
+            return new PlanTranslatorNoRecurse(ttl);
+        case RECURSIVE_TWO_LAYER:
+            return new PlanTranslatorRecurse2Layer(ttl);
+        default:
+            throw new RuntimeException("Unexpected DNS resolution type: " + dnsResolutionType);
         }
     }
 

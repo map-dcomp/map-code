@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "minnow",
+    "name": "Eserver13",
+    "region": "E",
+    "underlay": false
+}

@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -50,20 +50,26 @@ if [ -z "${dir}" ]; then
     dir=$(pwd)
 fi
 
+num_cpus=$(cat /proc/cpuinfo  | grep "physical id" | wc -l) || warn "Unable to get number of CPUs, assuming 1"
+if [ -z "${num_cpus}" ]; then
+    num_cpus=1
+fi
+
 cd "${dir}"
-if [ -n "$(find . -maxdepth 1 -name '*.tar.xz' -print -quit)" ]; then
-    for i in *.tar.xz; do
-        try xzcat -T0 ${i} | tar -x
+if [ -n "$(find . -maxdepth 1 -name '*.tar' -print -quit)" ]; then
+    for i in *.tar; do
+        if [ "charts.tar.xz" != "${i}" ]; then
+            # skip over charts.tar.xz
+            try tar -xf ${i}
+        fi
     done
     for sim_dir in *; do
         if [ -d "${sim_dir}" ]; then
             cd "${sim_dir}"
             if [ -n "$(find . -maxdepth 1 -name '*.tar.xz' -print -quit)" ]; then
                 log "Processing sim dir ${sim_dir}"
-                
-                for i in *.tar.xz; do
-                    try xzcat -T0 ${i} | tar -x
-                done
+
+                find *.tar.xz -maxdepth 0 -print | xargs -P ${num_cpus} -I {} sh -c "xzcat {} | tar -x; rm {}"
                 cd ..
                 try ${mydir}/analyze-hifi-results.sh \
                     --scenario "${sim_dir}"/inputs/scenario/ \
@@ -79,5 +85,5 @@ if [ -n "$(find . -maxdepth 1 -name '*.tar.xz' -print -quit)" ]; then
         fi
     done
 else
-    warn "No tar.xz files found in the current directory, skipping processing"
-fi # have some tar.xz files
+    warn "No tar files found in the current directory, skipping processing"
+fi # have some tar files

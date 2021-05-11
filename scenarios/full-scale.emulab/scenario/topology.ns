@@ -1,0 +1,706 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+set Adcop [$ns node]
+tb-set-node-os $Adcop UBUNTU16-64-MAP
+tb-set-hardware $Adcop leader
+
+set Adns [$ns node]
+tb-set-node-os $Adns UBUNTU16-64-MAP
+tb-set-hardware $Adns leader
+
+set Arlg [$ns node]
+tb-set-node-os $Arlg UBUNTU16-64-MAP
+tb-set-hardware $Arlg leader
+
+set Artr1 [$ns node]
+tb-set-node-os $Artr1 UBUNTU16-64-MAP
+tb-set-hardware $Artr1 router
+
+set Artr2 [$ns node]
+tb-set-node-os $Artr2 UBUNTU16-64-MAP
+tb-set-hardware $Artr2 router
+
+set Artr3 [$ns node]
+tb-set-node-os $Artr3 UBUNTU16-64-MAP
+tb-set-hardware $Artr3 router
+
+set Aserver1 [$ns node]
+tb-set-node-os $Aserver1 UBUNTU16-64-MAP
+tb-set-hardware $Aserver1 compute
+
+set Aserver2 [$ns node]
+tb-set-node-os $Aserver2 UBUNTU16-64-MAP
+tb-set-hardware $Aserver2 compute
+
+set Aserver3 [$ns node]
+tb-set-node-os $Aserver3 UBUNTU16-64-MAP
+tb-set-hardware $Aserver3 compute
+
+set Aserver4 [$ns node]
+tb-set-node-os $Aserver4 UBUNTU16-64-MAP
+tb-set-hardware $Aserver4 compute
+
+set Aserver5 [$ns node]
+tb-set-node-os $Aserver5 UBUNTU16-64-MAP
+tb-set-hardware $Aserver5 compute
+
+set Cdcop [$ns node]
+tb-set-node-os $Cdcop UBUNTU16-64-MAP
+tb-set-hardware $Cdcop leader
+
+set Cdns [$ns node]
+tb-set-node-os $Cdns UBUNTU16-64-MAP
+tb-set-hardware $Cdns leader
+
+set Crlg [$ns node]
+tb-set-node-os $Crlg UBUNTU16-64-MAP
+tb-set-hardware $Crlg leader
+
+set Crtr1 [$ns node]
+tb-set-node-os $Crtr1 UBUNTU16-64-MAP
+tb-set-hardware $Crtr1 router
+
+set Crtr2 [$ns node]
+tb-set-node-os $Crtr2 UBUNTU16-64-MAP
+tb-set-hardware $Crtr2 router
+
+set Crtr3 [$ns node]
+tb-set-node-os $Crtr3 UBUNTU16-64-MAP
+tb-set-hardware $Crtr3 router
+
+set Cserver1 [$ns node]
+tb-set-node-os $Cserver1 UBUNTU16-64-MAP
+tb-set-hardware $Cserver1 compute
+
+set Cserver2 [$ns node]
+tb-set-node-os $Cserver2 UBUNTU16-64-MAP
+tb-set-hardware $Cserver2 compute
+
+set Cserver3 [$ns node]
+tb-set-node-os $Cserver3 UBUNTU16-64-MAP
+tb-set-hardware $Cserver3 compute
+
+set Cserver4 [$ns node]
+tb-set-node-os $Cserver4 UBUNTU16-64-MAP
+tb-set-hardware $Cserver4 compute
+
+set Cserver5 [$ns node]
+tb-set-node-os $Cserver5 UBUNTU16-64-MAP
+tb-set-hardware $Cserver5 compute
+
+set Edcop [$ns node]
+tb-set-node-os $Edcop UBUNTU16-64-MAP
+tb-set-hardware $Edcop leader
+
+set Edns [$ns node]
+tb-set-node-os $Edns UBUNTU16-64-MAP
+tb-set-hardware $Edns leader
+
+set Erlg [$ns node]
+tb-set-node-os $Erlg UBUNTU16-64-MAP
+tb-set-hardware $Erlg leader
+
+set Ertr1 [$ns node]
+tb-set-node-os $Ertr1 UBUNTU16-64-MAP
+tb-set-hardware $Ertr1 router
+
+set Ertr2 [$ns node]
+tb-set-node-os $Ertr2 UBUNTU16-64-MAP
+tb-set-hardware $Ertr2 router
+
+set Ertr3 [$ns node]
+tb-set-node-os $Ertr3 UBUNTU16-64-MAP
+tb-set-hardware $Ertr3 router
+
+set Eserver1 [$ns node]
+tb-set-node-os $Eserver1 UBUNTU16-64-MAP
+tb-set-hardware $Eserver1 compute
+
+set Eserver2 [$ns node]
+tb-set-node-os $Eserver2 UBUNTU16-64-MAP
+tb-set-hardware $Eserver2 compute
+
+set Eserver3 [$ns node]
+tb-set-node-os $Eserver3 UBUNTU16-64-MAP
+tb-set-hardware $Eserver3 compute
+
+set Eserver4 [$ns node]
+tb-set-node-os $Eserver4 UBUNTU16-64-MAP
+tb-set-hardware $Eserver4 compute
+
+set Eserver5 [$ns node]
+tb-set-node-os $Eserver5 UBUNTU16-64-MAP
+tb-set-hardware $Eserver5 compute
+
+set Fdcop [$ns node]
+tb-set-node-os $Fdcop UBUNTU16-64-MAP
+tb-set-hardware $Fdcop leader
+
+set Fdns [$ns node]
+tb-set-node-os $Fdns UBUNTU16-64-MAP
+tb-set-hardware $Fdns leader
+
+set Frlg [$ns node]
+tb-set-node-os $Frlg UBUNTU16-64-MAP
+tb-set-hardware $Frlg leader
+
+set Frtr1 [$ns node]
+tb-set-node-os $Frtr1 UBUNTU16-64-MAP
+tb-set-hardware $Frtr1 router
+
+set Frtr2 [$ns node]
+tb-set-node-os $Frtr2 UBUNTU16-64-MAP
+tb-set-hardware $Frtr2 router
+
+set Frtr3 [$ns node]
+tb-set-node-os $Frtr3 UBUNTU16-64-MAP
+tb-set-hardware $Frtr3 router
+
+set Fserver1 [$ns node]
+tb-set-node-os $Fserver1 UBUNTU16-64-MAP
+tb-set-hardware $Fserver1 compute
+
+set Fserver2 [$ns node]
+tb-set-node-os $Fserver2 UBUNTU16-64-MAP
+tb-set-hardware $Fserver2 compute
+
+set Fserver3 [$ns node]
+tb-set-node-os $Fserver3 UBUNTU16-64-MAP
+tb-set-hardware $Fserver3 compute
+
+set Fserver4 [$ns node]
+tb-set-node-os $Fserver4 UBUNTU16-64-MAP
+tb-set-hardware $Fserver4 compute
+
+set Fserver5 [$ns node]
+tb-set-node-os $Fserver5 UBUNTU16-64-MAP
+tb-set-hardware $Fserver5 compute
+
+set Hdcop [$ns node]
+tb-set-node-os $Hdcop UBUNTU16-64-MAP
+tb-set-hardware $Hdcop leader
+
+set Hdns [$ns node]
+tb-set-node-os $Hdns UBUNTU16-64-MAP
+tb-set-hardware $Hdns leader
+
+set Hrlg [$ns node]
+tb-set-node-os $Hrlg UBUNTU16-64-MAP
+tb-set-hardware $Hrlg leader
+
+set Hrtr1 [$ns node]
+tb-set-node-os $Hrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Hrtr1 router
+
+set Hrtr2 [$ns node]
+tb-set-node-os $Hrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Hrtr2 router
+
+set Hrtr3 [$ns node]
+tb-set-node-os $Hrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Hrtr3 router
+
+set Hserver1 [$ns node]
+tb-set-node-os $Hserver1 UBUNTU16-64-MAP
+tb-set-hardware $Hserver1 compute
+
+set Hserver2 [$ns node]
+tb-set-node-os $Hserver2 UBUNTU16-64-MAP
+tb-set-hardware $Hserver2 compute
+
+set Hserver3 [$ns node]
+tb-set-node-os $Hserver3 UBUNTU16-64-MAP
+tb-set-hardware $Hserver3 compute
+
+set Hserver4 [$ns node]
+tb-set-node-os $Hserver4 UBUNTU16-64-MAP
+tb-set-hardware $Hserver4 compute
+
+set Hserver5 [$ns node]
+tb-set-node-os $Hserver5 UBUNTU16-64-MAP
+tb-set-hardware $Hserver5 compute
+
+set Idcop [$ns node]
+tb-set-node-os $Idcop UBUNTU16-64-MAP
+tb-set-hardware $Idcop leader
+
+set Idns [$ns node]
+tb-set-node-os $Idns UBUNTU16-64-MAP
+tb-set-hardware $Idns leader
+
+set Irlg [$ns node]
+tb-set-node-os $Irlg UBUNTU16-64-MAP
+tb-set-hardware $Irlg leader
+
+set Irtr1 [$ns node]
+tb-set-node-os $Irtr1 UBUNTU16-64-MAP
+tb-set-hardware $Irtr1 router
+
+set Irtr2 [$ns node]
+tb-set-node-os $Irtr2 UBUNTU16-64-MAP
+tb-set-hardware $Irtr2 router
+
+set Irtr3 [$ns node]
+tb-set-node-os $Irtr3 UBUNTU16-64-MAP
+tb-set-hardware $Irtr3 router
+
+set Iserver1 [$ns node]
+tb-set-node-os $Iserver1 UBUNTU16-64-MAP
+tb-set-hardware $Iserver1 compute
+
+set Iserver2 [$ns node]
+tb-set-node-os $Iserver2 UBUNTU16-64-MAP
+tb-set-hardware $Iserver2 compute
+
+set Iserver3 [$ns node]
+tb-set-node-os $Iserver3 UBUNTU16-64-MAP
+tb-set-hardware $Iserver3 compute
+
+set Iserver4 [$ns node]
+tb-set-node-os $Iserver4 UBUNTU16-64-MAP
+tb-set-hardware $Iserver4 compute
+
+set Iserver5 [$ns node]
+tb-set-node-os $Iserver5 UBUNTU16-64-MAP
+tb-set-hardware $Iserver5 compute
+
+set Jdcop [$ns node]
+tb-set-node-os $Jdcop UBUNTU16-64-MAP
+tb-set-hardware $Jdcop leader
+
+set Jdns [$ns node]
+tb-set-node-os $Jdns UBUNTU16-64-MAP
+tb-set-hardware $Jdns leader
+
+set Jrlg [$ns node]
+tb-set-node-os $Jrlg UBUNTU16-64-MAP
+tb-set-hardware $Jrlg leader
+
+set Jrtr1 [$ns node]
+tb-set-node-os $Jrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Jrtr1 router
+
+set Jrtr2 [$ns node]
+tb-set-node-os $Jrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Jrtr2 router
+
+set Jrtr3 [$ns node]
+tb-set-node-os $Jrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Jrtr3 router
+
+set Jserver1 [$ns node]
+tb-set-node-os $Jserver1 UBUNTU16-64-MAP
+tb-set-hardware $Jserver1 compute
+
+set Jserver2 [$ns node]
+tb-set-node-os $Jserver2 UBUNTU16-64-MAP
+tb-set-hardware $Jserver2 compute
+
+set Jserver3 [$ns node]
+tb-set-node-os $Jserver3 UBUNTU16-64-MAP
+tb-set-hardware $Jserver3 compute
+
+set Jserver4 [$ns node]
+tb-set-node-os $Jserver4 UBUNTU16-64-MAP
+tb-set-hardware $Jserver4 compute
+
+set Jserver5 [$ns node]
+tb-set-node-os $Jserver5 UBUNTU16-64-MAP
+tb-set-hardware $Jserver5 compute
+
+set Nclient01 [$ns node]
+tb-set-node-os $Nclient01 UBUNTU16-64-MAP
+tb-set-hardware $Nclient01 client
+
+set Nclient02 [$ns node]
+tb-set-node-os $Nclient02 UBUNTU16-64-MAP
+tb-set-hardware $Nclient02 client
+
+set Nclient03 [$ns node]
+tb-set-node-os $Nclient03 UBUNTU16-64-MAP
+tb-set-hardware $Nclient03 client
+
+set Ndcop [$ns node]
+tb-set-node-os $Ndcop UBUNTU16-64-MAP
+tb-set-hardware $Ndcop leader
+
+set Ndns [$ns node]
+tb-set-node-os $Ndns UBUNTU16-64-MAP
+tb-set-hardware $Ndns leader
+
+set Nrlg [$ns node]
+tb-set-node-os $Nrlg UBUNTU16-64-MAP
+tb-set-hardware $Nrlg leader
+
+set Nrtr1 [$ns node]
+tb-set-node-os $Nrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Nrtr1 router
+
+set Nrtr2 [$ns node]
+tb-set-node-os $Nrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Nrtr2 router
+
+set Nrtr3 [$ns node]
+tb-set-node-os $Nrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Nrtr3 router
+
+set Nserver1 [$ns node]
+tb-set-node-os $Nserver1 UBUNTU16-64-MAP
+tb-set-hardware $Nserver1 compute
+
+set Nserver2 [$ns node]
+tb-set-node-os $Nserver2 UBUNTU16-64-MAP
+tb-set-hardware $Nserver2 compute
+
+set Nserver3 [$ns node]
+tb-set-node-os $Nserver3 UBUNTU16-64-MAP
+tb-set-hardware $Nserver3 compute
+
+set Nserver4 [$ns node]
+tb-set-node-os $Nserver4 UBUNTU16-64-MAP
+tb-set-hardware $Nserver4 compute
+
+set Nserver5 [$ns node]
+tb-set-node-os $Nserver5 UBUNTU16-64-MAP
+tb-set-hardware $Nserver5 compute
+
+set Qdcop [$ns node]
+tb-set-node-os $Qdcop UBUNTU16-64-MAP
+tb-set-hardware $Qdcop leader
+
+set Qdns [$ns node]
+tb-set-node-os $Qdns UBUNTU16-64-MAP
+tb-set-hardware $Qdns leader
+
+set Qrlg [$ns node]
+tb-set-node-os $Qrlg UBUNTU16-64-MAP
+tb-set-hardware $Qrlg leader
+
+set Qrtr1 [$ns node]
+tb-set-node-os $Qrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Qrtr1 router
+
+set Qrtr2 [$ns node]
+tb-set-node-os $Qrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Qrtr2 router
+
+set Qrtr3 [$ns node]
+tb-set-node-os $Qrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Qrtr3 router
+
+set Qserver1 [$ns node]
+tb-set-node-os $Qserver1 UBUNTU16-64-MAP
+tb-set-hardware $Qserver1 compute
+
+set Qserver2 [$ns node]
+tb-set-node-os $Qserver2 UBUNTU16-64-MAP
+tb-set-hardware $Qserver2 compute
+
+set Qserver3 [$ns node]
+tb-set-node-os $Qserver3 UBUNTU16-64-MAP
+tb-set-hardware $Qserver3 compute
+
+set Qserver4 [$ns node]
+tb-set-node-os $Qserver4 UBUNTU16-64-MAP
+tb-set-hardware $Qserver4 compute
+
+set Qserver5 [$ns node]
+tb-set-node-os $Qserver5 UBUNTU16-64-MAP
+tb-set-hardware $Qserver5 compute
+
+set Sclient01 [$ns node]
+tb-set-node-os $Sclient01 UBUNTU16-64-MAP
+tb-set-hardware $Sclient01 client
+
+set Sclient02 [$ns node]
+tb-set-node-os $Sclient02 UBUNTU16-64-MAP
+tb-set-hardware $Sclient02 client
+
+set Sclient03 [$ns node]
+tb-set-node-os $Sclient03 UBUNTU16-64-MAP
+tb-set-hardware $Sclient03 client
+
+set Sdcop [$ns node]
+tb-set-node-os $Sdcop UBUNTU16-64-MAP
+tb-set-hardware $Sdcop leader
+
+set Sdns [$ns node]
+tb-set-node-os $Sdns UBUNTU16-64-MAP
+tb-set-hardware $Sdns leader
+
+set Srlg [$ns node]
+tb-set-node-os $Srlg UBUNTU16-64-MAP
+tb-set-hardware $Srlg leader
+
+set Srtr1 [$ns node]
+tb-set-node-os $Srtr1 UBUNTU16-64-MAP
+tb-set-hardware $Srtr1 router
+
+set Srtr2 [$ns node]
+tb-set-node-os $Srtr2 UBUNTU16-64-MAP
+tb-set-hardware $Srtr2 router
+
+set Srtr3 [$ns node]
+tb-set-node-os $Srtr3 UBUNTU16-64-MAP
+tb-set-hardware $Srtr3 router
+
+set Sserver1 [$ns node]
+tb-set-node-os $Sserver1 UBUNTU16-64-MAP
+tb-set-hardware $Sserver1 compute
+
+set Sserver2 [$ns node]
+tb-set-node-os $Sserver2 UBUNTU16-64-MAP
+tb-set-hardware $Sserver2 compute
+
+set Sserver3 [$ns node]
+tb-set-node-os $Sserver3 UBUNTU16-64-MAP
+tb-set-hardware $Sserver3 compute
+
+set Sserver4 [$ns node]
+tb-set-node-os $Sserver4 UBUNTU16-64-MAP
+tb-set-hardware $Sserver4 compute
+
+set Sserver5 [$ns node]
+tb-set-node-os $Sserver5 UBUNTU16-64-MAP
+tb-set-hardware $Sserver5 compute
+
+set Tdcop [$ns node]
+tb-set-node-os $Tdcop UBUNTU16-64-MAP
+tb-set-hardware $Tdcop leader
+
+set Tdns [$ns node]
+tb-set-node-os $Tdns UBUNTU16-64-MAP
+tb-set-hardware $Tdns leader
+
+set Trlg [$ns node]
+tb-set-node-os $Trlg UBUNTU16-64-MAP
+tb-set-hardware $Trlg leader
+
+set Trtr1 [$ns node]
+tb-set-node-os $Trtr1 UBUNTU16-64-MAP
+tb-set-hardware $Trtr1 router
+
+set Trtr2 [$ns node]
+tb-set-node-os $Trtr2 UBUNTU16-64-MAP
+tb-set-hardware $Trtr2 router
+
+set Trtr3 [$ns node]
+tb-set-node-os $Trtr3 UBUNTU16-64-MAP
+tb-set-hardware $Trtr3 router
+
+set Tserver1 [$ns node]
+tb-set-node-os $Tserver1 UBUNTU16-64-MAP
+tb-set-hardware $Tserver1 compute
+
+set Tserver2 [$ns node]
+tb-set-node-os $Tserver2 UBUNTU16-64-MAP
+tb-set-hardware $Tserver2 compute
+
+set Tserver3 [$ns node]
+tb-set-node-os $Tserver3 UBUNTU16-64-MAP
+tb-set-hardware $Tserver3 compute
+
+set Tserver4 [$ns node]
+tb-set-node-os $Tserver4 UBUNTU16-64-MAP
+tb-set-hardware $Tserver4 compute
+
+set Tserver5 [$ns node]
+tb-set-node-os $Tserver5 UBUNTU16-64-MAP
+tb-set-hardware $Tserver5 compute
+
+set Xhighdcop [$ns node]
+tb-set-node-os $Xhighdcop UBUNTU16-64-MAP
+tb-set-hardware $Xhighdcop leader
+
+set Xhighdns [$ns node]
+tb-set-node-os $Xhighdns UBUNTU16-64-MAP
+tb-set-hardware $Xhighdns leader
+
+set Xhighrlg [$ns node]
+tb-set-node-os $Xhighrlg UBUNTU16-64-MAP
+tb-set-hardware $Xhighrlg leader
+
+set Xhighrtr1 [$ns node]
+tb-set-node-os $Xhighrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Xhighrtr1 router
+
+set Xhighrtr2 [$ns node]
+tb-set-node-os $Xhighrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Xhighrtr2 router
+
+set Xhighrtr3 [$ns node]
+tb-set-node-os $Xhighrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Xhighrtr3 router
+
+set Xhighserver1 [$ns node]
+tb-set-node-os $Xhighserver1 UBUNTU16-64-MAP
+tb-set-hardware $Xhighserver1 compute
+
+set Xhighserver2 [$ns node]
+tb-set-node-os $Xhighserver2 UBUNTU16-64-MAP
+tb-set-hardware $Xhighserver2 compute
+
+set Xhighserver3 [$ns node]
+tb-set-node-os $Xhighserver3 UBUNTU16-64-MAP
+tb-set-hardware $Xhighserver3 compute
+
+set Xhighserver4 [$ns node]
+tb-set-node-os $Xhighserver4 UBUNTU16-64-MAP
+tb-set-hardware $Xhighserver4 compute
+
+set Xhighserver5 [$ns node]
+tb-set-node-os $Xhighserver5 UBUNTU16-64-MAP
+tb-set-hardware $Xhighserver5 compute
+
+set Xlowdcop [$ns node]
+tb-set-node-os $Xlowdcop UBUNTU16-64-MAP
+tb-set-hardware $Xlowdcop leader
+
+set Xlowdns [$ns node]
+tb-set-node-os $Xlowdns UBUNTU16-64-MAP
+tb-set-hardware $Xlowdns leader
+
+set Xlowrlg [$ns node]
+tb-set-node-os $Xlowrlg UBUNTU16-64-MAP
+tb-set-hardware $Xlowrlg leader
+
+set Xlowrtr1 [$ns node]
+tb-set-node-os $Xlowrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Xlowrtr1 router
+
+set Xlowrtr2 [$ns node]
+tb-set-node-os $Xlowrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Xlowrtr2 router
+
+set Xlowrtr3 [$ns node]
+tb-set-node-os $Xlowrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Xlowrtr3 router
+
+set Xlowserver1 [$ns node]
+tb-set-node-os $Xlowserver1 UBUNTU16-64-MAP
+tb-set-hardware $Xlowserver1 compute
+
+set Xlowserver2 [$ns node]
+tb-set-node-os $Xlowserver2 UBUNTU16-64-MAP
+tb-set-hardware $Xlowserver2 compute
+
+set Xlowserver3 [$ns node]
+tb-set-node-os $Xlowserver3 UBUNTU16-64-MAP
+tb-set-hardware $Xlowserver3 compute
+
+set Xlowserver4 [$ns node]
+tb-set-node-os $Xlowserver4 UBUNTU16-64-MAP
+tb-set-hardware $Xlowserver4 compute
+
+set Xlowserver5 [$ns node]
+tb-set-node-os $Xlowserver5 UBUNTU16-64-MAP
+tb-set-hardware $Xlowserver5 compute
+
+set Xmeddcop [$ns node]
+tb-set-node-os $Xmeddcop UBUNTU16-64-MAP
+tb-set-hardware $Xmeddcop leader
+
+set Xmeddns [$ns node]
+tb-set-node-os $Xmeddns UBUNTU16-64-MAP
+tb-set-hardware $Xmeddns leader
+
+set Xmedrlg [$ns node]
+tb-set-node-os $Xmedrlg UBUNTU16-64-MAP
+tb-set-hardware $Xmedrlg leader
+
+set Xmedrtr1 [$ns node]
+tb-set-node-os $Xmedrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Xmedrtr1 router
+
+set Xmedrtr2 [$ns node]
+tb-set-node-os $Xmedrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Xmedrtr2 router
+
+set Xmedrtr3 [$ns node]
+tb-set-node-os $Xmedrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Xmedrtr3 router
+
+set Xmedserver1 [$ns node]
+tb-set-node-os $Xmedserver1 UBUNTU16-64-MAP
+tb-set-hardware $Xmedserver1 compute
+
+set Xmedserver2 [$ns node]
+tb-set-node-os $Xmedserver2 UBUNTU16-64-MAP
+tb-set-hardware $Xmedserver2 compute
+
+set Xmedserver3 [$ns node]
+tb-set-node-os $Xmedserver3 UBUNTU16-64-MAP
+tb-set-hardware $Xmedserver3 compute
+
+set Xmedserver4 [$ns node]
+tb-set-node-os $Xmedserver4 UBUNTU16-64-MAP
+tb-set-hardware $Xmedserver4 compute
+
+set Xmedserver5 [$ns node]
+tb-set-node-os $Xmedserver5 UBUNTU16-64-MAP
+tb-set-hardware $Xmedserver5 compute
+
+
+set NC [$ns duplex-link $Nrtr1 $Crtr1 100Mb 0.0ms DropTail]
+set CI [$ns duplex-link $Crtr1 $Irtr1 100Mb 100.0ms DropTail]
+set CH [$ns duplex-link $Crtr1 $Hrtr1 100Mb 0.0ms DropTail]
+set CE [$ns duplex-link $Crtr1 $Ertr1 100Mb 0.0ms DropTail]
+set IA [$ns duplex-link $Irtr1 $Artr1 200Mb 0.0ms DropTail]
+set AF [$ns duplex-link $Artr1 $Frtr1 200Mb 0.0ms DropTail]
+set FQ [$ns duplex-link $Frtr1 $Qrtr1 100Mb 0.0ms DropTail]
+set QS [$ns duplex-link $Qrtr1 $Srtr1 50Mb 0.0ms DropTail]
+set QJ [$ns duplex-link $Qrtr1 $Jrtr1 100Mb 100.0ms DropTail]
+set IJ [$ns duplex-link $Irtr1 $Jrtr1 200Mb 0.0ms DropTail]
+set IT [$ns duplex-link $Irtr1 $Trtr1 200Mb 200.0ms DropTail]
+set TXlow [$ns duplex-link $Trtr1 $Xlowrtr1 200Mb 0.0ms DropTail]
+set TXmed [$ns duplex-link $Trtr1 $Xmedrtr1 200Mb 0.0ms DropTail]
+set TXhigh [$ns duplex-link $Trtr1 $Xhighrtr1 200Mb 0.0ms DropTail]
+
+set Asw1 [$ns make-lan "$Adcop $Adns $Arlg $Artr2" 100Mb 0.0ms]
+set Asw2 [$ns make-lan "$Artr3 $Aserver1 $Aserver2 $Aserver3 $Aserver4 $Aserver5" 100Mb 0.0ms]
+set Aswcore [$ns make-lan "$Artr1 $Artr2 $Artr3" 100Mb 0.0ms]
+set Csw1 [$ns make-lan "$Cdcop $Cdns $Crlg $Crtr2" 100Mb 0.0ms]
+set Csw2 [$ns make-lan "$Crtr3 $Cserver1 $Cserver2 $Cserver3 $Cserver4 $Cserver5" 100Mb 0.0ms]
+set Cswcore [$ns make-lan "$Crtr1 $Crtr2 $Crtr3" 100Mb 0.0ms]
+set Esw1 [$ns make-lan "$Edcop $Edns $Erlg $Ertr2" 100Mb 0.0ms]
+set Esw2 [$ns make-lan "$Ertr3 $Eserver1 $Eserver2 $Eserver3 $Eserver4 $Eserver5" 100Mb 0.0ms]
+set Eswcore [$ns make-lan "$Ertr1 $Ertr2 $Ertr3" 100Mb 0.0ms]
+set Fsw1 [$ns make-lan "$Fdcop $Fdns $Frlg $Frtr2" 100Mb 0.0ms]
+set Fsw2 [$ns make-lan "$Frtr3 $Fserver1 $Fserver2 $Fserver3 $Fserver4 $Fserver5" 100Mb 0.0ms]
+set Fswcore [$ns make-lan "$Frtr1 $Frtr2 $Frtr3" 100Mb 0.0ms]
+set Hsw1 [$ns make-lan "$Hdcop $Hdns $Hrlg $Hrtr2" 100Mb 0.0ms]
+set Hsw2 [$ns make-lan "$Hrtr3 $Hserver1 $Hserver2 $Hserver3 $Hserver4 $Hserver5" 100Mb 0.0ms]
+set Hswcore [$ns make-lan "$Hrtr1 $Hrtr2 $Hrtr3" 100Mb 0.0ms]
+set Isw1 [$ns make-lan "$Idcop $Idns $Irlg $Irtr2" 100Mb 0.0ms]
+set Isw2 [$ns make-lan "$Irtr3 $Iserver1 $Iserver2 $Iserver3 $Iserver4 $Iserver5" 100Mb 0.0ms]
+set Iswcore [$ns make-lan "$Irtr1 $Irtr2 $Irtr3" 100Mb 0.0ms]
+set Jsw1 [$ns make-lan "$Jdcop $Jdns $Jrlg $Jrtr2" 100Mb 0.0ms]
+set Jsw2 [$ns make-lan "$Jrtr3 $Jserver1 $Jserver2 $Jserver3 $Jserver4 $Jserver5" 100Mb 0.0ms]
+set Jswcore [$ns make-lan "$Jrtr1 $Jrtr2 $Jrtr3" 100Mb 0.0ms]
+set Ncsw [$ns make-lan "$Nclient01 $Nclient02 $Nclient03 $Nrtr1" 200Mb 0.0ms]
+set Nsw1 [$ns make-lan "$Ndcop $Ndns $Nrlg $Nrtr2" 100Mb 0.0ms]
+set Nsw2 [$ns make-lan "$Nrtr3 $Nserver1 $Nserver2 $Nserver3 $Nserver4 $Nserver5" 100Mb 0.0ms]
+set Nswcore [$ns make-lan "$Nrtr1 $Nrtr2 $Nrtr3" 100Mb 0.0ms]
+set Qsw1 [$ns make-lan "$Qdcop $Qdns $Qrlg $Qrtr2" 100Mb 0.0ms]
+set Qsw2 [$ns make-lan "$Qrtr3 $Qserver1 $Qserver2 $Qserver3 $Qserver4 $Qserver5" 100Mb 0.0ms]
+set Qswcore [$ns make-lan "$Qrtr1 $Qrtr2 $Qrtr3" 100Mb 0.0ms]
+set Scsw [$ns make-lan "$Sclient01 $Sclient02 $Sclient03 $Srtr1" 200Mb 0.0ms]
+set Ssw1 [$ns make-lan "$Sdcop $Sdns $Srlg $Srtr2" 100Mb 0.0ms]
+set Ssw2 [$ns make-lan "$Srtr3 $Sserver1 $Sserver2 $Sserver3 $Sserver4 $Sserver5" 100Mb 0.0ms]
+set Sswcore [$ns make-lan "$Srtr1 $Srtr2 $Srtr3" 100Mb 0.0ms]
+set Tsw1 [$ns make-lan "$Tdcop $Tdns $Trlg $Trtr2" 100Mb 0.0ms]
+set Tsw2 [$ns make-lan "$Trtr3 $Tserver1 $Tserver2 $Tserver3 $Tserver4 $Tserver5" 100Mb 0.0ms]
+set Tswcore [$ns make-lan "$Trtr1 $Trtr2 $Trtr3" 100Mb 0.0ms]
+set Xhighsw1 [$ns make-lan "$Xhighdcop $Xhighdns $Xhighrlg $Xhighrtr2" 100Mb 0.0ms]
+set Xhighsw2 [$ns make-lan "$Xhighrtr3 $Xhighserver1 $Xhighserver2 $Xhighserver3 $Xhighserver4 $Xhighserver5" 100Mb 0.0ms]
+set Xhighswcore [$ns make-lan "$Xhighrtr1 $Xhighrtr2 $Xhighrtr3" 100Mb 0.0ms]
+set Xlowsw1 [$ns make-lan "$Xlowdcop $Xlowdns $Xlowrlg $Xlowrtr2" 100Mb 0.0ms]
+set Xlowsw2 [$ns make-lan "$Xlowrtr3 $Xlowserver1 $Xlowserver2 $Xlowserver3 $Xlowserver4 $Xlowserver5" 100Mb 0.0ms]
+set Xlowswcore [$ns make-lan "$Xlowrtr1 $Xlowrtr2 $Xlowrtr3" 100Mb 0.0ms]
+set Xmedsw1 [$ns make-lan "$Xmeddcop $Xmeddns $Xmedrlg $Xmedrtr2" 100Mb 0.0ms]
+set Xmedsw2 [$ns make-lan "$Xmedrtr3 $Xmedserver1 $Xmedserver2 $Xmedserver3 $Xmedserver4 $Xmedserver5" 100Mb 0.0ms]
+set Xmedswcore [$ns make-lan "$Xmedrtr1 $Xmedrtr2 $Xmedrtr3" 100Mb 0.0ms]
+
+$ns rtproto Manual
+$ns run

@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -44,6 +44,7 @@ import java.nio.charset.Charset;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -56,6 +57,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -69,6 +71,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.bbn.map.ServiceConfiguration;
+import com.bbn.map.simulator.Simulation;
 import com.bbn.protelis.networkresourcemanagement.NetworkServerProperties;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
@@ -96,8 +99,8 @@ public class DNSAnalysisTableGenerator {
 
     private static final String CSV_HEADER_TIMESTAMP = "timestamp";
     private static final String CSV_HEADER_CLIENT_ADDRESS = "clientAddress";
-    private static final String CSV_HEADER_NAME_TO_RESOLVE = " name_to_resolve";
-    private static final String CSV_HEADER_RESOLVED_NAME = "  resolved_name";
+    private static final String CSV_HEADER_NAME_TO_RESOLVE = "name_to_resolve";
+    private static final String CSV_HEADER_RESOLVED_NAME = "resolved_name";
     private static final String[] CSV_HEADER = { CSV_HEADER_TIMESTAMP, CSV_HEADER_CLIENT_ADDRESS,
             CSV_HEADER_NAME_TO_RESOLVE, CSV_HEADER_RESOLVED_NAME };
 
@@ -105,7 +108,8 @@ public class DNSAnalysisTableGenerator {
             "time_sent", "time_ack_received", "latency", "hop_count" };
 
     private static final String[] CLIENT_PROCESSING_LATENCY_BY_SERVICE_WITH_HOP_INFO_CSV_HEADER = { "timestamp",
-            "event", "client", "server", "time_sent", "time_ack_received", "latency", "hop_count" };
+            "event", "client", "server", "time_sent", "time_ack_received", "latency", "hop_count", "success",
+            "message" };
 
     private static final String[] SERVER_PROCESSING_LATENCY_BY_SERVICE_WITH_HOP_INFO_CSV_HEADER = { "timestamp",
             "event", "client", "server", "time_received", "time_finished", "latency", "hop_count" };
@@ -114,19 +118,30 @@ public class DNSAnalysisTableGenerator {
             "client", "resolutions_in_region", "resolutions_delegated" };
 
     private static final long SERVER_PROCESSING_LATENCY_COUNT_BIN_SIZE = 30000;
-    
+
     /**
-     * The number of threads to use for the thread pool, which gathers latency entries for individual nodes in parallel.
+     * The number of threads to use for the thread pool, which gathers latency
+     * entries for individual nodes in parallel.
      */
     public static final int N_WORKER_THREADS = Runtime.getRuntime().availableProcessors();
-    
-    
 
-    private Map<String, String> nodeToRegionMap = new HashMap<>();              // created from topology.ns
-    private Map<String, String> ipAddressToNodeMap = new HashMap<>();           // created from topology.ns
-    private Map<String, String> domainBaseToServiceNameMap = new HashMap<>();       // created from service-configurations.json
+    private Map<String, String> nodeToRegionMap = new HashMap<>(); // created
+                                                                   // from
+                                                                   // topology.ns
+    private Map<String, String> ipAddressToNodeMap = new HashMap<>(); // created
+                                                                      // from
+                                                                      // topology.ns
+    private Map<String, String> domainBaseToServiceNameMap = new HashMap<>(); // created
+                                                                              // from
+                                                                              // service-configurations.json
 
-    private Map<String, String> containerIpToNodeIpMap = new HashMap<>();       // created from ipAddressToNodeMap and discovered container IPs
+    private Map<String, String> containerIpToNodeIpMap = new HashMap<>(); // created
+                                                                          // from
+                                                                          // ipAddressToNodeMap
+                                                                          // and
+                                                                          // discovered
+                                                                          // container
+                                                                          // IPs
 
     // client --> ncp --> route hop information
     private Map<String, Map<String, RouteHopInfo>> hopsMap = new HashMap<>();
@@ -164,9 +179,13 @@ public class DNSAnalysisTableGenerator {
      * @param outputFolder
      *            the folder to output the tables to
      * @param outputModifiedLatencyFiles
-     *            if true, output modified latency files, which inlude hop count information
+     *            if true, output modified latency files, which inlude hop count
+     *            information
      */
-    public void processLatencyDNSResolutions(File scenarioFolder, File inputFolder, File outputFolder, boolean outputModifiedLatencyFiles) {
+    public void processLatencyDNSResolutions(File scenarioFolder,
+            File inputFolder,
+            File outputFolder,
+            boolean outputModifiedLatencyFiles) {
         LOGGER.info("Scenario folder: '{}'", scenarioFolder);
         LOGGER.info("Data input folder: '{}'", inputFolder);
 
@@ -184,15 +203,14 @@ public class DNSAnalysisTableGenerator {
 
         // load hop counts from the first hop count file found in the scenario
         // folder if it exists
-        if (outputModifiedLatencyFiles)
-        {
+        if (outputModifiedLatencyFiles) {
             File[] hopCountFiles = scenarioFolder.listFiles(new FilenameFilter() {
                 @Override
                 public boolean accept(File dir, String name) {
                     return name.matches("hop_counts.*" + Pattern.quote(ChartGenerationUtils.CSV_FILE_EXTENSION));
                 }
             });
-    
+
             if (hopCountFiles != null && hopCountFiles.length > 0) {
                 processScenarioHopCountsFile(hopCountFiles[0], hopsMap);
             } else {
@@ -206,193 +224,213 @@ public class DNSAnalysisTableGenerator {
 
         // service --> client --> container instance --> list of CSV latency
         // records as Maps
-        final Map<String, Map<String, Map<String, List<Map<String, String>>>>> clientLatencyRecords = new HashMap<>();
+        final Map<String, Map<String, Map<String, List<Map<String, Object>>>>> clientLatencyRecords = new HashMap<>();
 
         // service --> server --> container instance --> list of CSV latency
         // records as Maps
-        final Map<String, Map<String, Map<String, List<Map<String, String>>>>> serverLatencyRecords = new HashMap<>();
+        final Map<String, Map<String, Map<String, List<Map<String, Object>>>>> serverLatencyRecords = new HashMap<>();
 
         // service --> list of CSV latency records as Maps
-        final Map<String, List<Map<String, String>>> serviceClientLatencyRecords = new HashMap<>();
+        final Map<String, List<Map<String, Object>>> serviceClientLatencyRecords = new HashMap<>();
 
         // service --> list of CSV latency records as Maps
-        final Map<String, List<Map<String, String>>> serviceServerProcessingLatencyRecords = new HashMap<>();
-        
-        
-        
+        final Map<String, List<Map<String, Object>>> serviceServerProcessingLatencyRecords = new HashMap<>();
+
+        // service --> time bin --> client pool --> request count
+        final Map<String, Map<Long, Map<String, Integer>>> serviceServerRequestClientPoolDistribution = new HashMap<>();
+
         LOGGER.info("Using thread pool size of {} threads.", N_WORKER_THREADS);
         ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(N_WORKER_THREADS);
         List<Future<?>> clientThreadPoolSubmissions = new LinkedList<>();
         List<Future<?>> serverThreadPoolSubmissions = new LinkedList<>();
-        
+
         List<ClientLatencyRecordWorker> clientLatencyRecordWorkers = new LinkedList<>();
         List<ServerLatencyRecordWorker> serverLatencyRecordWorkers = new LinkedList<>();
-        
-        
 
         File[] nodeFolders = inputFolder.listFiles();
 
         if (nodeFolders != null) {
             for (File nodeFolder : nodeFolders) {
-                
-                // collect client data
+
+                // collect client data from edge client
                 File clientContainerDataFolder = nodeFolder.toPath().resolve("client").resolve("container_data")
                         .toFile();
 
-                if (clientContainerDataFolder.exists() && clientContainerDataFolder.isDirectory()) {
+                if (!clientContainerDataFolder.exists() || !clientContainerDataFolder.isDirectory()) {
+                    clientContainerDataFolder = nodeFolder.toPath().resolve("agent").resolve("container_data").toFile();
+                }
+
+                if (!clientContainerDataFolder.exists() || !clientContainerDataFolder.isDirectory()) {
+                    clientContainerDataFolder = null;
+                }
+
+                if (clientContainerDataFolder != null) {
 
                     File[] clientServiceFolders = clientContainerDataFolder.listFiles();
 
                     if (clientServiceFolders != null) {
                         for (File clientServiceFolder : clientServiceFolders) {
                             if (clientServiceFolder.isDirectory()) {
-                                String service = clientServiceFolder.getName();
-                                
-                                String clientName = nodeFolder.getName();
-                                String clientRegion = mapNodeAddressToRegion(clientName);
-                                
-                                ClientLatencyRecordWorker clientLatencyRecordWorker = new ClientLatencyRecordWorker(service, clientName, clientRegion, clientServiceFolder, outputModifiedLatencyFiles);
-                                clientLatencyRecordWorkers.add(clientLatencyRecordWorker);                                
+                                final String service = ChartGenerationUtils
+                                        .serviceGroupArtifactVersionFolderNameToService(clientServiceFolder.getName());
+
+                                final String clientName = nodeFolder.getName();
+                                final String clientRegion = mapNodeAddressToRegion(clientName);
+
+                                ClientLatencyRecordWorker clientLatencyRecordWorker = new ClientLatencyRecordWorker(
+                                        service, clientName, clientRegion, clientServiceFolder,
+                                        outputModifiedLatencyFiles);
+                                clientLatencyRecordWorkers.add(clientLatencyRecordWorker);
                             }
                         }
                     }
                 }
-                
 
                 // collect server data
                 File serverContainerDataFolder = nodeFolder.toPath().resolve("agent").resolve("container_data")
                         .toFile();
 
                 if (serverContainerDataFolder.exists() && serverContainerDataFolder.isDirectory()) {
-                    
+
                     File[] serverServiceFolders = serverContainerDataFolder.listFiles();
 
                     if (serverServiceFolders != null) {
                         for (File serverServiceFolder : serverServiceFolders) {
                             if (serverServiceFolder.isDirectory()) {
-                                String service = serverServiceFolder.getName()
-                                        .replaceAll("\\A.*" + Pattern.quote("."), "").replaceAll("_.*\\z", "");
-                                
-                                String serverName = nodeFolder.getName();
-                                String serverRegion = mapNodeAddressToRegion(serverName);
-                                
-                                ServerLatencyRecordWorker serverLatencyRecordWorker = new ServerLatencyRecordWorker(service, serverName, serverRegion, serverServiceFolder);
+                                final String service = ChartGenerationUtils
+                                        .serviceGroupArtifactVersionFolderNameToService(serverServiceFolder.getName());
+
+                                final String serverName = nodeFolder.getName();
+                                final String serverRegion = mapNodeAddressToRegion(serverName);
+
+                                ServerLatencyRecordWorker serverLatencyRecordWorker = new ServerLatencyRecordWorker(
+                                        service, serverName, serverRegion, serverServiceFolder);
                                 serverLatencyRecordWorkers.add(serverLatencyRecordWorker);
                             }
                         }
                     }
                 }
             }
-            
-            
-            
-            for (ClientLatencyRecordWorker worker : clientLatencyRecordWorkers)
-            {
+
+            for (ClientLatencyRecordWorker worker : clientLatencyRecordWorkers) {
                 clientThreadPoolSubmissions.add(threadPoolExecutor.submit(worker));
             }
-            
+
             int nFinished = 0;
-            
-            
+
             // wait until all client worker threads finish
-            for (Future<?> f : clientThreadPoolSubmissions)
-            {
-                try
-                {
+            for (Future<?> f : clientThreadPoolSubmissions) {
+                try {
                     f.get();
                     nFinished++;
-                }
-                catch (InterruptedException e)
-                {
-                    LOGGER.error("Error waiting for computation {} to complete:", f, e);
-                }
-                catch (ExecutionException e)
-                {
-                    LOGGER.error("Error with computation {}:", f, e);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Error waiting for computation " + f + " to complete.", e);
+                } catch (ExecutionException e) {
+                    throw new RuntimeException("Error with computation" + f + ".", e);
                 }
             }
-            
+
             LOGGER.debug("{} future objects finshed", nFinished);
-            
+
             // combine client latency results into large Maps
-            for (ClientLatencyRecordWorker cw : clientLatencyRecordWorkers)
-            {                        
+            for (ClientLatencyRecordWorker cw : clientLatencyRecordWorkers) {
                 String service = cw.getService();
                 String clientName = cw.getClientName();
                 String clientRegion = cw.getClientRegion();
-                
+
                 // container instance --> list of CSV latency
-                Map<String, List<Map<String, String>>> workerLatencyRecords = cw.getLatencyRecords();
-                
-                // service --> client --> container instance --> list of CSV latency
-                clientLatencyRecords
-                    .computeIfAbsent(service, k -> new HashMap<>())
-                    .put(clientName, workerLatencyRecords);
+                final Map<String, List<Map<String, Object>>> workerLatencyRecords = cw.getLatencyRecords();
+
+                // service --> client --> container instance --> list of CSV
+                // latency
+                clientLatencyRecords.computeIfAbsent(service, k -> new HashMap<>()).put(clientName,
+                        workerLatencyRecords);
 
                 // resolution region --> count
-                Map<String, Integer> workerRegionResolutionCounts = cw.getRegionResolutionCounts();
+                final Map<String, Integer> workerRegionResolutionCounts = cw.getRegionResolutionCounts();
 
-                // service --> client region --> client --> resolution region --> count
-                regionResolutionCounts
-                    .computeIfAbsent(service, k -> new HashMap<>())
-                    .computeIfAbsent(clientRegion, k -> new HashMap<>())
-                    .put(clientName, workerRegionResolutionCounts);
-                
+                // service --> client region --> client --> resolution region
+                // --> count
+                regionResolutionCounts.computeIfAbsent(service, k -> new HashMap<>())
+                        .computeIfAbsent(clientRegion, k -> new HashMap<>())
+                        .put(clientName, workerRegionResolutionCounts);
 
-//                LOGGER.debug("Added results for service '{}' client '{}' consisting of {} container instances "
-//                        + "to clientLatencyRecords", service, clientName, workerLatencyRecords.keySet().size());
-                LOGGER.debug("Added results for service '{}' client '{}' "
-                        + "to clientLatencyRecords", service, clientName);
+                // back end service --> container instance --> list of CSV
+                // latency
+                final Map<String, Map<String, List<Map<String, Object>>>> workerDependentServiceLatencyRecords = cw
+                        .getDependentServiceLatencyRecords();
+
+                if (null != workerDependentServiceLatencyRecords) {
+                    LOGGER.debug("workerDependentServiceLatencyRecords = {}, clientName = {}",
+                            workerDependentServiceLatencyRecords, clientName);
+
+                    workerDependentServiceLatencyRecords.forEach((backEndService, containerInstanceRecords) -> {
+                        clientLatencyRecords.computeIfAbsent(backEndService, k -> new HashMap<>()).put(clientName,
+                                containerInstanceRecords);
+                    });
+                }
+
+                // back end service --> resolution region --> count
+                final Map<String, Map<String, Integer>> workerBackEndRegionResolutionCounts = cw
+                        .getDependentServiceRegionResolutionCounts();
+
+                if (null != workerBackEndRegionResolutionCounts) {
+                    workerBackEndRegionResolutionCounts.forEach((backEndService, resolutionRegionCounts) -> {
+                        // service --> client region --> client --> resolution
+                        // region --> count
+                        regionResolutionCounts.computeIfAbsent(backEndService, k -> new HashMap<>())
+                                .computeIfAbsent(clientRegion, k -> new HashMap<>())
+                                .put(clientName, resolutionRegionCounts);
+
+                    });
+                }
+
+                // LOGGER.debug("Added results for service '{}' client '{}'
+                // consisting of {} container instances "
+                // + "to clientLatencyRecords", service, clientName,
+                // workerLatencyRecords.keySet().size());
+                LOGGER.debug("Added results for service '{}' client '{}' " + "to clientLatencyRecords", service,
+                        clientName);
             }
-            
-            
-            
-            
-            for (ServerLatencyRecordWorker worker : serverLatencyRecordWorkers)
-            {
+
+            for (ServerLatencyRecordWorker worker : serverLatencyRecordWorkers) {
                 serverThreadPoolSubmissions.add(threadPoolExecutor.submit(worker));
             }
-            
+
             // wait until all worker threads finish
-            for (Future<?> f : serverThreadPoolSubmissions)
-            {
-                try
-                {
+            for (Future<?> f : serverThreadPoolSubmissions) {
+                try {
                     f.get();
                     nFinished++;
-                }
-                catch (InterruptedException e)
-                {
-                    LOGGER.error("Error waiting for computation {} to complete:", f, e);
-                }
-                catch (ExecutionException e)
-                {
-                    LOGGER.error("Error with computation {}:", f, e);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Error waiting for computation " + f + " to complete.", e);
+                } catch (ExecutionException e) {
+                    throw new RuntimeException("Error with computation" + f + ".", e);
                 }
             }
-            
+
             LOGGER.debug("{} future objects finshed", nFinished);
 
-            
             // combine server latency results into large Maps
-            for (ServerLatencyRecordWorker sw : serverLatencyRecordWorkers)
-            {
+            for (ServerLatencyRecordWorker sw : serverLatencyRecordWorkers) {
                 String service = sw.getService();
                 String serverName = sw.getServerName();
-                
+
                 // container instance --> list of CSV latency
-                Map<String, List<Map<String, String>>> workerLatencyRecords = sw.getLatencyRecords();
-                
-                // service --> server --> container instance --> list of CSV latency
-                serverLatencyRecords
-                    .computeIfAbsent(service, k -> new HashMap<>())
-                    .put(serverName, workerLatencyRecords);
-                
-//                LOGGER.debug("Added results for service '{}' server '{}' consisting of {} container instances "
-//                        + "to clientLatencyRecords", service, serverName, workerLatencyRecords.keySet().size());
-                
-                LOGGER.debug("Added results for service '{}' server '{}' "
-                        + "to clientLatencyRecords", service, serverName);
+                Map<String, List<Map<String, Object>>> workerLatencyRecords = sw.getLatencyRecords();
+
+                // service --> server --> container instance --> list of CSV
+                // latency
+                serverLatencyRecords.computeIfAbsent(service, k -> new HashMap<>()).put(serverName,
+                        workerLatencyRecords);
+
+                // LOGGER.debug("Added results for service '{}' server '{}'
+                // consisting of {} container instances "
+                // + "to clientLatencyRecords", service, serverName,
+                // workerLatencyRecords.keySet().size());
+
+                LOGGER.debug("Added results for service '{}' server '{}' " + "to clientLatencyRecords", service,
+                        serverName);
             }
         }
 
@@ -409,7 +447,7 @@ public class DNSAnalysisTableGenerator {
             serviceClientLatencyRecords.forEach((service, records) -> {
                 records.forEach((record) -> {
                     record.computeIfPresent("server", (k, serverIp) -> {
-                        return mapNodeAddressToNodeName(mapContainerIpToNodeIp(serverIp));
+                        return mapNodeAddressToNodeName(mapContainerIpToNodeIp((String) serverIp));
                     });
                 });
             });
@@ -417,7 +455,7 @@ public class DNSAnalysisTableGenerator {
             serviceServerProcessingLatencyRecords.forEach((service, records) -> {
                 records.forEach((record) -> {
                     record.computeIfPresent("client", (k, clientIp) -> {
-                        return mapNodeAddressToNodeName(clientIp);
+                        return mapNodeAddressToNodeName(mapContainerIpToNodeIp((String) clientIp));
                     });
                 });
             });
@@ -431,11 +469,11 @@ public class DNSAnalysisTableGenerator {
                     serviceServerProcessingLatencyRecords);
 
             // region --> service --> list of CSV latency records as Maps
-            Map<String, Map<String, List<Map<String, String>>>> regionServiceServerProcessingLatencyRecords = new HashMap<>();
+            Map<String, Map<String, List<Map<String, Object>>>> regionServiceServerProcessingLatencyRecords = new HashMap<>();
 
             serviceServerProcessingLatencyRecords.forEach((service, serviceRecords) -> {
                 serviceRecords.forEach((serviceRecord) -> {
-                    String serverRegion = mapAddressToRegion(serviceRecord.get("server"));
+                    String serverRegion = mapAddressToRegion((String) serviceRecord.get("server"));
 
                     regionServiceServerProcessingLatencyRecords.computeIfAbsent(serverRegion, k -> new HashMap<>())
                             .computeIfAbsent(service, k -> new LinkedList<>()).add(serviceRecord);
@@ -460,7 +498,7 @@ public class DNSAnalysisTableGenerator {
 
             // service --> time bin --> region --> list of CSV latency records
             // as Maps
-            Map<String, Map<Long, Map<String, List<Map<String, String>>>>> binnedRegionServiceServerProcessingLatencyRecords = new HashMap<>();
+            Map<String, Map<Long, Map<String, List<Map<String, Object>>>>> binnedRegionServiceServerProcessingLatencyRecords = new HashMap<>();
 
             // service --> time bin --> region --> count of requests received
             Map<String, Map<Long, Map<String, Integer>>> binnedRegionServiceServerProcessingLatencyRecordCounts = new HashMap<>();
@@ -468,7 +506,7 @@ public class DNSAnalysisTableGenerator {
             regionServiceServerProcessingLatencyRecords.forEach((region, serviceRecords) -> {
                 serviceRecords.forEach((service, records) -> {
                     records.forEach((record) -> {
-                        long time = Long.parseLong(record.get("time_received"));
+                        long time = (long) record.get("time_received");
                         long timeBin = ChartGenerationUtils.getBinForTime(time, 0,
                                 SERVER_PROCESSING_LATENCY_COUNT_BIN_SIZE);
 
@@ -485,27 +523,114 @@ public class DNSAnalysisTableGenerator {
 
             outputAggregatedByServiceLatencyRecordBinCounts(outputFolder, "binned_server_processing_latency_counts-",
                     binnedRegionServiceServerProcessingLatencyRecordCounts);
+
+            // output service server request client pool distribution files
+            computeServiceServerRequestClientPoolDistribution(serviceServerRequestClientPoolDistribution,
+                    serviceServerProcessingLatencyRecords, 1000);
+            outputServiceServerRequestClientPoolDistribution(outputFolder, "server_request_client_pool_distribution-",
+                    serviceServerRequestClientPoolDistribution);
         } else {
             LOGGER.error("Unable to create output folder {}", outputFolder);
         }
     }
 
-    private static final Comparator<Map<String, String>> LATENCY_RECORD_COMPARATOR = new Comparator<Map<String, String>>() {
+    private void outputServiceServerRequestClientPoolDistribution(File outputFolder,
+            String outputFilePrefix,
+            Map<String, Map<Long, Map<String, Integer>>> serviceServerRequestClientPoolDistribution) {
+
+        final Set<String> clientPools = new HashSet<>();
+        serviceServerRequestClientPoolDistribution.forEach((service, timeEntries) -> {
+            timeEntries.forEach((timeBin, clientEntries) -> {
+                clientPools.addAll(clientEntries.keySet());
+            });
+        });
+
+        final List<String> clientPoolsList = clientPools.stream().sorted().collect(Collectors.toList());
+        final String[] header = new String[1 + clientPoolsList.size()];
+        header[0] = "time";
+
+        for (int c = 0; c < clientPoolsList.size(); c++) {
+            header[c + 1] = clientPoolsList.get(c);
+        }
+
+        final CSVFormat format = CSVFormat.EXCEL.withHeader(header);
+
+        for (Entry<String, Map<Long, Map<String, Integer>>> entry : serviceServerRequestClientPoolDistribution
+                .entrySet()) {
+            String service = entry.getKey();
+            Map<Long, Map<String, Integer>> timeClientPoolCounts = entry.getValue();
+
+            final File serverRequestClientPoolDistributionFile = outputFolder.toPath()
+                    .resolve(outputFilePrefix + service + ChartGenerationUtils.CSV_FILE_EXTENSION).toFile();
+
+            try (CSVPrinter printer = new CSVPrinter(new OutputStreamWriter(
+                    new FileOutputStream(serverRequestClientPoolDistributionFile), Charset.defaultCharset()), format)) {
+
+                final List<Long> times = timeClientPoolCounts.keySet().stream().sorted().collect(Collectors.toList());
+
+                for (int t = 0; t < times.size(); t++) {
+                    Map<String, Integer> clientPoolCounts = timeClientPoolCounts.get(times.get(t));
+                    Object[] record = new Object[header.length];
+                    Arrays.fill(record, ChartGenerationUtils.EMPTY_CELL_VALUE);
+                    record[0] = times.get(t);
+
+                    for (int c = 0; c < clientPoolsList.size(); c++) {
+                        final String clientPool = clientPoolsList.get(c);
+                        Integer count = clientPoolCounts.get(clientPool);
+
+                        if (count != null) {
+                            record[c + 1] = count;
+                        }
+                    }
+
+                    printer.printRecord(record);
+                }
+
+                LOGGER.info("Output service server request client pool distribution file: {}",
+                        serverRequestClientPoolDistributionFile);
+            } catch (IOException e) {
+                LOGGER.error("Could not write service server request client pool distribution file: {}",
+                        serverRequestClientPoolDistributionFile, e);
+            }
+        }
+    }
+
+    private static void computeServiceServerRequestClientPoolDistribution(
+            Map<String, Map<Long, Map<String, Integer>>> serviceServerRequestClientPoolDistribution,
+            Map<String, List<Map<String, Object>>> serviceServerProcessingLatencyRecords,
+            long binSize) {
+
+        serviceServerProcessingLatencyRecords.forEach((service, serverRecords) -> {
+            serverRecords.forEach((serverRecord) -> {
+                final long time = (long) serverRecord.get("timestamp");
+                final long timeBin = ChartGenerationUtils.getBinForTime(time, 0, binSize);
+                final String clientPool = (String) serverRecord.get("client");
+
+                serviceServerRequestClientPoolDistribution.computeIfAbsent(service, k -> new HashMap<>())
+                        .computeIfAbsent(timeBin, k -> new HashMap<>()).merge(clientPool, 1, Integer::sum);
+            });
+        });
+    }
+
+    private static final Comparator<Map<String, Object>> LATENCY_RECORD_COMPARATOR = new Comparator<Map<String, Object>>() {
         @Override
-        public int compare(Map<String, String> e1, Map<String, String> e2) {
-            int diff = Long.compare(Long.parseLong(e1.get("timestamp")), Long.parseLong(e2.get("timestamp")));
-            
-            // compare by client name and then server name if timestamps are equal
-            if (diff == 0)
-            {
-                diff = e1.get("client").compareTo(e2.get("client"));
+        public int compare(Map<String, Object> e1, Map<String, Object> e2) {
+            int diff = Long.compare((long) e1.get("timestamp"), (long) e2.get("timestamp"));
+
+            // compare by client name and then server name if timestamps are
+            // equal
+            if (e1.containsKey("client") && e2.containsKey("client")) {
+                if (diff == 0) {
+                    diff = ((String) e1.get("client")).compareTo((String) e2.get("client"));
+                }
             }
-            
-            if (diff == 0)
-            {
-                diff = e1.get("server").compareTo(e2.get("server"));
+
+            if (e1.containsKey("server") && e2.containsKey("server")) {
+                if (diff == 0) {
+                    diff = ((String) e1.get("server")).compareTo((String) e2.get("server"));
+                }
             }
-            
+
             return diff;
         }
     };
@@ -514,21 +639,24 @@ public class DNSAnalysisTableGenerator {
         @Override
         public int compare(CSVRecord e1, CSVRecord e2) {
             int diff = Long.compare(Long.parseLong(e1.get("timestamp")), Long.parseLong(e2.get("timestamp")));
-            
+
             return diff;
         }
     };
-    
+
     private void aggregateLatencyRecordsPerService(
-            Map<String, Map<String, Map<String, List<Map<String, String>>>>> latencyRecords,
-            Map<String, List<Map<String, String>>> latencyRecordsPerService) {
+            Map<String, Map<String, Map<String, List<Map<String, Object>>>>> latencyRecords,
+            Map<String, List<Map<String, Object>>> latencyRecordsPerService) {
+
         latencyRecords.forEach((service, clientContainerMap) -> {
-            List<Map<String, String>> serviceRecords = new LinkedList<>();
+            List<Map<String, Object>> serviceRecords = new LinkedList<>();
 
             clientContainerMap.forEach((client, containerMap) -> {
-                containerMap.forEach((container, containerInstanceRecords) -> {
-                    serviceRecords.addAll(containerInstanceRecords);
-                });
+                if (null != containerMap) {
+                    containerMap.forEach((container, containerInstanceRecords) -> {
+                        serviceRecords.addAll(containerInstanceRecords);
+                    });
+                }
             });
 
             Collections.sort(serviceRecords, LATENCY_RECORD_COMPARATOR);
@@ -540,12 +668,12 @@ public class DNSAnalysisTableGenerator {
     private void outputAggregatedByServiceLatencyRecords(File outputFolder,
             String[] csvHeader,
             String outputFilePrefix,
-            Map<String, List<Map<String, String>>> serviceLatencyRecords) {
+            Map<String, List<Map<String, Object>>> serviceLatencyRecords) {
         CSVFormat format = CSVFormat.EXCEL.withHeader(csvHeader);
 
-        for (Entry<String, List<Map<String, String>>> entry : serviceLatencyRecords.entrySet()) {
+        for (Entry<String, List<Map<String, Object>>> entry : serviceLatencyRecords.entrySet()) {
             String service = entry.getKey();
-            List<Map<String, String>> latencyRecords = entry.getValue();
+            List<Map<String, Object>> latencyRecords = entry.getValue();
 
             File serviceLatencyRecordsFile = outputFolder.toPath()
                     .resolve(outputFilePrefix + service + ChartGenerationUtils.CSV_FILE_EXTENSION).toFile();
@@ -556,7 +684,15 @@ public class DNSAnalysisTableGenerator {
                 String[] header = format.getHeader();
 
                 for (int r = 0; r < latencyRecords.size(); r++) {
-                    printer.printRecord(mapToRecordArray(latencyRecords.get(r), header));
+                    Map<String, Object> record = latencyRecords.get(r);
+
+                    for (String column : header) {
+                        if (!record.containsKey(column)) {
+                            record.put(column, ChartGenerationUtils.EMPTY_CELL_VALUE);
+                        }
+                    }
+
+                    printer.printRecord(mapToRecordArray(record, header));
                 }
 
                 LOGGER.info("Output service latency file: {}", serviceLatencyRecordsFile);
@@ -677,7 +813,7 @@ public class DNSAnalysisTableGenerator {
     }
 
     private void outputModifiedContainerInstanceLatencyFile(File modifiedContainerInstanceLatencyFile,
-            List<Map<String, String>> containerInstanceLatencyRecords) {
+            List<Map<String, Object>> containerInstanceLatencyRecords) {
         CSVFormat format = CSVFormat.EXCEL.withHeader(CLIENT_PROCESSING_LATENCY_WITH_HOP_INFO_CSV_HEADER);
 
         try (CSVPrinter printer = new CSVPrinter(new OutputStreamWriter(
@@ -717,10 +853,10 @@ public class DNSAnalysisTableGenerator {
         }
     }
 
-    private String mapContainerIpToNodeIp(String containerIp) {
-        return containerIpToNodeIpMap.computeIfAbsent(containerIp, ip -> {
+    private synchronized String mapContainerIpToNodeIp(String containerIp) {
+        String nodeIp = containerIpToNodeIpMap.computeIfAbsent(containerIp, ip -> {
             Set<String> nodeIps = ipAddressToNodeMap.keySet();
-            
+
             String[] ipParts = ip.split(Pattern.quote("."));
 
             if (ipParts.length == 4) {
@@ -736,6 +872,7 @@ public class DNSAnalysisTableGenerator {
                                             // next attempt
 
                     if (nodeIps.contains(newIp)) {
+                        LOGGER.trace("mapContainerIpToNodeIp: mapping IP {} to node NCP IP {}", containerIp, newIp);
                         return newIp;
                     }
 
@@ -744,6 +881,15 @@ public class DNSAnalysisTableGenerator {
 
             return null;
         });
+
+        if (nodeIp == null) {
+            LOGGER.warn(
+                    "mapContainerIpToNodeIp: Could not find NCP IP for {}. Defaulting to {}. ipAddressToNodeMap = {}",
+                    containerIp, containerIp, ipAddressToNodeMap);
+            return containerIp;
+        }
+
+        return nodeIp;
     }
 
     private void processClientLatencyFile(File processingLatencyFile,
@@ -777,7 +923,8 @@ public class DNSAnalysisTableGenerator {
                 containerInstanceLatencyRecords.add(recordMap);
             });
 
-//            LOGGER.debug("Processed latency file: {}", processingLatencyFile);
+            // LOGGER.debug("Processed latency file: {}",
+            // processingLatencyFile);
         } catch (NoSuchFileException | FileNotFoundException e) {
             LOGGER.error("Could not find latency file: {}", processingLatencyFile);
         } catch (IOException | IllegalArgumentException e) {
@@ -785,7 +932,8 @@ public class DNSAnalysisTableGenerator {
         }
     }
 
-    private synchronized RouteHopInfo getClientToServerNodeRouteHopInfo(String clientAddress, String serverNodeAddress) {
+    private synchronized RouteHopInfo getClientToServerNodeRouteHopInfo(String clientAddress,
+            String serverNodeAddress) {
         String clientName = mapNodeAddressToNodeName(clientAddress);
         String serverNodeName = mapNodeAddressToNodeName(serverNodeAddress);
 
@@ -873,7 +1021,7 @@ public class DNSAnalysisTableGenerator {
 
         outputDNSLinesToCSV(outputFolder, OUTPUT_FILE_GROUPED_DNS_REQUEST_PREFIX, dnsEntries);
         outputRequestCountsToCSV(outputFolder, binnedContainerResolutionDNSCounts, binnedRegionResolutionDNSCounts);
-        
+
         computeBinnedRegionDeviations(rlgRegionOverflowPlan, binnedRegionResolutionDNSCounts,
                 binnedRegionDNSDeviations);
         outputRequestDeviationsToCSV(outputFolder, binnedRegionDNSDeviations);
@@ -899,13 +1047,11 @@ public class DNSAnalysisTableGenerator {
             for (String planRegion : regions) {
                 for (String service : services) {
                     Map<String, Double> expectedResolutionDistribution = binnedRlgRegionOverflowPlans
-                            .getOrDefault(time, new HashMap<>())
-                            .getOrDefault(planRegion, new HashMap<>())
+                            .getOrDefault(time, new HashMap<>()).getOrDefault(planRegion, new HashMap<>())
                             .getOrDefault(service, new HashMap<>());
 
                     Map<String, Integer> actualResolutionDistribution = binnedRegionResolutionDNSCounts
-                            .getOrDefault(time, new HashMap<>())
-                            .getOrDefault(planRegion, new HashMap<>())
+                            .getOrDefault(time, new HashMap<>()).getOrDefault(planRegion, new HashMap<>())
                             .getOrDefault(service, new HashMap<>());
 
                     int actualTotalResolutions = 0;
@@ -937,7 +1083,12 @@ public class DNSAnalysisTableGenerator {
                 new InputStreamReader(new FileInputStream(dnsCSVFile), Charset.defaultCharset()),
                 CSVFormat.EXCEL.withHeader(CSV_HEADER).withSkipHeaderRecord())) {
             parser.forEach((record) -> {
-                processDNSLine(record, dnsEntries, binnedContainerResolutionDNSCounts, binnedRegionResolutionDNSCounts);
+                try {
+                    processDNSLine(record, dnsEntries, binnedContainerResolutionDNSCounts,
+                            binnedRegionResolutionDNSCounts);
+                } catch (IllegalArgumentException e) {
+                    LOGGER.warn("Skipping a problematic record in file {}: {}", dnsCSVFile, record);
+                }
             });
         } catch (NoSuchFileException | FileNotFoundException e) {
             LOGGER.error("Could not find DNS file: {}", dnsCSVFile, e);
@@ -949,15 +1100,16 @@ public class DNSAnalysisTableGenerator {
     private void processDNSLine(CSVRecord dnsLine,
             Map<ImmutableList<String>, List<CSVRecord>> dnsEntries,
             Map<Long, Map<String, Map<String, Map<String, Integer>>>> binnedContainerResolutionDNSCounts,
-            Map<Long, Map<String, Map<String, Map<String, Integer>>>> binnedRegionResolutionDNSCounts) {
+            Map<Long, Map<String, Map<String, Map<String, Integer>>>> binnedRegionResolutionDNSCounts)
+            throws IllegalArgumentException {
 
         long timestamp = Long.parseLong(dnsLine.get(CSV_HEADER_TIMESTAMP));
         long binnedTime = ChartGenerationUtils.getBinForTime(timestamp, 0, binSize);
 
         String clientAddress = dnsLine.get(CSV_HEADER_CLIENT_ADDRESS); // source
                                                                        // node
-        String clientNode = mapNodeAddressToNodeName(clientAddress);
-        String sourceRegion = mapAddressToRegion(clientAddress);
+        String clientNode = mapNodeAddressToNodeName(mapContainerIpToNodeIp(clientAddress));
+        String sourceRegion = mapAddressToRegion(mapContainerIpToNodeIp(clientAddress));
 
         if (clientNode == null) {
             LOGGER.warn("Could not find client node for address '{}'", clientAddress);
@@ -968,6 +1120,7 @@ public class DNSAnalysisTableGenerator {
         }
 
         String nameToResolve = dnsLine.get(CSV_HEADER_NAME_TO_RESOLVE); // service
+
         String serviceName = mapServiceDomainNameToServiceName(nameToResolve);
         String nameToResolveRegion = mapAddressToRegion(nameToResolve);
 
@@ -989,6 +1142,7 @@ public class DNSAnalysisTableGenerator {
         if (sourceRegion != null && destinationRegion != null && serviceName != null) {
             sourceRegions.add(sourceRegion);
             services.add(serviceName);
+
             destinationRegions.add(destinationRegion);
 
             // source region -> destination region
@@ -1055,21 +1209,26 @@ public class DNSAnalysisTableGenerator {
             }
         }
     }
-    
+
     /**
      * Removes .map.dcomp or .[region].map.dcomp from service domainName
      * 
      * @param domainName
-     *          domain name of service
+     *            domain name of service
      * @return base part of domain name
      */
-    private String serviceDomainToBaseName(String domainName)
-    {
-        return domainName.replaceFirst("(\\..+?)?" + Pattern.quote(ChartGenerationUtils.MAP_DOMAIN_NAME_SUFFIX) + "\\z", "");
+    private String serviceDomainToBaseName(String domainName) {
+        return domainName.replaceFirst("(\\..+?)?" + Pattern.quote(ChartGenerationUtils.MAP_DOMAIN_NAME_SUFFIX) + "\\z",
+                "");
     }
 
     private synchronized String mapServiceDomainNameToServiceName(String addressToResolve) {
         String baseName = serviceDomainToBaseName(addressToResolve);
+
+        if (baseName.endsWith("-containers")) {
+            // handle 2 layer DNS
+            baseName = baseName.substring(0, baseName.length() - "-containers".length());
+        }
 
         if (domainBaseToServiceNameMap.containsKey(baseName)) {
             return domainBaseToServiceNameMap.get(baseName);
@@ -1170,7 +1329,7 @@ public class DNSAnalysisTableGenerator {
         LOGGER.debug("Node to region map: {}", nodeToRegionMap);
         LOGGER.debug("IP address to node map: {}", ipAddressToNodeMap);
 
-        Path serviceConfigurationsPath = scenarioFolder.resolve("service-configurations.json");
+        Path serviceConfigurationsPath = scenarioFolder.resolve(Simulation.SERVICE_CONFIGURATIONS_FILENAME);
 
         try {
             ImmutableCollection<ServiceConfiguration> serviceConfigurations = ServiceConfiguration
@@ -1318,7 +1477,7 @@ public class DNSAnalysisTableGenerator {
         }
 
         LOGGER.debug("serviceContainers: {}", serviceContainers);
-        
+
         for (String service : services) {
             // time bin --> service --> container name --> count
             Map<Long, Map<String, Map<String, Integer>>> binnedServiceTotalContainerResolutionCounts = new HashMap<>();
@@ -1331,7 +1490,7 @@ public class DNSAnalysisTableGenerator {
             if (serviceContainers.containsKey(service)) {
                 containerList.addAll(serviceContainers.get(service));
             }
-            
+
             if (containerList.isEmpty()) {
                 LOGGER.warn("outputRequestCountsToCSV: Found no containers for service '{}'.", service);
             }
@@ -1353,7 +1512,7 @@ public class DNSAnalysisTableGenerator {
 
             Set<String> regions2 = new HashSet<>();
             regions2.addAll(regions);
-//            regions2.add(null);
+            // regions2.add(null);
 
             for (String nameToResolveRegion : regions2) {
                 File clientServiceCSVFile = new File(
@@ -1478,14 +1637,14 @@ public class DNSAnalysisTableGenerator {
                 timeBins.add(t);
             }
         }
-        
+
         LOGGER.debug("serviceContainers: {}", serviceContainers);
 
         for (String service : services) {
-            
+
             String[] header = new String[1 + regions.size()];
             header[0] = ChartGenerationUtils.CSV_TIME_COLUMN_LABEL;
-            
+
             for (int r = 0; r < regions.size(); r++) {
                 header[1 + r] = regions.get(r);
             }
@@ -1633,89 +1792,99 @@ public class DNSAnalysisTableGenerator {
         return nodeToRegionMap.entrySet().stream().map(Map.Entry::getValue).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
-    
-    
-    
-    private class ClientLatencyRecordWorker implements Runnable
-    {
+
+    private class ClientLatencyRecordWorker implements Runnable {
         private String service;
         private String clientName;
         private String clientRegion;
         private File clientServiceFolder;
         private boolean outputModifiedLatencyFiles;
-        
+
         // resolution region --> count
         private final Map<String, Integer> regionResolutionCounts = new HashMap<>();
-        
+
+        // back end service --> resolution region --> count
+        private final Map<String, Map<String, Integer>> dependentServiceRegionResolutionCounts = new HashMap<>();
+
         // container instance --> list of CSV latency
-        private Map<String, List<Map<String, String>>> latencyRecords = null;
-        
-        ClientLatencyRecordWorker(String service, String clientName, String clientRegion, File clientServiceFolder, boolean outputModifiedLatencyFiles)
-        {
+        private Map<String, List<Map<String, Object>>> latencyRecords = null;
+
+        // back end service --> container instance --> list of CSV latency
+        private Map<String, Map<String, List<Map<String, Object>>>> dependentServiceLatencyRecords = null;
+
+        ClientLatencyRecordWorker(String service,
+                String clientName,
+                String clientRegion,
+                File clientServiceFolder,
+                boolean outputModifiedLatencyFiles) {
             this.service = service;
             this.clientName = clientName;
             this.clientRegion = clientRegion;
             this.clientServiceFolder = clientServiceFolder;
             this.outputModifiedLatencyFiles = outputModifiedLatencyFiles;
         }
-        
-        Map<String, List<Map<String, String>>> getLatencyRecords()
-        {
+
+        Map<String, List<Map<String, Object>>> getLatencyRecords() {
             return latencyRecords;
         }
-        
-        Map<String, Integer> getRegionResolutionCounts()
-        {
+
+        Map<String, Map<String, List<Map<String, Object>>>> getDependentServiceLatencyRecords() {
+            return dependentServiceLatencyRecords;
+        }
+
+        Map<String, Integer> getRegionResolutionCounts() {
             return regionResolutionCounts;
         }
-        
-        String getService()
-        {
+
+        Map<String, Map<String, Integer>> getDependentServiceRegionResolutionCounts() {
+            return dependentServiceRegionResolutionCounts;
+        }
+
+        String getService() {
             return service;
         }
-        
-        String getClientName()
-        {
+
+        String getClientName() {
             return clientName;
         }
-        
-        String getClientRegion()
-        {
+
+        String getClientRegion() {
             return clientRegion;
         }
 
-
         @Override
-        public void run()
-        {
+        public void run() {
             LOGGER.debug("Starting processing for service '{}' client '{}'.", service, clientName);
-            
-            final Map<String, List<Map<String, String>>> latencyRecords = new HashMap<>();
 
-            File[] clientServiceContainerFolders = clientServiceFolder.listFiles();
+            final Map<String, List<Map<String, Object>>> latencyRecords = new HashMap<>();
+            final Map<String, Map<String, List<Map<String, Object>>>> dependentServiceLatencyRecords = new HashMap<>();
+
+            final File[] clientServiceContainerFolders = clientServiceFolder.listFiles();
 
             if (clientServiceContainerFolders != null) {
                 for (File clientServiceContainerFolder : clientServiceContainerFolders) {
-                    String containerInstanceName = clientServiceContainerFolder.getName();
+                    final String containerInstanceName = clientServiceContainerFolder.getName();
 
                     if (clientServiceContainerFolder.isDirectory()) {
-                        File processingLatencyFile = clientServiceContainerFolder.toPath().resolve("app_metrics_data")
-                                .resolve("processing_latency.csv").toFile();
+                        final File processingLatencyFile = clientServiceContainerFolder.toPath()
+                                .resolve("app_metrics_data").resolve("processing_latency.csv").toFile();
 
-                        File modifiedContainerInstanceLatencyFile = clientServiceContainerFolder.toPath()
+                        final File requestStatusFile = clientServiceContainerFolder.toPath().resolve("app_metrics_data")
+                                .resolve("request_status.csv").toFile();
+
+                        final File modifiedContainerInstanceLatencyFile = clientServiceContainerFolder.toPath()
                                 .resolve("app_metrics_data").resolve("processing_latency-with_hop_count.csv").toFile();
 
                         if (processingLatencyFile.exists()) {
-                            List<Map<String, String>> containerInstanceLatencyRecords = new LinkedList<>();
+                            final List<Map<String, Object>> containerInstanceLatencyRecords = new LinkedList<>();
 
-                            processClientLatencyFile(processingLatencyFile,
-                                    service, 
-                                    containerInstanceName,
-                                    regionResolutionCounts,
-                                    containerInstanceLatencyRecords);
+                            processClientLatencyFile(processingLatencyFile, service, containerInstanceName,
+                                    regionResolutionCounts, containerInstanceLatencyRecords);
+
+                            processClientRequestStatusFile(requestStatusFile, containerInstanceLatencyRecords);
 
                             latencyRecords.merge(containerInstanceName, containerInstanceLatencyRecords, (a, b) -> {
-                                List<Map<String, String>> c = new LinkedList<>();
+                                List<Map<String, Object>> c = new LinkedList<>();
                                 c.addAll(a);
                                 c.addAll(b);
                                 Collections.sort(c, LATENCY_RECORD_COMPARATOR);
@@ -1723,8 +1892,7 @@ public class DNSAnalysisTableGenerator {
                                 return c;
                             });
 
-                            if (outputModifiedLatencyFiles)
-                            {
+                            if (outputModifiedLatencyFiles) {
                                 outputModifiedContainerInstanceLatencyFile(modifiedContainerInstanceLatencyFile,
                                         containerInstanceLatencyRecords);
                             }
@@ -1732,41 +1900,121 @@ public class DNSAnalysisTableGenerator {
                             LOGGER.warn("Latency file does not exist: {}", processingLatencyFile.getAbsolutePath());
                         }
 
+                        // process dependent service request latency data
+
+                        File[] clientFrontEndServiceContainerTimeFolders = clientServiceContainerFolder.listFiles();
+
+                        if (clientFrontEndServiceContainerTimeFolders != null) {
+                            for (File clientFrontEndServiceContainerTimeFolder : clientFrontEndServiceContainerTimeFolders) {
+                                if (clientServiceContainerFolder.isDirectory()
+                                        && !clientFrontEndServiceContainerTimeFolder.getName()
+                                                .equals("app_metrics_data")) {
+
+                                    File[] clientServiceContainerTimeFolders = clientServiceContainerFolder.listFiles();
+
+                                    if (clientServiceContainerTimeFolders != null) {
+                                        for (File clientServiceContainerTimeFolder : clientServiceContainerTimeFolders) {
+                                            final File dependentServicesParentFolder = clientServiceContainerTimeFolder
+                                                    .toPath().resolve("app_metrics_data").resolve("dependent-services")
+                                                    .toFile();
+
+                                            File[] backEndServiceFolders = dependentServicesParentFolder.listFiles();
+
+                                            if (backEndServiceFolders != null) {
+                                                LOGGER.debug("Found depenent-services folder: {}",
+                                                        dependentServicesParentFolder);
+
+                                                for (File backEndServiceFolder : backEndServiceFolders) {
+                                                    final String backEndServiceGroupArtifactVersionString = backEndServiceFolder
+                                                            .getName();
+                                                    final String backEndService = ChartGenerationUtils
+                                                            .serviceGroupArtifactVersionFolderNameToService(
+                                                                    backEndServiceGroupArtifactVersionString);
+
+                                                    File[] backEndServiceTimeFolders = backEndServiceFolder.listFiles();
+
+                                                    if (backEndServiceTimeFolders != null) {
+                                                        for (File backEndServiceTimeFolder : backEndServiceTimeFolders) {
+                                                            String backEndServiceTime = backEndServiceTimeFolder
+                                                                    .getName();
+
+                                                            final File backEndServiceProcessingLatencyFile = backEndServiceTimeFolder
+                                                                    .toPath().resolve("processing_latency.csv")
+                                                                    .toFile();
+
+                                                            final File backEndServiceRequestStatusFile = backEndServiceTimeFolder
+                                                                    .toPath().resolve("request_status.csv").toFile();
+
+                                                            List<Map<String, Object>> backendServiceContainerInstanceLatencyRecords = dependentServiceLatencyRecords
+                                                                    .computeIfAbsent(backEndService,
+                                                                            k -> new HashMap<>())
+                                                                    .computeIfAbsent(backEndServiceTime,
+                                                                            k -> new LinkedList<>());
+
+                                                            LOGGER.debug("backEndServiceProcessingLatencyFile = {}",
+                                                                    backEndServiceProcessingLatencyFile);
+
+                                                            Map<String, Integer> backEndServiceRegionResolutionCounts = dependentServiceRegionResolutionCounts
+                                                                    .computeIfAbsent(backEndService,
+                                                                            k -> new HashMap<>());
+
+                                                            processClientLatencyFile(
+                                                                    backEndServiceProcessingLatencyFile, backEndService,
+                                                                    backEndServiceTime,
+                                                                    backEndServiceRegionResolutionCounts,
+                                                                    backendServiceContainerInstanceLatencyRecords);
+
+                                                            processClientRequestStatusFile(
+                                                                    backEndServiceRequestStatusFile,
+                                                                    backendServiceContainerInstanceLatencyRecords);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             this.latencyRecords = latencyRecords;
-            LOGGER.info("Finished processing for service '{}' client '{}'.", service, clientName);                
+            this.dependentServiceLatencyRecords = dependentServiceLatencyRecords;
+            LOGGER.info("Finished processing for service '{}' client '{}'.", service, clientName);
         }
-            
-            
+
         private void processClientLatencyFile(File processingLatencyFile,
                 String service,
                 String containerInstanceName,
                 Map<String, Integer> regionResolutionCounts,
-                List<Map<String, String>> containerInstanceLatencyRecords) {
+                List<Map<String, Object>> containerInstanceLatencyRecords) {
 
             try (CSVParser parser = new CSVParser(
                     new InputStreamReader(new FileInputStream(processingLatencyFile), Charset.defaultCharset()),
                     CSVFormat.EXCEL.withHeader().withSkipHeaderRecord())) {
                 parser.forEach((record) -> {
-                    String serverAddress = record.get("server");
-                    String serverNodeAddress = mapContainerIpToNodeIp(serverAddress);
-                    String serverRegion = mapNodeAddressToRegion(serverNodeAddress);
+                    Map<String, Object> recordMap = csvLatencyRecordToMap(record);
 
-//                    regionResolutionCounts.computeIfAbsent(clientName, k -> new HashMap<>()).merge(serverRegion, 1, Integer::sum);
-                    regionResolutionCounts.merge(serverRegion, 1, Integer::sum);
+                    if (recordMap != null) {
+                        String serverAddress = (String) recordMap.get("server");
+                        String serverNodeAddress = mapContainerIpToNodeIp(serverAddress);
+                        String serverRegion = mapNodeAddressToRegion(serverNodeAddress);
 
-                    // add additional information to record as a Map and add the Map
-                    // to latencyEntries
-                    Map<String, String> recordMap = record.toMap();
-                    recordMap.put("client", clientName);
-                    RouteHopInfo hopInfo = getClientToServerNodeRouteHopInfo(clientName, serverNodeAddress);
-                    recordMap.put("hop_count", (hopInfo != null ? Integer.toString(hopInfo.getHops())
-                            : ChartGenerationUtils.EMPTY_CELL_VALUE.toString()));
+                        regionResolutionCounts.merge(serverRegion, 1, Integer::sum);
 
-                    containerInstanceLatencyRecords.add(recordMap);
+                        // add additional information to record as a Map and add
+                        // the Map to latencyEntries
+                        recordMap.put("client", clientName);
+                        RouteHopInfo hopInfo = getClientToServerNodeRouteHopInfo(clientName, serverNodeAddress);
+                        recordMap.put("hop_count", (hopInfo != null ? Integer.toString(hopInfo.getHops())
+                                : ChartGenerationUtils.EMPTY_CELL_VALUE.toString()));
+
+                        containerInstanceLatencyRecords.add(recordMap);
+                    } else {
+                        LOGGER.warn("Found issues with record {} in file {}.", record, processingLatencyFile);
+                    }
                 });
 
                 LOGGER.trace("Processed latency file: {}", processingLatencyFile);
@@ -1776,89 +2024,132 @@ public class DNSAnalysisTableGenerator {
                 LOGGER.error("Error processing latency file {}:", processingLatencyFile, e);
             }
         }
+
+        private void processClientRequestStatusFile(File requestStatusFile,
+                List<Map<String, Object>> containerInstanceLatencyRecords) {
+
+            try (CSVParser parser = new CSVParser(
+                    new InputStreamReader(new FileInputStream(requestStatusFile), Charset.defaultCharset()),
+                    CSVFormat.EXCEL.withHeader().withSkipHeaderRecord())) {
+                parser.forEach((record) -> {
+                    final Map<String, Object> recordMap = csvRequestStatusToMap(record);
+
+                    if (recordMap != null) {
+                        final long requestStatusTimestamp = (Long) recordMap.get("timestamp");
+
+                        boolean matchFound = false;
+
+                        // check to see if any of the existing records from
+                        // processing_latency.csv have a time_sent
+                        // equal to the timestamp of this request_status.csv
+                        // record and, if so, merge in the data
+                        for (Map<String, Object> containerInstanceLatencyRecord : containerInstanceLatencyRecords) {
+                            final Long requestTimeSent = (Long) containerInstanceLatencyRecord.get("time_sent");
+
+                            if (requestTimeSent != null && requestStatusTimestamp == requestTimeSent) {
+                                matchFound = true;
+                                containerInstanceLatencyRecord.put("success", recordMap.get("success"));
+                                containerInstanceLatencyRecord.put("message", recordMap.get("message"));
+                            }
+                        }
+
+                        // add a new record if a no existing record has a
+                        // processing_latency.csv time_sent
+                        // equal to timestamp of request_status.csv record
+                        if (!matchFound) {
+                            recordMap.put("client", clientName);
+                            recordMap.put("time_sent", recordMap.get("timestamp"));
+
+                            final Object address = (String) recordMap.get("address");
+
+                            if (address != null && !((String) address).equals("")) {
+                                recordMap.put("server", recordMap.get("address"));
+                            }
+                            containerInstanceLatencyRecords.add(recordMap);
+                        }
+                    } else {
+                        LOGGER.warn("Found issues with record {} in file {}.", record, requestStatusFile);
+                    }
+                });
+
+                LOGGER.trace("Processed request status file: {}", requestStatusFile);
+            } catch (NoSuchFileException | FileNotFoundException e) {
+                LOGGER.error("Could not find request status file {}:", requestStatusFile, e);
+            } catch (IOException | IllegalArgumentException e) {
+                LOGGER.error("Error processing request status file {}:", requestStatusFile, e);
+            }
+        }
     }
-    
-    
-    
-    private class ServerLatencyRecordWorker implements Runnable
-    {
+
+    private class ServerLatencyRecordWorker implements Runnable {
         private String service;
         private String serverName;
         private String serverRegion;
         private File serverServiceFolder;
-        
+
         // container instance --> list of CSV latency
-        private Map<String, List<Map<String, String>>> latencyRecords = null; // = new HashMap<>();
-        
-        ServerLatencyRecordWorker(String service, String serverName, String serverRegion, File serverServiceFolder)
-        {
+        private Map<String, List<Map<String, Object>>> latencyRecords = null; // =
+                                                                              // new
+                                                                              // HashMap<>();
+
+        ServerLatencyRecordWorker(String service, String serverName, String serverRegion, File serverServiceFolder) {
             this.service = service;
             this.serverName = serverName;
             this.serverRegion = serverRegion;
             this.serverServiceFolder = serverServiceFolder;
         }
-        
-        Map<String, List<Map<String, String>>> getLatencyRecords()
-        {
+
+        Map<String, List<Map<String, Object>>> getLatencyRecords() {
             return latencyRecords;
         }
-        
-        String getService()
-        {
+
+        String getService() {
             return service;
         }
-        
-        String getServerName()
-        {
+
+        String getServerName() {
             return serverName;
         }
-        
-        String getServerRegion()
-        {
+
+        String getServerRegion() {
             return serverRegion;
         }
 
-
         @Override
-        public void run()
-        {
+        public void run() {
             LOGGER.debug("Starting processing for service '{}' server '{}'.", service, serverName);
-            
-            final Map<String, List<Map<String, String>>> latencyRecords = new HashMap<>();
-            
+
+            final Map<String, List<Map<String, Object>>> latencyRecords = new HashMap<>();
+
             File[] serverServiceContainerIdFolders = serverServiceFolder.listFiles();
-    
+
             if (serverServiceContainerIdFolders != null) {
                 for (File serverServiceContainerIdFolder : serverServiceContainerIdFolders) {
-                    File[] serverServiceContainerInstanceFolders = serverServiceContainerIdFolder
-                            .listFiles();
-    
+                    File[] serverServiceContainerInstanceFolders = serverServiceContainerIdFolder.listFiles();
+
                     if (serverServiceContainerInstanceFolders != null) {
                         for (File serverServiceContainerInstanceFolder : serverServiceContainerInstanceFolders) {
-                            String containerInstanceName = serverServiceContainerIdFolder.getName()
-                                    + "__" + serverServiceContainerInstanceFolder.getName();
-    
-                            File processingLatencyFile = serverServiceContainerInstanceFolder
-                                    .toPath().resolve("app_metrics_data")
-                                    .resolve("processing_latency.csv").toFile();
-    
+                            String containerInstanceName = serverServiceContainerIdFolder.getName() + "__"
+                                    + serverServiceContainerInstanceFolder.getName();
+
+                            File processingLatencyFile = serverServiceContainerInstanceFolder.toPath()
+                                    .resolve("app_metrics_data").resolve("processing_latency.csv").toFile();
+
                             if (processingLatencyFile.exists()) {
-                                List<Map<String, String>> containerInstanceLatencyRecords = new LinkedList<>();
-    
-                                processServerLatencyFile(processingLatencyFile,
-                                        containerInstanceName,
+                                List<Map<String, Object>> containerInstanceLatencyRecords = new LinkedList<>();
+
+                                processServerLatencyFile(processingLatencyFile, containerInstanceName,
                                         containerInstanceLatencyRecords);
 
-                                latencyRecords.merge(containerInstanceName,
-                                                containerInstanceLatencyRecords, (a, b) -> {
-                                                    List<Map<String, String>> c = new LinkedList<>();
-                                                    c.addAll(a);
-                                                    c.addAll(b);
-                                                    Collections.sort(c, LATENCY_RECORD_COMPARATOR);
-    
-                                                    return c;
-                                                });
-    
+                                latencyRecords.merge(containerInstanceName, containerInstanceLatencyRecords, (a, b) -> {
+                                    List<Map<String, Object>> c = new LinkedList<>();
+                                    c.addAll(a);
+                                    c.addAll(b);
+                                    Collections.sort(c, LATENCY_RECORD_COMPARATOR);
+
+                                    return c;
+                                });
+
                                 // outputModifiedContainerInstanceLatencyFile(modifiedContainerInstanceLatencyFile,
                                 // containerInstanceLatencyRecords);
                             }
@@ -1868,28 +2159,33 @@ public class DNSAnalysisTableGenerator {
             }
 
             this.latencyRecords = latencyRecords;
-            LOGGER.info("Finished processing for service '{}' server '{}'.", service, serverName);   
+            LOGGER.info("Finished processing for service '{}' server '{}'.", service, serverName);
         }
-        
-        
+
         private void processServerLatencyFile(File processingLatencyFile,
                 String containerInstanceName,
-                List<Map<String, String>> containerInstanceLatencyRecords) {
+                List<Map<String, Object>> containerInstanceLatencyRecords) {
 
             try (CSVParser parser = new CSVParser(
                     new InputStreamReader(new FileInputStream(processingLatencyFile), Charset.defaultCharset()),
                     CSVFormat.EXCEL.withHeader().withSkipHeaderRecord())) {
                 parser.forEach((record) -> {
-                    String clientNodeAddress = record.get("client");
+                    Map<String, Object> recordMap = csvLatencyRecordToMap(record);
 
-                    // add additional information to record as a Map and add the Map to latencyEntries
-                    Map<String, String> recordMap = record.toMap();
-                    recordMap.put("server", serverName);
-                    RouteHopInfo hopInfo = getClientToServerNodeRouteHopInfo(clientNodeAddress, serverName);
-                    recordMap.put("hop_count", (hopInfo != null ? Integer.toString(hopInfo.getHops())
-                            : ChartGenerationUtils.EMPTY_CELL_VALUE.toString()));
+                    if (recordMap != null) {
+                        String clientNodeAddress = (String) recordMap.get("client");
 
-                    containerInstanceLatencyRecords.add(recordMap);
+                        // add additional information to record as a Map and add
+                        // the Map to latencyEntries
+                        recordMap.put("server", serverName);
+                        RouteHopInfo hopInfo = getClientToServerNodeRouteHopInfo(clientNodeAddress, serverName);
+                        recordMap.put("hop_count", (hopInfo != null ? Integer.toString(hopInfo.getHops())
+                                : ChartGenerationUtils.EMPTY_CELL_VALUE.toString()));
+
+                        containerInstanceLatencyRecords.add(recordMap);
+                    } else {
+                        LOGGER.warn("Found issues with record {} in file {}.", record, processingLatencyFile);
+                    }
                 });
 
                 LOGGER.info("Processed latency file: {}", processingLatencyFile);
@@ -1898,6 +2194,89 @@ public class DNSAnalysisTableGenerator {
             } catch (IOException | IllegalArgumentException e) {
                 LOGGER.error("Error processing latency file: {}", processingLatencyFile, e);
             }
-        }           
+        }
+    }
+
+    private Map<String, Object> csvLatencyRecordToMap(CSVRecord record) {
+        Map<String, String> map = record.toMap();
+        Map<String, Object> recordMap = new HashMap<>();
+
+        AtomicBoolean validRecord = new AtomicBoolean(true);
+
+        map.forEach((column, value) -> {
+            switch (column) {
+            case "timestamp":
+            case "time_sent":
+            case "time_received":
+            case "time_ack_received":
+            case "time_finished":
+            case "latency":
+                try {
+                    Long longValue = Long.parseLong(value);
+                    recordMap.put(column, longValue);
+                } catch (NumberFormatException e) {
+                    LOGGER.warn("Unable to parse long value {} in column {}:", value, column, e);
+                    validRecord.set(false);
+                }
+                break;
+
+            default:
+                if (!value.equals("")) {
+                    recordMap.put(column, value);
+                } else {
+                    LOGGER.warn("Found empty value in CSV record colum '{}': {}", column, map);
+                    validRecord.set(false);
+                }
+                break;
+            }
+        });
+
+        if (validRecord.get()) {
+            return recordMap;
+        } else {
+            return null;
+        }
+    }
+
+    private Map<String, Object> csvRequestStatusToMap(CSVRecord record) {
+        Map<String, String> map = record.toMap();
+        Map<String, Object> recordMap = new HashMap<>();
+
+        AtomicBoolean validRecord = new AtomicBoolean(true);
+
+        map.forEach((column, value) -> {
+            switch (column) {
+            case "timestamp":
+                try {
+                    Long longValue = Long.parseLong(value);
+                    recordMap.put(column, longValue);
+                } catch (NumberFormatException e) {
+                    LOGGER.warn("Unable to parse long value {} in column {}:", value, column, e);
+                    validRecord.set(false);
+                }
+                break;
+
+            case "address":
+            case "success":
+            case "message":
+                recordMap.put(column, value);
+                break;
+
+            default:
+                if (!value.equals("")) {
+                    recordMap.put(column, value);
+                } else {
+                    LOGGER.warn("Found empty value in CSV record colum '{}': {}", column, map);
+                    validRecord.set(false);
+                }
+                break;
+            }
+        });
+
+        if (validRecord.get()) {
+            return recordMap;
+        } else {
+            return null;
+        }
     }
 }

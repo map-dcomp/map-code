@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -47,9 +47,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.csv.CSVFormat;
@@ -143,7 +145,7 @@ public class RLGPlanUpdateTableGenerator {
 
         // service -> time -> region -> name of node publishing the plan -> node -> number of instances of service
         Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<NodeIdentifier, Integer>>>>> serviceRLGPlans = new HashMap<>();
-        List<NodeIdentifier> nodes = new ArrayList<>();
+        Set<NodeIdentifier> nodes = new HashSet<>();
         
         // service -> time -> container -> weight
         Map<ServiceIdentifier<?>, Map<Long, Map<NodeIdentifier, Double>>> serviceContainerWeights = new HashMap<>();
@@ -250,7 +252,7 @@ public class RLGPlanUpdateTableGenerator {
             
             for (int c = 0; c < containers.size(); c++)
             {
-                header[c + 1] = containers.get(c).getName();
+                header[c + 1] = ChartGenerationUtils.nodeBaseName(containers.get(c).getName());
             }
             
             
@@ -365,8 +367,11 @@ public class RLGPlanUpdateTableGenerator {
             final LoadBalancerPlan rlgPlan,
             final Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<NodeIdentifier, Integer>>>>> serviceRLGPlans,
             final Map<ServiceIdentifier<?>, Map<Long, Map<NodeIdentifier, Double>>> serviceContainerWeights,
-            final List<NodeIdentifier> nodes) {
-        LOGGER.debug("Add region plan for time {} and node '{}': {}", time, nodeName, rlgPlan);
+            final Set<NodeIdentifier> nodes) {
+        
+        final String nodeBaseName = ChartGenerationUtils.nodeBaseName(nodeName);
+        
+        LOGGER.debug("Add region plan for time {} and node '{}': {}", time, nodeBaseName, rlgPlan);
 
         final RegionIdentifier fromRegion = rlgPlan.getRegion();
 
@@ -374,20 +379,22 @@ public class RLGPlanUpdateTableGenerator {
         
 
         servicePlans.forEach((node, containerInfos) -> {
-            if (!nodes.contains(node)) {
-                nodes.add(node);
-            }
+            NodeIdentifier nodeBaseId = ChartGenerationUtils.nodeBaseIdentifier(node);
+            nodes.add(nodeBaseId);
 
             final Map<ServiceIdentifier<?>, Integer> numInstancesOfService = new HashMap<>();
             containerInfos.forEach(info -> {
-                if (!info.isStop()) {
-                    numInstancesOfService.merge(info.getService(), 1, Integer::sum);
+                if (info.getId() != null) {
+                    
+                    if (!info.isStop()) {
+                        numInstancesOfService.merge(info.getService(), 1, Integer::sum);
+                    }
+                    
+                    serviceContainerWeights
+                            .computeIfAbsent(info.getService(), k -> new HashMap<>())
+                            .computeIfAbsent(time, k -> new HashMap<>())
+                            .put(info.getId(), (!info.isStop() && !info.isStopTrafficTo() ? info.getWeight() : Double.NaN));
                 }
-                
-                serviceContainerWeights
-                        .computeIfAbsent(info.getService(), k -> new HashMap<>())
-                        .computeIfAbsent(time, k -> new HashMap<>())
-                        .put(info.getId(), (!info.isStop() && !info.isStopTrafficTo() ? info.getWeight() : Double.NaN));
             });
 
             numInstancesOfService.forEach((service, numInstances) -> {
@@ -396,14 +403,14 @@ public class RLGPlanUpdateTableGenerator {
                 serviceRLGPlans.computeIfAbsent(service, k -> new HashMap<>())
                         .computeIfAbsent(time, k -> new HashMap<>()).computeIfAbsent(fromRegion, k -> new HashMap<>());
 
-                if (serviceRLGPlans.get(service).get(time).get(fromRegion).containsKey(nodeName)) {
+                if (serviceRLGPlans.get(service).get(time).get(fromRegion).containsKey(nodeBaseName)) {
                     LOGGER.info(
                             "WARNING: Replacing plan for service '{}' at time {} for region '{}' from leader node '{}'.",
-                            service, time, fromRegion, nodeName);
+                            service, time, fromRegion, nodeBaseName);
                 }
 
-                serviceRLGPlans.get(service).get(time).get(fromRegion).computeIfAbsent(nodeName, k -> new HashMap<>())
-                        .put(node, numInstances);
+                serviceRLGPlans.get(service).get(time).get(fromRegion).computeIfAbsent(nodeBaseName, k -> new HashMap<>())
+                        .put(nodeBaseId, numInstances);
             }); // foreach service,numInstances
 
         }); // foreach node in the service plan
@@ -551,7 +558,7 @@ public class RLGPlanUpdateTableGenerator {
     private void outputServicePlanNodeChanges(File outputFolder,
             Map<ServiceIdentifier<?>, Map<Long, Map<RegionIdentifier, Map<String, Map<NodeIdentifier, Integer>>>>> serviceRLGPlans,
             List<Long> times,
-            List<NodeIdentifier> nodes) {
+            Set<NodeIdentifier> nodes) {
         if (!outputFolder.exists()) {
             if (!outputFolder.mkdirs()) {
                 throw new RuntimeException("Unable to create directory " + outputFolder);
@@ -562,14 +569,22 @@ public class RLGPlanUpdateTableGenerator {
             File serviceFile = new File(
                     outputFolder + File.separator + "service_" + ChartGenerationUtils.serviceToFilenameString(service)
                             + "-rlg_service_plans" + CSV_FILE_EXTENSION);
-
-            String[] header = new String[1 + nodes.size() + 1];
+            
+            List<NodeIdentifier> nodeList = nodes.stream().sorted(new Comparator<NodeIdentifier>() {
+                @Override
+                public int compare(NodeIdentifier a, NodeIdentifier b) {
+                    return a.toString().compareTo(b.toString());
+                }
+            }).collect(Collectors.toList());
+            
+            String[] header = new String[1 + nodeList.size() + 1];
             header[0] = CSV_HEADER_TIMESTAMP;
 
-            for (int t = 0; t < nodes.size(); t++)
-                header[1 + t] = nodes.get(t).getName();
+            for (int t = 0; t < nodeList.size(); t++) {
+                header[1 + t] = ChartGenerationUtils.nodeBaseName(nodeList.get(t).getName());
+            }
 
-            header[1 + nodes.size()] = "error";
+            header[1 + nodeList.size()] = "error";
 
             CSVFormat format = CSVFormat.EXCEL.withHeader(header);
 
@@ -583,14 +598,14 @@ public class RLGPlanUpdateTableGenerator {
 
                 for (int t = 0; t < times2.size(); t++) {
                     long time = times2.get(t);
-                    List<NodeIdentifier> nodesWithoutData = new ArrayList<>();
+                    Set<NodeIdentifier> nodesWithoutData = new HashSet<>();
                     nodesWithoutData.addAll(nodes);
 
                     int error = 0;
                     Object[] rowValues = new Object[header.length];
 
                     rowValues[0] = time; // add time to row
-                    Arrays.fill(rowValues, 1, nodes.size() + 1, ChartGenerationUtils.EMPTY_CELL_VALUE);
+                    Arrays.fill(rowValues, 1, nodeList.size() + 1, ChartGenerationUtils.EMPTY_CELL_VALUE);
 
                     Map<RegionIdentifier, Map<String, Map<NodeIdentifier, Integer>>> servicePlan = servicePlans
                             .get(time);
@@ -621,8 +636,8 @@ public class RLGPlanUpdateTableGenerator {
                                         // this node
                                         Integer instances = entry3.getValue();
 
-                                        for (int n = 0; n < nodes.size(); n++) {
-                                            if (node.equals(nodes.get(n))) {
+                                        for (int n = 0; n < nodeList.size(); n++) {
+                                            if (node.equals(nodeList.get(n))) {
                                                 rowValues[1 + n] = instances; // add
                                                                               // instances
                                                                               // value
@@ -653,12 +668,12 @@ public class RLGPlanUpdateTableGenerator {
                         error = 1;
                     }
 
-                    rowValues[1 + nodes.size()] = error;
+                    rowValues[1 + nodeList.size()] = error;
 
                     // print rowValues if it is the first or last entry or
                     // different from the previous entry
                     if (prevRowValues == null
-                            || !ChartGenerationUtils.compareArrays(prevRowValues, rowValues, 1, nodes.size() + 1)
+                            || !ChartGenerationUtils.compareArrays(prevRowValues, rowValues, 1, nodeList.size() + 1)
                             || t == times2.size() - 1)
                         printer.printRecord(rowValues);
 
@@ -745,7 +760,7 @@ public class RLGPlanUpdateTableGenerator {
                             } else {
                                 for (final Map.Entry<String, Map<RegionIdentifier, Double>> entry : toRegions
                                         .entrySet()) {
-                                    Map<RegionIdentifier, Double> toRegionPercents = entry.getValue();
+                                    Map<RegionIdentifier, Double> toRegionPercents = ChartGenerationUtils.normalizeWeights(entry.getValue());
 
                                     for (int t = 0; t < regions.size(); t++) {
                                         RegionIdentifier toRegion = regions.get(t);

@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -110,7 +110,7 @@ try cp -r "${scenario_dir}" "${stage_scenario_dir}"
 for num in 1 2; do
     for priority in 2 5; do
         
-        try "${mydir}"/../generate_service_configs.py \
+        try "${mydir}"/../../generate_service_configs.py \
             --scenario_dir "${scenario_dir}" \
             --num-priorities ${priority} \
             --num-apps-per-priority ${num} \
@@ -118,7 +118,7 @@ for num in 1 2; do
             --output "${stage_scenario_dir}"/service-configurations.json
 
         demand_dir="${batch_name}"/demand.p${priority}.${num}
-        try "${mydir}"/../generate_demand.py \
+        try "${mydir}"/../../generate_demand.py \
             --scenario_dir "${scenario_dir}" \
             --num-priorities ${priority} \
             --num-apps-per-priority ${num} \
@@ -140,7 +140,7 @@ for num in 1 2; do
 
         # no map
         algorithm=no-map
-        try "${mydir}"/../generate_service_configs-no-map.py \
+        try "${mydir}"/../../generate_service_configs-no-map.py \
             --scenario_dir "${scenario_dir}" \
             --num-priorities ${priority} \
             --num-apps-per-priority ${num} \

@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -119,6 +119,12 @@ try mkdir -p "${chart_output}"
 try mkdir -p "${graph_output}"
 try mkdir -p "${gnuplot_graph_output}"
 
+log "Running hopcount see ${chart_output}/hopcount.log for output"
+try "${mydir}"/run-hopcount.sh \
+    --scenario "${scenario_dir}" \
+    --output "${chart_output}/hopcount.csv" \
+    > "${chart_output}"/hopcount.log 2>&1
+
 log "Running chartgen see ${chart_output}/chartgen.log for output"
 try "${mydir}"/run-chartgen.sh \
     --sim "${sim_output}" \
@@ -127,11 +133,33 @@ try "${mydir}"/run-chartgen.sh \
     --output "${chart_output}" \
     > "${chart_output}"/chartgen.log 2>&1
 
+
+
+try "${mydir}"/get_sim-start_timestamp.sh \
+    --sim "${sim_output}" \
+    > "${chart_output}"/start_simulation.timestamp
+
 log "Running overflow-plan-analysis see ${graph_output}/overflow-plan-analysis.log for output"
 "${mydir}"/overflow-plan-analysis.py \
+          --first-timestamp-file "${chart_output}"/start_simulation.timestamp \
+          --scenario "${scenario_dir}" \
+          --chart_output "${chart_output}" \
+          --output "${graph_output}" \
+          > "${graph_output}"/overflow-plan-analysis.log 2>&1 &
+
+log "Running dns-request-count-plot see ${graph_output}/dns-request-count-plot.log for output"
+"${mydir}"/dns-request-count-plot.py \
     --chart_output "${chart_output}" \
     --output "${graph_output}" \
-    > "${graph_output}"/overflow-plan-analysis.log 2>&1 &
+    > "${graph_output}"/dns-request-count-plot.log 2>&1 &
+
+log "Running graph-network-traffic see ${graph_output}/graph-network-traffic.log for output"
+"${mydir}"/network-data-analysis/graph-network-traffic.py \
+    --first-timestamp-file "${chart_output}"/start_simulation.timestamp \
+    -c "${chart_output}" \
+    -o "${graph_output}" 
+> "${graph_output}"/graph-network-traffic.log 2>&1
+
 
 log "Running load-cpu-plot see ${graph_output}/load-cpu-plot.log for output"
 "${mydir}"/load-cpu-plot.py \
@@ -141,6 +169,7 @@ log "Running load-cpu-plot see ${graph_output}/load-cpu-plot.log for output"
 
 log "Running container-node-load-plot see ${graph_output}/container-node-load-plot.log for output"
 "${mydir}"/container-node-load-plot.py \
+    --first-timestamp-file "${chart_output}"/start_simulation.timestamp \
     --sim-output "${sim_output}" \
     -o "${graph_output}" \
     > "${graph_output}"/container-node-load-plot.log 2>&1 &
@@ -151,23 +180,31 @@ log "Running graph-num-clients see ${graph_output}/graph-num-clients.log for out
     -o "${graph_output}" \
     > "${graph_output}"/graph-num-clients.log 2>&1 &
 
-log "Running compare-app-load see ${graph_output}/compare-app-load.log for output"
-"${mydir}"/compare-app-load.py \
-    -s "${sim_output}" \
-    -o "${graph_output}" \
-    > "${graph_output}"/compare-app-load.log 2>&1 &
 
 log "Running graph-report-lag see ${chart_output}/max-report-lag.txt for output"
 "${mydir}"/graph-report-lag.py \
     -s "${sim_output}" \
     -o "${graph_output}" \
     > "${chart_output}"/max-report-lag.txt 2>&1 &
-	
-log "Generating gnuplot charts see ${gnuplot_graph_output}/gnuplot_graphs.log for output"
-"${mydir}"/gnuplot/generate_gnuplot_charts.sh \
-    --sim "${sim_output}" \
-	--chart_output "${chart_output}" \
-	--load_unit "TASK_CONTAINERS" \
-	--run_title "$(basename $(dirname ${sim_output}))" \
-	--output "${gnuplot_graph_output}" \
-	> "${gnuplot_graph_output}"/gnuplot_graphs.log 2>&1 &
+
+log "Running compare-app-load see ${graph_output}/compare-app-load.log for output"
+"${mydir}"/compare-app-load.py \
+    --scenario "${scenario_dir}" \
+    --first-timestamp-file "${chart_output}"/start_simulation.timestamp \
+    -s "${sim_output}" \
+    -o "${graph_output}" \
+    > "${graph_output}"/compare-app-load.log 2>&1
+
+log "Aggregating inferred demand information. See ${graph_output}/inferred_demand_to_csv.log for output"
+try "${mydir}"/inferred_demand_to_csv.py \
+    -s "${sim_output}" \
+    -o "${graph_output}" \
+    > "${graph_output}"/inferred_demand_to_csv.log 2>&1
+
+log "Graphing inferred demand. See ${graph_output}/graph_inferred_demand.log for output"
+try "${mydir}"/graph_inferred_demand.py \
+    --first-timestamp-file "${chart_output}"/start_simulation.timestamp \
+    -o "${graph_output}" \
+    > "${graph_output}"/inferred_demand_to_csv.log 2>&1
+
+wait

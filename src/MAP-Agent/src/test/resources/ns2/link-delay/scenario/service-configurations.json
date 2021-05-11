@@ -1,0 +1,20 @@
+[
+  {
+    "service": {
+      "group": "test",
+      "artifact": "test-service",
+      "version": "1"
+    },
+    "hostname": "test-service",
+    "defaultNode": "A0",
+    "defaultNodeRegion": "A",
+    "initialInstances": "1",
+    "computeCapacity": {
+      "TASK_CONTAINERS": "50000000"
+    },
+    "networkCapacity": {
+      "DATARATE_TX": 500.0,
+      "DATARATE_RX": 500.0
+    }
+  }
+]

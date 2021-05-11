@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "router",
+    "name": "Crtr3",
+    "region": "C",
+    "router": true,
+    "underlay": false
+}

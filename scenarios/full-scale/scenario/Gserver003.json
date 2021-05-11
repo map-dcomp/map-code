@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "Gserver003",
+    "region": "G",
+    "router": false,
+    "underlay": false
+}

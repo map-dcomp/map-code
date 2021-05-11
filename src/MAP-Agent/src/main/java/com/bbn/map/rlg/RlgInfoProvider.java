@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -40,8 +40,6 @@ import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
-import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 /**
@@ -50,29 +48,10 @@ import com.google.common.collect.ImmutableSet;
 public interface RlgInfoProvider {
 
     /**
-     * This method should be used by RLG to get the most recent shared state.
-     * 
-     * @return the RLG shared information
-     */
-    @Nonnull
-    ImmutableMap<RegionIdentifier, RlgSharedInformation> getAllRlgSharedInformation();
-
-    /**
-     * This method is called by RLG to share new information.
-     * 
-     * @param v
-     *            the current information to share FROM this RLG node with other
-     *            regions
-     */
-    void setLocalRlgSharedInformation(@Nonnull RlgSharedInformation v);
-
-    /**
-     * @param estimationWindow
-     *            the estimation window for the demand
      * @return the summary for the region.
      */
     @Nonnull
-    ResourceSummary getRegionSummary(@Nonnull ResourceReport.EstimationWindow estimationWindow);
+    ResourceSummary getRlgResourceSummary();
 
     /**
      * 
@@ -100,7 +79,7 @@ public interface RlgInfoProvider {
      * @return the current node state
      */
     @Nonnull
-    ImmutableSet<ResourceReport> getNodeResourceReports();
+    ImmutableSet<ResourceReport> getRlgResourceReports();
 
     /**
      * 
@@ -108,16 +87,6 @@ public interface RlgInfoProvider {
      */
     @Nonnull
     RegionIdentifier getRegion();
-
-    /**
-     * 
-     * @param region
-     *            the region to check
-     * @param service
-     *            the service to check for
-     * @return check if a service is availahble in a region
-     */
-    boolean isServiceAvailable(RegionIdentifier region, ServiceIdentifier<?> service);
 
     /**
      * Get the overlay for the current region.

@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -48,11 +48,8 @@ batch_name=${experiment}_$1
 if [ ! -f ${batch_name}.tar.xz ] ; then
 
 	if [ ! -d ${batch_name} ] ; then
-		log "${batch_name} does not yet exist. Staging..."	
-
-		dos2unix $(find .)
+		log "${batch_name} does not yet exist. Staging..."
 		./stage-all.sh --batch ${batch_name} --experiment ${experiment} --params "demand-params.json"
-		dos2unix $(find ${batch_name})
 	fi
 
 	log "${batch_name}.tar.xz does not yet exist. Taring..."

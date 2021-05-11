@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -32,6 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +51,8 @@ import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NetworkClient;
+import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
@@ -98,6 +101,7 @@ public class SimResourceManager implements ResourceManager<Controller> {
     private ResourceReport longResourceReport;
     private final long pollingInterval;
     private final NetworkDemandTracker networkDemandTracker = new NetworkDemandTracker();
+    private final boolean useFailedRequestsInDemand;
 
     /* package */ long getPollingInterval() {
         return pollingInterval;
@@ -133,6 +137,8 @@ public class SimResourceManager implements ResourceManager<Controller> {
      */
     public SimResourceManager(@Nonnull final Simulation simulation, final long pollingInterval) {
         logger = LoggerFactory.getLogger(SimResourceManager.class.getName() + ".unknown");
+        // cache value so that it isn't checked every time
+        this.useFailedRequestsInDemand = AgentConfiguration.getInstance().getUseFailedRequestsInDemand();
 
         this.simulation = simulation;
         this.pollingInterval = pollingInterval;
@@ -167,6 +173,15 @@ public class SimResourceManager implements ResourceManager<Controller> {
             final ImmutableMap.Builder<NodeAttribute, Double> builder = ImmutableMap.builder();
             hardwareConfig.getCapacity().forEach((k, v) -> builder.put(k, v));
 
+            // make lo-fi behave like hi-fi where CPU is measured and copied to
+            // TASK_CONTAINERS. If CPU is missing from the request then TASK_CONTAINERS is copied to CPU.
+            if (!hardwareConfig.getCapacity().containsKey(NodeAttribute.TASK_CONTAINERS)
+                    && hardwareConfig.getCapacity().containsKey(NodeAttribute.CPU)) {
+                builder.put(NodeAttribute.TASK_CONTAINERS, hardwareConfig.getCapacity().get(NodeAttribute.CPU));
+            } else if (hardwareConfig.getCapacity().containsKey(NodeAttribute.TASK_CONTAINERS)
+                    && !hardwareConfig.getCapacity().containsKey(NodeAttribute.CPU)) {
+                builder.put(NodeAttribute.CPU, hardwareConfig.getCapacity().get(NodeAttribute.TASK_CONTAINERS));
+            }
             return builder.build();
         }
     }
@@ -256,7 +271,7 @@ public class SimResourceManager implements ResourceManager<Controller> {
                 // interface -> flow -> service -> values
                 final ImmutableMap.Builder<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = ImmutableMap
                         .builder();
-                node.getConnectedNeighbors().forEach(neighborId -> {
+                node.getNeighbors().forEach(neighborId -> {
                     final LinkResourceManager lmgr = getLinkResourceManager(neighborId);
 
                     final ImmutableMap<LinkAttribute, Double> neighborCapacity = lmgr.getCapacity();
@@ -281,10 +296,10 @@ public class SimResourceManager implements ResourceManager<Controller> {
                 networkDemandTracker.updateDemandValues(now, reportNetworkLoad);
 
                 final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportShortNetworkDemand = networkDemandTracker
-                        .computeNetworkDemand(now, ResourceReport.EstimationWindow.SHORT);
+                        .computeNetworkDemand(ResourceReport.EstimationWindow.SHORT);
 
                 final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportLongNetworkDemand = networkDemandTracker
-                        .computeNetworkDemand(now, ResourceReport.EstimationWindow.LONG);
+                        .computeNetworkDemand(ResourceReport.EstimationWindow.LONG);
 
                 final boolean skipNetworkData = AgentConfiguration.getInstance().getSkipNetworkData();
 
@@ -479,5 +494,55 @@ public class SimResourceManager implements ResourceManager<Controller> {
     @Override
     public boolean waitForImage(ServiceIdentifier<?> service) {
         return true;
+    }
+
+    @Override
+    public void addFailedRequest(final NodeIdentifier clientId,
+            final NodeIdentifier containerId,
+            final long serverEndTime,
+            final Map<NodeAttribute, Double> serverLoad,
+            final long networkEndTime,
+            final Map<LinkAttribute, Double> networkLoad) {
+        if (useFailedRequestsInDemand) {
+            final ContainerSim container = runningContainers.get(containerId);
+            if (null == container) {
+                logger.warn("Looking for container {} to notify of failed request, but it's not running", containerId);
+                return;
+            }
+
+            final NetworkClient client = getSimulation().getClientById(clientId);
+            if (null == client) {
+                logger.warn("Cannot find client {} to record failed request", clientId);
+                return;
+            }
+
+            // find path back to the client
+            final List<NetworkLink> networkPath = getSimulation().getPath(getNode(), client);
+            if (networkPath.isEmpty()) {
+                logger.warn("Cannot find path from {} to {} to record failed request", getNode().getNodeIdentifier(),
+                        clientId);
+                return;
+            }
+
+            // the first link defines the interface
+            final NetworkLink firstLink = networkPath.get(0);
+
+            final NodeIdentifier neighbor;
+            if (firstLink.getLeft().getNodeIdentifier().equals(getNode().getNodeIdentifier())) {
+                neighbor = firstLink.getRight().getNodeIdentifier();
+            } else if (firstLink.getRight().getNodeIdentifier().equals(getNode().getNodeIdentifier())) {
+                neighbor = firstLink.getLeft().getNodeIdentifier();
+            } else {
+                throw new RuntimeException("Invalid path, cannot find one side of the link that has "
+                        + getNode().getNodeIdentifier().getName());
+            }
+
+            final InterfaceIdentifier ifce = BasicResourceManager.createInterfaceIdentifierForNeighbor(neighbor);
+
+            container.addFailedRequest(clientId, serverEndTime, serverLoad, networkEndTime, networkLoad);
+
+            networkDemandTracker.addFailedRequest(ifce, clientId, containerId, container.getService(), networkEndTime,
+                    networkLoad);
+        }
     }
 }

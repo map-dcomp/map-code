@@ -1,0 +1,82 @@
+#!/bin/sh
+
+debug() { ! "${log_debug-false}" || log "DEBUG: $*" >&2; }
+log() { printf '%s\n' "$*"; }
+warn() { log "WARNING: $*" >&2; }
+error() { log "ERROR: $*" >&2; }
+fatal() { error "$*"; exit 1; }
+try() { "$@" || fatal "'$@' failed"; }
+
+mydir=$(cd "$(dirname "$0")" && pwd -L) || fatal "Unable to determine script directory"
+
+cleanup() {
+    debug "In cleanup"
+}
+trap 'cleanup' INT TERM EXIT
+
+experiment=EXPERIMENT_NAME
+scenario_name=SCENARIO_NAME
+
+# ensure that we don't get stuck at prompts
+DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND
+
+# use common virtual env to save space
+
+log "Setting up ansible environment"
+try sudo apt update
+try sudo apt install -y python3-venv python3-dev libffi-dev xz-utils
+try python3 -m venv "${mydir}"/venv
+. "${mydir}"/venv/bin/activate || fatal "Unable to source virtual environment"
+
+args=""
+if [ -e /proj ]; then
+    base_output=/proj/a3/map/scenario-outputs/${USER}
+elif [ -e /project ]; then
+    # DCOMP testbed
+    args="${args} --dcomptb"
+    base_output=/project/map/scenario-outputs/${USER}
+else
+    fatal "Unable to determine output directory"
+fi
+
+#enable collect flow data
+args="${args} --collect-flow-data"
+
+date_folder=${experiment}_$(date +%m%d%y_%H%M)
+log "See ${date_folder} for the results"
+
+go() {
+    run_folder=pri${priority}-num${num}-${i}-${algorithm}_${container_algorithm}${suffix}
+    output_folder=${base_output}/${date_folder}/${run_folder}
+    try mkdir -p ${output_folder}
+
+    generated_dir=generated_${priority}_${num}_${algorithm}_${container_algorithm}${suffix}
+
+    log "Executing priority ${priority} apps per priority ${num}"
+    "${mydir}"/${generated_dir}/execute-scenario.sh ${args} --output "${date_folder}/${run_folder}" 2>&1 | tee ${output_folder}/execute.log
+}
+
+for iftop in "filtered" "high-priority" "low-priority"; do
+for num in 1; do
+    for algorithm in greedy-group no-map; do
+        for priority in 1 2; do
+            for container_algorithm in round-robin; do
+                if [ ${algorithm} = "no-map" ]; then
+                    suffix="_even_iftop-${iftop}"
+                    go
+                else
+                    suffix="_iftop-${iftop}"
+                    go
+                fi
+            done
+        done
+    done
+done
+done
+
+# log "Executing swap out"
+# wrapper=$(/bin/ls "${mydir}"/generated_*/emulab-scripts/script_wrapper.py | tail -1)
+# python2 ${wrapper} swapexp -e a3,${experiment} out
+log "Experiment is still swapped in, will need to be swapped out manually when finished"
+log "See ${date_folder} for the results"

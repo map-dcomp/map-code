@@ -1,0 +1,14 @@
+{
+    "client_request_cpu_load" : 0.1,
+    "client_request_network_tx" : 0.20,
+    "client_request_network_rx" : 0.04,
+    "minutes_per_priority_group" : 30,
+    "minutes_per_service_num" : 0,
+    "num_clients_per_service" : 60,
+    "feathering_factor" : 60,
+    "feathering_range_minutes" : 1,
+    "start_together": true,
+    "num_apps_per_priority": 1,
+    "num_priorities": 3,
+    "single_service_per_client_pool": true
+}

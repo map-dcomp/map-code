@@ -1,0 +1,11 @@
+{
+    "DCOP": true,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Bdcop",
+    "region": "B",
+    "router": false,
+    "underlay": false
+}

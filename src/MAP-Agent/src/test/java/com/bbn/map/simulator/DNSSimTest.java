@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -46,10 +46,14 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
 import org.junit.rules.RuleChain;
+import org.junit.runner.RunWith;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.DnsResolutionType;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.dns.DelegateRecord;
 import com.bbn.map.dns.DnsRecord;
@@ -69,6 +73,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * Some tests for {@Link DNSSim}.
  * 
  */
+@RunWith(Theories.class)
 public class DNSSimTest {
 
     /**
@@ -78,7 +83,6 @@ public class DNSSimTest {
     @Rule
     public RuleChain chain = TestUtils.getStandardRuleChain();
 
-    private DNSSim dns;
     private Simulation simulation;
 
     private Simulation createSimulation() throws IOException {
@@ -101,6 +105,14 @@ public class DNSSimTest {
     }
 
     /**
+     * @return the types of dns resolution to use
+     */
+    @DataPoints
+    public static DnsResolutionType[] dnsImplementations() {
+        return DnsResolutionType.values();
+    }
+
+    /**
      * Setup clock and empty DNS.
      * 
      * @throws IOException
@@ -109,7 +121,6 @@ public class DNSSimTest {
     @Before
     public void setup() throws IOException {
         simulation = createSimulation();
-        dns = new DNSSim(simulation, "test");
     }
 
     /**
@@ -121,14 +132,21 @@ public class DNSSimTest {
             simulation.stopSimulation();
             simulation = null;
         }
-        dns = null;
     }
 
     /**
      * Test that when adding a record we can get it back out.
+     * 
+     * @param resolutionType
+     *            dns resolution type to use
      */
-    @Test
-    public void testAddRecord() {
+    @Theory
+    public void testAddRecord(final DnsResolutionType resolutionType) {
+        AgentConfiguration.getInstance().setDnsResolutionType(resolutionType);
+        final RegionIdentifier testRegion = new StringRegionIdentifier("test");
+        simulation.ensureRegionalDNSExists(testRegion);
+        final DNSSim dns = simulation.getRegionalDNS(testRegion);
+
         final String fqdn = "service1.map";
         final NodeIdentifier node = new DnsNameIdentifier("nodeA1");
         final int ttl = 100;
@@ -149,9 +167,17 @@ public class DNSSimTest {
     /**
      * Check basic round robin. See that given 3 entries with equal weight see
      * all 3 with equal weight.
+     * 
+     * @param resolutionType
+     *            dns resolution type to use
      */
-    @Test
-    public void testRoundRobinEqual() {
+    @Theory
+    public void testRoundRobinEqual(final DnsResolutionType resolutionType) {
+        AgentConfiguration.getInstance().setDnsResolutionType(resolutionType);
+        final RegionIdentifier testRegion = new StringRegionIdentifier("test");
+        simulation.ensureRegionalDNSExists(testRegion);
+        final DNSSim dns = simulation.getRegionalDNS(testRegion);
+
         final String fqdn = "service1.map";
         final NodeIdentifier node1 = new DnsNameIdentifier("nodeA1");
         final NodeIdentifier node2 = new DnsNameIdentifier("nodeA2");
@@ -160,7 +186,7 @@ public class DNSSimTest {
         final RegionIdentifier sourceRegion = null;
         final int ttl = 100;
         final int numRecords = 3;
-        final int numCycles = 100000; // enough times to get a good sampling
+        final int numCycles = 1000000; // enough times to get a good sampling
         final int numQueries = numRecords * numCycles;
         final String clientName = "test-client";
         final double weightPrecision = 1D / AgentConfiguration.getInstance().getDnsWeightPrecision();
@@ -188,9 +214,17 @@ public class DNSSimTest {
 
     /**
      * Test basic name resolution.
+     * 
+     * @param resolutionType
+     *            dns resolution type to use
      */
-    @Test
-    public void testResolveName() {
+    @Theory
+    public void testResolveName(final DnsResolutionType resolutionType) {
+        AgentConfiguration.getInstance().setDnsResolutionType(resolutionType);
+        final RegionIdentifier testRegion = new StringRegionIdentifier("test");
+        simulation.ensureRegionalDNSExists(testRegion);
+        final DNSSim dns = simulation.getRegionalDNS(testRegion);
+
         final String fqdn = "service1.map";
         final NodeIdentifier node = new DnsNameIdentifier("nodeA1");
         final int ttl = 100;
@@ -207,9 +241,15 @@ public class DNSSimTest {
     /**
      * Simple test of delegation. Have regionA delegate to regionB and then have
      * regionB resolve.
+     * 
+     * @param resolutionType
+     *            dns resolution type to use
+     * 
      */
-    @Test
-    public void testDelegation() {
+    @Theory
+    public void testDelegation(final DnsResolutionType resolutionType) {
+        AgentConfiguration.getInstance().setDnsResolutionType(resolutionType);
+
         final String fqdn = "service1.map";
         final NodeIdentifier node = new DnsNameIdentifier("nodeB1");
         final int ttl = 100;

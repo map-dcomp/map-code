@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "rohu_no_containers",
+    "name": "C3rtr1",
+    "region": "C3",
+    "underlay": false
+}

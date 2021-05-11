@@ -44,11 +44,11 @@ date_folder=${experiment}_$(date +%m%d%y_%H%M)
 log "See ${date_folder} for the results"
 
 go() {
-    run_folder=pri${priority}-num${num}-${i}-${algorithm}_${container_algorithm}
+    run_folder=pri${priority}-num${num}-${i}-${algorithm}_${container_algorithm}${suffix}
     output_folder=${base_output}/${date_folder}/${run_folder}
     try mkdir -p ${output_folder}
 
-    generated_dir=generated_${priority}_${num}_${algorithm}_${container_algorithm}
+    generated_dir=generated_${priority}_${num}_${algorithm}_${container_algorithm}${suffix}
     
     log "Executing priority ${priority} apps per priority ${num}"
     "${mydir}"/${generated_dir}/execute-scenario.sh ${args} 2>&1 | tee ${output_folder}/execute.log
@@ -59,17 +59,18 @@ go() {
 for num in 1 2; do
     for algorithm in greedy-group reservation no-map; do
         for priority in 2 5; do
-            if [ ${algorithm} = "no-map" ]; then
-                container_algorithm="even"
-                go
-                
-                container_algorithm="single"
-                go
-            else
-                for container_algorithm in proportional round-robin; do
+            for container_algorithm in proportional round-robin; do
+                if [ ${algorithm} = "no-map" ]; then
+                    suffix="_even"
                     go
-                done
-            fi
+                    
+                    suffix="_single"
+                    go
+                else
+                    suffix=""
+                    go
+                fi
+            done
         done
     done
 done

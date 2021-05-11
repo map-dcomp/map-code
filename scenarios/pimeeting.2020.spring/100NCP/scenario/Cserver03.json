@@ -1,0 +1,10 @@
+{
+    "DCOP": true,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Cserver03",
+    "region": "C",
+    "underlay": false
+}

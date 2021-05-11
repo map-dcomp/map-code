@@ -1,0 +1,11 @@
+[
+  {
+    "name": "simple",
+    "capacity": {
+      "CPU": 32,
+      "MEMORY": 100000000000,
+      "DISK": 100000000000,
+      "TASK_CONTAINERS": 100000
+    }
+  }
+]

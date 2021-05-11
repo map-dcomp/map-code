@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -34,11 +34,11 @@ package com.bbn.map;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.annotation.Nonnull;
 
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 
 /**
@@ -51,20 +51,35 @@ public class NetworkAvailableServices implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private final Map<RegionIdentifier, RegionAvailableServices> data = new HashMap<>();
+    /**
+     * The nodes running service.
+     */
+    private final Map<NodeIdentifier, ServiceIdentifier<?>> nodesRunningServices = new HashMap<>();
+
+    /**
+     * 
+     * @return the services list so that subclasses can use it for hashing
+     */
+    protected Map<NodeIdentifier, ServiceIdentifier<?>> getNodesRunningServices() {
+        return nodesRunningServices;
+    }
 
     /**
      * Create an object with no known services.
      */
     public NetworkAvailableServices() {
+        this.hashCode = 0;
     }
 
     /**
-     * @param regionAvailableServices
-     *            the know services for a region
+     * Copy constructor.
+     * 
+     * @param source
+     *            what to copy.
      */
-    public NetworkAvailableServices(@Nonnull final RegionAvailableServices regionAvailableServices) {
-        data.put(regionAvailableServices.getRegion(), regionAvailableServices);
+    public NetworkAvailableServices(final NetworkAvailableServices source) {
+        nodesRunningServices.putAll(source.nodesRunningServices);
+        this.hashCode = Objects.hash(nodesRunningServices);
     }
 
     /**
@@ -77,31 +92,9 @@ public class NetworkAvailableServices implements Serializable {
      */
     public NetworkAvailableServices(@Nonnull final NetworkAvailableServices a,
             @Nonnull final NetworkAvailableServices b) {
-        data.putAll(a.data);
-        b.data.forEach((region, regionAvailableServices) -> {
-            final RegionAvailableServices existing = data.get(region);
-            if (null == existing) {
-                data.put(region, regionAvailableServices);
-            } else {
-                final RegionAvailableServices merged = new RegionAvailableServices(regionAvailableServices, existing);
-                data.put(region, merged);
-            }
-        });
-    }
-
-    /**
-     * @param region
-     *            the region to check
-     * @param service
-     *            the service to find
-     * @return if a service is available in the specified region
-     */
-    public boolean isServiceAvailable(final RegionIdentifier region, final ServiceIdentifier<?> service) {
-        if (data.containsKey(region)) {
-            return data.get(region).isServiceAvailable(service);
-        } else {
-            return false;
-        }
+        nodesRunningServices.putAll(a.nodesRunningServices);
+        nodesRunningServices.putAll(b.nodesRunningServices);
+        this.hashCode = Objects.hash(nodesRunningServices);
     }
 
     /**
@@ -112,13 +105,12 @@ public class NetworkAvailableServices implements Serializable {
      *         service is running on the node
      */
     public ServiceIdentifier<?> getServiceForNode(final NodeIdentifier node) {
-        return data.entrySet().stream().map(e -> e.getValue().getServiceForNode(node)).filter(s -> null != s).findAny()
-                .orElse(null);
+        return nodesRunningServices.get(node);
     }
 
     /**
      * 
-     * @return the null object, used byProtelis
+     * @return the null object, used by Protelis
      */
     public static NetworkAvailableServices nullNetworkAvailableServices() {
         return new NetworkAvailableServices();
@@ -138,20 +130,46 @@ public class NetworkAvailableServices implements Serializable {
         return new NetworkAvailableServices(a, b);
     }
 
+    @Override
+    public String toString() {
+        return nodesRunningServices.toString();
+    }
+
     /**
+     * Add an available service.
      * 
-     * @param regionAvailableServices
-     *            the object to convert
-     * @return a new network available services object
+     * @param node
+     *            the node running the service
+     * @param service
+     *            the service being run
      */
-    public static NetworkAvailableServices convertToNetworkAvailableServices(
-            @Nonnull final RegionAvailableServices regionAvailableServices) {
-        return new NetworkAvailableServices(regionAvailableServices);
+    protected void internalAddService(@Nonnull final NodeIdentifier node, @Nonnull final ServiceIdentifier<?> service) {
+        nodesRunningServices.put(node, service);
+    }
+
+    private final int hashCode;
+
+    /**
+     * Cached in the constructor since it shouldn't change. Subclasses that are
+     * mutable need to override this.
+     */
+    @Override
+    public int hashCode() {
+        return this.hashCode;
     }
 
     @Override
-    public String toString() {
-        return data.toString();
+    public boolean equals(final Object o) {
+        if (null == o) {
+            return false;
+        } else if (this == o) {
+            return true;
+        } else if (this.getClass().equals(o.getClass())) {
+            final NetworkAvailableServices other = (NetworkAvailableServices) o;
+            return this.nodesRunningServices.equals(other.nodesRunningServices);
+        } else {
+            return false;
+        }
     }
 
 }

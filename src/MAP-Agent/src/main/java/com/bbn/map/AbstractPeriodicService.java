@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -32,7 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map;
 
 import java.time.Duration;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 import javax.annotation.Nonnull;
 
@@ -81,7 +81,7 @@ public abstract class AbstractPeriodicService extends AbstractService {
         LOGGER.debug("Started service {}", getName());
 
         while (Status.RUNNING == getStatus()) {
-            final LocalTime beforePlan = LocalTime.now();
+            final LocalDateTime beforePlan = LocalDateTime.now();
 
             execute();
 
@@ -89,7 +89,7 @@ public abstract class AbstractPeriodicService extends AbstractService {
             if (Status.RUNNING == getStatus()) {
                 try {
                     // sleep if the computation didn't take too long
-                    final Duration timeSinceStart = Duration.between(beforePlan, LocalTime.now());
+                    final Duration timeSinceStart = Duration.between(beforePlan, LocalDateTime.now());
                     final Duration sleepDuration = period.minus(timeSinceStart);
                     if (!sleepDuration.isZero() && !sleepDuration.isNegative()) {
                         Thread.sleep(sleepDuration.toMillis());

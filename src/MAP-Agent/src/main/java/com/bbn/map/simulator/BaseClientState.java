@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -101,7 +101,7 @@ public class BaseClientState {
 
     private int numRequestsAttempted = 0;
 
-    /* package */ void incrementRequestsAttempted() {
+    /* package */ synchronized void incrementRequestsAttempted() {
         ++numRequestsAttempted;
     }
 
@@ -109,37 +109,37 @@ public class BaseClientState {
 
     private int numRequestsFailedForServerLoad = 0;
 
-    /* package */ void incrementRequestsFailedForServerLoad() {
+    /* package */ synchronized void incrementRequestsFailedForServerLoad() {
         ++numRequestsFailedForServerLoad;
     }
 
     private int numRequestsFailedForNetworkLoad = 0;
 
-    /* package */ void incrementRequestsFailedForNetworkLoad() {
+    /* package */ synchronized void incrementRequestsFailedForNetworkLoad() {
         ++numRequestsFailedForNetworkLoad;
     }
 
     private int numRequestsSlowForServerLoad = 0;
 
-    /* package */ void incrementRequestsSlowForServerLoad() {
+    /* package */ synchronized void incrementRequestsSlowForServerLoad() {
         ++numRequestsSlowForServerLoad;
     }
 
     private int numRequestsSlowForNetworkLoad = 0;
 
-    /* package */ void incrementRequestsSlowForNetworkLoad() {
+    /* package */ synchronized void incrementRequestsSlowForNetworkLoad() {
         ++numRequestsSlowForNetworkLoad;
     }
 
     private int numRequestsSlowForNetworkAndServerLoad = 0;
 
-    /* package */ void incrementRequestsSlowForNetworkAndServerLoad() {
+    /* package */ synchronized void incrementRequestsSlowForNetworkAndServerLoad() {
         ++numRequestsSlowForNetworkAndServerLoad;
     }
 
     private int numRequestsFailedForDownNode = 0;
 
-    /* package */ void incrementRequestsFailedForDownNode() {
+    /* package */ synchronized void incrementRequestsFailedForDownNode() {
         ++numRequestsFailedForDownNode;
     }
 
@@ -152,7 +152,7 @@ public class BaseClientState {
      * 
      * @return the number of client requests that were attempted
      */
-    public int getNumRequestsAttempted() {
+    public synchronized int getNumRequestsAttempted() {
         return numRequestsAttempted;
     }
 
@@ -162,7 +162,7 @@ public class BaseClientState {
      * @return the number of client requests that succeeded
      * @see #getNumRequestsAttempted()
      */
-    public int getNumRequestsSucceeded() {
+    public synchronized int getNumRequestsSucceeded() {
         return numRequestsSucceeded;
     }
 
@@ -171,7 +171,7 @@ public class BaseClientState {
      *         overloaded
      * @see #getNumRequestsAttempted()
      */
-    public int getNumRequestsFailedForServerLoad() {
+    public synchronized int getNumRequestsFailedForServerLoad() {
         return numRequestsFailedForServerLoad;
     }
 
@@ -180,7 +180,7 @@ public class BaseClientState {
      *         path was overloaded
      * @see #getNumRequestsAttempted()
      */
-    public int getNumRequestsFailedForNetworkLoad() {
+    public synchronized int getNumRequestsFailedForNetworkLoad() {
         return numRequestsFailedForNetworkLoad;
     }
 
@@ -189,7 +189,7 @@ public class BaseClientState {
      *         was overloaded
      * @see #getNumRequestsAttempted()
      */
-    public int getNumRequestsSlowForServerLoad() {
+    public synchronized int getNumRequestsSlowForServerLoad() {
         return numRequestsSlowForServerLoad;
     }
 
@@ -198,7 +198,7 @@ public class BaseClientState {
      *         path was overloaded
      * @see #getNumRequestsAttempted()
      */
-    public int getNumRequestsSlowForNetworkLoad() {
+    public synchronized int getNumRequestsSlowForNetworkLoad() {
         return numRequestsSlowForNetworkLoad;
     }
 
@@ -207,7 +207,7 @@ public class BaseClientState {
      *         network path and the server were overloaded
      * @see #getNumRequestsAttempted()
      */
-    public int getNumRequestsSlowForNetworkAndServerLoad() {
+    public synchronized int getNumRequestsSlowForNetworkAndServerLoad() {
         return numRequestsSlowForNetworkAndServerLoad;
     }
 
@@ -217,7 +217,7 @@ public class BaseClientState {
      * 
      * @return key is region, value is count. Unmodifiable map.
      */
-    public Map<RegionIdentifier, Integer> getNumRequestsServicedByRegion() {
+    public synchronized Map<RegionIdentifier, Integer> getNumRequestsServicedByRegion() {
         return numRequestsServicedByRegion;
     }
 
@@ -227,7 +227,7 @@ public class BaseClientState {
      *            increment the number of requests serviced by the specified
      *            region
      */
-    public void incrementRequestsServicedByRegion(final RegionIdentifier region) {
+    public synchronized void incrementRequestsServicedByRegion(final RegionIdentifier region) {
         numRequestsServicedByRegion.merge(region, 1, (v1, v2) -> v1 + v2);
         ++numRequestsSucceeded;
     }
@@ -235,7 +235,7 @@ public class BaseClientState {
     /**
      * @return the number of requests that failed due to the node being down
      */
-    public int getNumRequestsFailedForDownNode() {
+    public synchronized int getNumRequestsFailedForDownNode() {
         return numRequestsFailedForDownNode;
     }
 
@@ -244,7 +244,7 @@ public class BaseClientState {
      * @param v
      *            see {@link #getNumRequestsFailedForDownNode()}
      */
-    public void setNumRequestsFailedForDownNode(final int v) {
+    public synchronized void setNumRequestsFailedForDownNode(final int v) {
         numRequestsFailedForDownNode = v;
     }
 

@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -70,6 +70,7 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
     private final boolean enableDcop;
     private final boolean enableRlg;
     private final Function<String, NodeIdentifier> createNodeIdentifier;
+    private final NodeLookupService dcopLookup;
 
     /**
      * Create a MAP factory.
@@ -99,8 +100,11 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
      *            set to false for testing where RLG should not run
      * @param createNodeIdentifier
      *            function for creating node identifiers from strings
+     * @param dcopLookup
+     *            passed to constructor for {@link Controller}
      */
     public MapNetworkFactory(@Nonnull final NodeLookupService nodeLookupService,
+            @Nonnull final NodeLookupService dcopLookup,
             @Nonnull final RegionLookupService regionLookupService,
             @Nonnull final ResourceManagerFactory<Controller> managerFactory,
             @Nonnull final String program,
@@ -111,6 +115,7 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
             final boolean enableRlg,
             @Nonnull final Function<String, NodeIdentifier> createNodeIdentifier) {
         this.nodeLookupService = nodeLookupService;
+        this.dcopLookup = dcopLookup;
         this.regionLookupService = regionLookupService;
         this.program = program;
         this.anonymousProgram = anonymous;
@@ -127,7 +132,8 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
     public NetworkLink createLink(final String name,
             final NetworkNode left,
             final NetworkNode right,
-            final double bandwidth, double delay) {
+            final double bandwidth,
+            double delay) {
         final NetworkLink link = new NetworkLink(name, left, right, bandwidth, delay);
         left.addNeighbor(right, bandwidth);
         right.addNeighbor(left, bandwidth);
@@ -146,7 +152,7 @@ public class MapNetworkFactory implements NetworkFactory<Controller, NetworkLink
 
         final ResourceManager<Controller> manager = managerFactory.createResourceManager();
         final Controller controller = new Controller(nodeLookupService, regionLookupService, instance, name, manager,
-                extraData, networkServices, allowDnsChanges, enableDcop, enableRlg);
+                extraData, networkServices, allowDnsChanges, enableDcop, enableRlg, dcopLookup);
         manager.init(controller, extraData);
 
         return controller;

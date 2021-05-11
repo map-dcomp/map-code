@@ -1,0 +1,115 @@
+set ns [new Simulator]
+source tb_compat.tcl
+
+# Clients
+set client2Pool1 [$ns node]
+tb-set-hardware $client2Pool1 pc3000
+
+set client2Pool2 [$ns node]
+tb-set-hardware $client2Pool2 pc3000
+
+set client2Pool3 [$ns node]
+tb-set-hardware $client2Pool3 pc3000
+
+set client2Pool4 [$ns node]
+tb-set-hardware $client2Pool4 pc3000
+
+set client3Pool1 [$ns node]
+tb-set-hardware $client3Pool1 pc3000
+
+set client3Pool2 [$ns node]
+tb-set-hardware $client3Pool2 pc3000
+
+set client3Pool3 [$ns node]
+tb-set-hardware $client3Pool3 pc3000
+
+set client3Pool4 [$ns node]
+tb-set-hardware $client3Pool4 pc3000
+
+# NCPs
+set nodeA0 [$ns node]
+tb-set-hardware $nodeA0 pc3000
+
+set nodeA1 [$ns node]
+tb-set-hardware $nodeA1 pc3000
+
+set nodeA2 [$ns node]
+tb-set-hardware $nodeA2 pc3000
+
+set nodeA3 [$ns node]
+tb-set-hardware $nodeA3 pc3000
+
+set nodeA4 [$ns node]
+tb-set-hardware $nodeA4 pc3000
+
+set nodeA5 [$ns node]
+tb-set-hardware $nodeA5 pc3000
+
+set nodeA6 [$ns node]
+tb-set-hardware $nodeA6 pc3000
+
+set nodeA7 [$ns node]
+tb-set-hardware $nodeA7 pc3000
+
+set nodeB0 [$ns node]
+tb-set-hardware $nodeB0 pc3000
+
+set nodeB1 [$ns node]
+tb-set-hardware $nodeB1 pc3000
+
+set nodeB2 [$ns node]
+tb-set-hardware $nodeB2 pc3000
+
+set nodeB3 [$ns node]
+tb-set-hardware $nodeB3 pc3000
+
+set nodeB4 [$ns node]
+tb-set-hardware $nodeB4 pc3000
+
+set nodeB5 [$ns node]
+tb-set-hardware $nodeB5 pc3000
+
+set nodeB6 [$ns node]
+tb-set-hardware $nodeB6 pc3000
+
+set nodeB7 [$ns node]
+tb-set-hardware $nodeB7 pc3000
+
+set serverX1 [$ns node]
+tb-set-hardware $serverX1 pc3000
+
+set serverX2 [$ns node]
+tb-set-hardware $serverX2 pc3000
+
+set serverX3 [$ns node]
+tb-set-hardware $serverX3 pc3000
+
+set serverX4 [$ns node]
+tb-set-hardware $serverX4 pc3000
+
+# Links
+set lanA0 [$ns make-lan "$nodeA0 $nodeA1 $nodeA2 $nodeA3 $nodeA4" 100Mb 0ms]
+set lanA1 [$ns make-lan "$nodeA4 $nodeA5 $nodeA6 $nodeA7" 100Mb 0ms]
+
+set lanB0 [$ns make-lan "$nodeB0 $nodeB1 $nodeB2 $nodeB3 $nodeB4" 100Mb 0ms]
+set lanB1 [$ns make-lan "$nodeB4 $nodeB5 $nodeB6 $nodeB7" 100Mb 0ms]
+
+set lanX [$ns make-lan "$nodeA0 $serverX1 $serverX2 $serverX3 $serverX4" 100Mb 0ms]
+
+
+set lanClient2 [$ns make-lan "$nodeB1 $client2Pool1 $client2Pool2 $client2Pool3 $client2Pool4" 100Mb 0ms]
+set lanClient3 [$ns make-lan "$nodeB2 $client3Pool1 $client3Pool2 $client3Pool3 $client3Pool4" 100Mb 0ms]
+
+set linkAB  [$ns duplex-link $nodeA1 $nodeB0 100Mb 0.0ms DropTail]
+
+
+
+
+
+$ns rtproto Manual
+
+
+
+$ns run
+
+

@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Mrtr6",
+    "region": "M",
+    "router": false,
+    "underlay": false
+}

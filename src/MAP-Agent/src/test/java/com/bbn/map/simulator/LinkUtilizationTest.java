@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -72,6 +72,7 @@ import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
 import com.bbn.protelis.utils.SimpleClock;
 import com.bbn.protelis.utils.VirtualClock;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -125,7 +126,8 @@ public class LinkUtilizationTest {
                 LinkAttribute.DATARATE_TX, tx);
 
         // create the client load request
-        final ClientLoad req = new ClientLoad(0, 1000, 1000, 1, service1, ImmutableMap.of(), networkLoad);
+        final ClientLoad req = new ClientLoad(0, 1000, 1000, 1, service1, ImmutableMap.of(), networkLoad,
+                ImmutableList.of());
 
         final Path baseDirectory = Paths.get(baseu.toURI());
 
@@ -159,8 +161,15 @@ public class LinkUtilizationTest {
             // apply client request
             final NodeNetworkFlow flowToApply = ClientSim.createNetworkFlow(clientId, serverEContainer.getIdentifier());
             final List<NetworkLink> networkPath = sim.getPath(client, serverE);
-            AbstractClientSimulator.applyNetworkDemand(sim, clientId, clientId, 0, req, serverEContainer, flowToApply,
-                    networkPath);
+
+            final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute = req.getNetworkLoadAsAttribute();
+            final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped = req
+                    .getNetworkLoadAsAttributeFlipped();
+            final ApplicationCoordinates service = req.getService();
+            final long duration = req.getNetworkDuration();
+
+            AbstractClientSimulator.applyNetworkDemand(sim, clientId, clientId, 0, networkLoadAsAttribute,
+                    networkLoadAsAttributeFlipped, service, duration, serverEContainer, flowToApply, networkPath);
 
             final NodeNetworkFlow expectedFlow = new NodeNetworkFlow(containerIdRunningService1, clientId,
                     containerIdRunningService1);
@@ -184,26 +193,11 @@ public class LinkUtilizationTest {
             checkNcp(sim, service1, nodeIdE, nodeIdD, null, tolerance, expectedFlow, rx, tx, expectedFlowFlipped,
                     rxFlipped, txFlipped);
 
-            // TODO: verify this in hi-fi once ticket:232 is fixed
-
             // check container load
             serverEContainer.updateResourceReports();
             final ContainerResourceReport containerResourceReport = serverEContainer
                     .getContainerResourceReport(EstimationWindow.SHORT);
             assertThat("Container Service resource report", containerResourceReport, notNullValue());
-
-            // the neighbor of a container is the NCP, in this case the server
-            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> actualNetworkLoad = containerResourceReport
-                    .getNetworkLoad();
-            assertThat(actualNetworkLoad, aMapWithSize(1));
-            final Optional<InterfaceIdentifier> ii = actualNetworkLoad.entrySet().stream().map(Map.Entry::getKey)
-                    .filter(i -> i.getNeighbors().contains(nodeIdE)).findAny();
-            assertTrue(ii.isPresent());
-
-            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> actualNeighborNetworkLoad = actualNetworkLoad
-                    .get(ii.get());
-            checkNeighborLoad(service1, tolerance, rxFlipped, txFlipped, expectedFlowFlipped,
-                    actualNeighborNetworkLoad);
 
         }
     }
@@ -223,9 +217,11 @@ public class LinkUtilizationTest {
         final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> serverANetLoad = getNetworkLoad(
                 sim, ncpId);
         int expectedMapSize = 0;
-        if (null != clientNeighbor) {
-            ++expectedMapSize;
-        }
+
+        // even if client neighbor is null we still get network information from
+        // the link between the NCP and the client
+        ++expectedMapSize;
+
         if (null != serverNeighbor) {
             ++expectedMapSize;
         }

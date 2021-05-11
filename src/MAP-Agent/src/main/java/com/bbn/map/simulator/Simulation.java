@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -60,7 +60,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.DnsResolutionType;
 import com.bbn.map.Controller;
+import com.bbn.map.MapOracle;
 import com.bbn.map.NetworkServices;
 import com.bbn.map.ServiceConfiguration;
 import com.bbn.map.ap.MapNetworkFactory;
@@ -74,6 +76,8 @@ import com.bbn.map.dns.DnsRecord;
 import com.bbn.map.dns.NameRecord;
 import com.bbn.map.dns.PlanTranslator;
 import com.bbn.map.ta2.OverlayTopology;
+import com.bbn.map.ta2.RegionalLink;
+import com.bbn.map.ta2.RegionalTopology;
 import com.bbn.map.ta2.TA2Interface;
 import com.bbn.map.utils.MapUtils;
 import com.bbn.protelis.networkresourcemanagement.ContainerParameters;
@@ -95,8 +99,6 @@ import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ns2.NS2Parser;
 import com.bbn.protelis.networkresourcemanagement.ns2.Topology;
 import com.bbn.protelis.networkresourcemanagement.testbed.LocalNodeLookupService;
-import com.bbn.protelis.networkresourcemanagement.testbed.Scenario;
-import com.bbn.protelis.networkresourcemanagement.testbed.ScenarioRunner;
 import com.bbn.protelis.utils.VirtualClock;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -109,11 +111,10 @@ import edu.uci.ics.jung.algorithms.shortestpath.DistanceStatistics;
 import edu.uci.ics.jung.graph.Graph;
 
 /**
- * Simulate client demand for a network. A {@link ScenarioRunner} should not be
- * used when this class is used as it does the same work (and more).
+ * Simulate client demand for a network.
  * 
  */
-public class Simulation implements NetworkServices, AutoCloseable, RegionLookupService, TA2Interface {
+public class Simulation implements NetworkServices, AutoCloseable, RegionLookupService, TA2Interface, MapOracle {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Simulation.class);
 
@@ -123,7 +124,8 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      */
     public static final String TIME_DIR_FORMAT = String.format("%%0%dd", MAX_NUM_CHARACTERS_IN_TIMESTAMP);
 
-    private static final int BASE_AP_COM_PORT = 20000;
+    private static final int BASE_AP_COM_PORT = 20_000;
+    private static final int BASE_DCOP_COM_PORT = 40_000;
 
     /**
      * Name of the file to read inside the scenario for service configuration
@@ -139,15 +141,13 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
 
     private final Graph<NetworkNode, NetworkLink> graph;
 
-    private final Scenario<Controller, NetworkLink, NetworkClient> scenario;
-
     /**
      * 
-     * @return the scenario that is being run
+     * @return the network graph
      */
     @Nonnull
-    public Scenario<Controller, NetworkLink, NetworkClient> getScenario() {
-        return scenario;
+    public Graph<NetworkNode, NetworkLink> getGraph() {
+        return graph;
     }
 
     private final Map<NodeIdentifier, Controller> controllerCache = new HashMap<>();
@@ -293,10 +293,7 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         this.hardwareConfigs = HardwareConfiguration
                 .parseHardwareConfigurations(scenarioDirectory.resolve(HardwareConfiguration.HARDWARE_CONFIG_FILENAME));
 
-        final ImmutablePair<Scenario<Controller, NetworkLink, NetworkClient>, Graph<NetworkNode, NetworkLink>> parsed = parseScenario(
-                name, scenarioDirectory, managerFactory, demandPath);
-        scenario = parsed.getLeft();
-        graph = parsed.getRight();
+        graph = parseScenario(name, scenarioDirectory, managerFactory, demandPath);
         validateTopology();
 
         checkDnsUpdateHandlers();
@@ -308,7 +305,8 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
 
         final ApplicationManagerApi appManager = AppMgrUtils.getApplicationManager();
 
-        planTranslator = new PlanTranslator(ttl);
+        final DnsResolutionType dnsResolutionType = AgentConfiguration.getInstance().getDnsResolutionType();
+        planTranslator = PlanTranslator.constructPlanTranslator(dnsResolutionType, ttl);
 
         final Path nodeFailuresPath = scenarioDirectory.resolve(NODE_FAILURES_FILENAME);
         nodeFailures = NodeFailure.loadNodeFailures(nodeFailuresPath);
@@ -352,7 +350,8 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                 LOGGER.debug("Default node: {} instances: {}", nodeId, initialInstances);
 
                 final Controller controller = getControllerById(nodeId);
-                Objects.requireNonNull(controller, "Cannot find controller for node: " + nodeId);
+                Objects.requireNonNull(controller, "Cannot find controller for node: " + nodeId
+                        + " that is listed as a default node for service " + service);
 
                 if (serviceDefaultRegion.equals(controller.getRegionIdentifier())) {
                     foundNodeInDefaultRegion = true;
@@ -445,21 +444,15 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         return hardwareConfigs.get(name);
     }
 
-    /**
-     * @param scenarioName
-     * @param baseDirectory
-     * @return
-     * @throws IOException
-     */
-    private ImmutablePair<Scenario<Controller, NetworkLink, NetworkClient>, Graph<NetworkNode, NetworkLink>> parseScenario(
-            @Nonnull final String scenarioName,
+    private Graph<NetworkNode, NetworkLink> parseScenario(@Nonnull final String scenarioName,
             @Nonnull final Path baseDirectory,
             @Nonnull final SimResourceManagerFactory managerFactory,
             final Path demandPath) throws IOException {
 
         final NodeLookupService nodeLookupService = new LocalNodeLookupService(BASE_AP_COM_PORT);
+        final NodeLookupService dcopLookup = new LocalNodeLookupService(BASE_DCOP_COM_PORT);
 
-        final MapNetworkFactory factory = new MapNetworkFactory(nodeLookupService, this, managerFactory,
+        final MapNetworkFactory factory = new MapNetworkFactory(nodeLookupService, dcopLookup, this, managerFactory,
                 AgentConfiguration.getInstance().getApProgram(),
                 AgentConfiguration.getInstance().isApProgramAnonymous(), this, allowDnsChanges, enableDcop, enableRlg,
                 DnsNameIdentifier::new);
@@ -467,19 +460,12 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         final Topology topology = NS2Parser.parse(scenarioName, baseDirectory);
         final Graph<NetworkNode, NetworkLink> graph = MapUtils.parseTopology(topology, factory);
 
-        final Scenario<Controller, NetworkLink, NetworkClient> scenario = processGraph(topology.getName(), graph,
-                demandPath);
+        processGraph(topology.getName(), graph, demandPath);
 
-        return ImmutablePair.of(scenario, graph);
+        return graph;
     }
 
-    private Scenario<Controller, NetworkLink, NetworkClient> processGraph(final String name,
-            final Graph<NetworkNode, NetworkLink> graph,
-            final Path demandPath) {
-        final Collection<Controller> servers = new LinkedList<>();
-        final Collection<NetworkClient> clients = new LinkedList<>();
-        final Collection<NetworkLink> links = new LinkedList<>();
-
+    private void processGraph(final String name, final Graph<NetworkNode, NetworkLink> graph, final Path demandPath) {
         graph.getVertices().stream().forEach(node -> {
             if (node instanceof NetworkClient) {
                 final NetworkClient client = (NetworkClient) node;
@@ -489,14 +475,10 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                 clientSimulators.add(sim);
 
                 ensureRegionalDNSExists(client.getRegionIdentifier());
-
-                clients.add(client);
             } else if (node instanceof Controller) {
                 final Controller controller = (Controller) node;
                 controllerCache.put(controller.getNodeIdentifier(), controller);
                 ensureRegionalDNSExists(controller.getRegionIdentifier());
-
-                servers.add(controller);
             } else {
                 throw new RuntimeException("Unexpected NetworkDevice type: " + node);
             }
@@ -505,17 +487,28 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         graph.getEdges().stream().forEach(link -> {
             final LinkResourceManager lmgr = new LinkResourceManager(link);
             addLinkResMgr(lmgr);
-
-            links.add(link);
         });
-
-        final Scenario<Controller, NetworkLink, NetworkClient> scenario = new Scenario<>(name, servers, links, clients);
-        return scenario;
     }
+
+    // MapOracle
+    private final Map<RegionIdentifier, NodeIdentifier> dcopLeaders = new HashMap<>();
+
+    @Nonnull
+    @Override
+    public NodeIdentifier getDcopForRegion(final @Nonnull RegionIdentifier region) {
+        if (!dcopLeaders.containsKey(region)) {
+            throw new IllegalArgumentException("No DCOP leader for " + region);
+        } else {
+            return dcopLeaders.get(region);
+        }
+    }
+
+    // end MAPOracle
 
     private void validateTopology() {
         final Set<RegionIdentifier> regions = this.getAllControllers().stream().map(NetworkServer::getRegionIdentifier)
                 .distinct().collect(Collectors.toSet());
+        dcopLeaders.clear();
 
         regions.stream().forEach(region -> {
             final Set<Controller> dcop = new HashSet<>();
@@ -541,6 +534,10 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                 } else if (dcop.isEmpty()) {
                     throw new IllegalArgumentException("Region " + region + " has no DCOP");
                 }
+            }
+
+            if (dcop.size() == 1) {
+                dcopLeaders.put(region, dcop.stream().findFirst().get().getNodeIdentifier());
             }
 
             if (enableRlg) {
@@ -613,7 +610,21 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
      *            the region to make sure a DNS exists for.
      */
     /* package */ void ensureRegionalDNSExists(final RegionIdentifier region) {
-        regionalDNS.computeIfAbsent(region, k -> new DNSSim(this, region.getName()));
+        regionalDNS.computeIfAbsent(region, k -> createDnsSim(region));
+    }
+
+    private DNSSim createDnsSim(final RegionIdentifier region) {
+        final DnsResolutionType type = AgentConfiguration.getInstance().getDnsResolutionType();
+        switch (type) {
+        case RECURSIVE:
+            return new DnsSimRecurse(this, region);
+        case NON_RECURSIVE:
+            return new DnsSimNoRecurse(this, region);
+        case RECURSIVE_TWO_LAYER:
+            return new DnsSimRecurse2Layer(this, region);
+        default:
+            throw new RuntimeException("Unexpected DNS resolution type: " + type);
+        }
     }
 
     /**
@@ -759,6 +770,8 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         backgroundTrafficSim.startSimulator();
     }
 
+    private long terminationPollFrequency = 1 * 1000;
+
     /**
      * Once the simulation has been stopped it cannot be started again.
      */
@@ -786,12 +799,10 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         }
         getAllControllers().parallelStream().forEach(e -> e.stopExecuting());
 
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Waiting for all daemons to stop");
-        }
+        LOGGER.info("Waiting for all daemons to stop");
         while (!daemonsQuiescent()) {
             try {
-                Thread.sleep(scenario.getTerminationPollFrequency());
+                Thread.sleep(terminationPollFrequency);
             } catch (final InterruptedException e) {
                 if (LOGGER.isTraceEnabled()) {
                     LOGGER.trace("sleep interrupted, waiting again", e);
@@ -1249,8 +1260,12 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
                 return container.getParentNode().getRegionIdentifier();
             } else if (stoppedContainerToRegion.containsKey(nodeId)) {
                 return stoppedContainerToRegion.get(nodeId);
+            } else if (controllerCache.containsKey(nodeId)) {
+                return controllerCache.get(nodeId).getRegion();
+            } else if (clientCache.containsKey(nodeId)) {
+                return clientCache.get(nodeId).getRegionIdentifier();
             } else {
-                return scenario.getRegionForNode(nodeId);
+                return RegionIdentifier.UNKNOWN;
             }
         }
     }
@@ -1560,4 +1575,22 @@ public class Simulation implements NetworkServices, AutoCloseable, RegionLookupS
         return new OverlayTopology(ta2Nodes, ta2Links);
     }
 
+    private Graph<RegionIdentifier, RegionalLink> cachedRegionalGraph = null;
+
+    @Override
+    @Nonnull
+    public RegionalTopology getRegionTopology() {
+        synchronized (graph) {
+            if (null == cachedRegionalGraph) {
+                cachedRegionalGraph = SimUtils.computeRegionGraph(graph, NetworkNode::getRegionIdentifier);
+            }
+        }
+        return new RegionalTopology(cachedRegionalGraph);
+    }
+
+    @Override
+    @Nonnull
+    public MapOracle getMapOracle() {
+        return this;
+    }
 }

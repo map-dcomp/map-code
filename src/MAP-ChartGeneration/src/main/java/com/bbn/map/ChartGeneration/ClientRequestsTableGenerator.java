@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -192,7 +192,7 @@ public class ClientRequestsTableGenerator
                             try(BufferedReader reader = Files.newBufferedReader(file.toPath())) {
                                 final JsonFactory generator = JSON_MAPPER.getFactory();
                                 final JsonParser parser = generator.createParser(reader);
-
+                                
                                 parser.nextToken();
                                 while (parser.hasCurrentToken()) {
                                     final ClientRequestRecord record = parser.readValueAs(ClientRequestRecord.class);
@@ -200,6 +200,7 @@ public class ClientRequestsTableGenerator
                                     
                                     parser.nextToken();
                                 }
+                                
                             } catch (IOException e)
                             {
                                 LOGGER.error("Failed to parse client requests sent JSON file: {}", file);
@@ -234,7 +235,8 @@ public class ClientRequestsTableGenerator
                 long binTime = ChartGenerationUtils.getBinForTime(entry.getKey(), 0, binSize);
                 maxBinTime = Math.max(maxBinTime, binTime);
                 binnedTimeData.merge(binTime, entry.getValue(), ClientRequestsTableGenerator::sumRequestResultsSummary);
-            }
+            }   
+           
             
             // add empty bins
             for (long time = 0; time <= maxBinTime; time += binSize)
@@ -427,7 +429,6 @@ public class ClientRequestsTableGenerator
         });
     }
     
-    
     private void processClientRequestRecord(ClientRequestRecord record, Map<ServiceIdentifier<?>, Map<Long, RequestResultsSummary>> requestsResultsSummaryDataByService, Set<NodeAttribute> attributes)
     {
         RequestResult networkResult = record.getNetworkRequestResult();
@@ -447,30 +448,34 @@ public class ClientRequestsTableGenerator
         
         Map<Long, RequestResultsSummary> requestSummaryForService = requestsResultsSummaryDataByService.computeIfAbsent(service, k -> new HashMap<>());
         
+        // increment requests attempted
+        requestSummaryForService.merge(startTime, new RequestResultsSummary(
+                nodeLoad, new HashMap<>(), new HashMap<>(), new HashMap<>(),
+                1, 0, 0, 0), ClientRequestsTableGenerator::sumRequestResultsSummary);
         
-        if (networkResult != RequestResult.FAIL && serverResult != RequestResult.FAIL)
+        if (!RequestResult.FAIL.equals(networkResult) && !RequestResult.FAIL.equals(serverResult))
         {
             // if request succeeded
             requestSummaryForService.merge(startTime, new RequestResultsSummary(
-                    nodeLoad, new HashMap<>(), new HashMap<>(),
-                    1, 0, 0), ClientRequestsTableGenerator::sumRequestResultsSummary);
+                    new HashMap<>(), nodeLoad, new HashMap<>(), new HashMap<>(),
+                    0, 1, 0, 0), ClientRequestsTableGenerator::sumRequestResultsSummary);
         }
         else
         {
             // if request failed
             
-            if (serverResult == RequestResult.FAIL)
+            if (RequestResult.FAIL.equals(serverResult))
             {
                 requestSummaryForService.merge(startTime, new RequestResultsSummary(
-                        new HashMap<>(), nodeLoad, new HashMap<>(),
-                        0, 1, 0), ClientRequestsTableGenerator::sumRequestResultsSummary);
+                        new HashMap<>(), new HashMap<>(), nodeLoad, new HashMap<>(),
+                        0, 0, 1, 0), ClientRequestsTableGenerator::sumRequestResultsSummary);
             }
             
-            if (networkResult == RequestResult.FAIL)
+            if (RequestResult.FAIL.equals(networkResult))
             {
                 requestSummaryForService.merge(startTime, new RequestResultsSummary(
-                        new HashMap<>(), new HashMap<>(), nodeLoad,
-                        0, 0, 1), ClientRequestsTableGenerator::sumRequestResultsSummary);
+                        new HashMap<>(), new HashMap<>(), new HashMap<>(), nodeLoad,
+                        0, 0, 0, 1), ClientRequestsTableGenerator::sumRequestResultsSummary);
             }
         }
     }
@@ -515,20 +520,24 @@ public class ClientRequestsTableGenerator
     
     private static class RequestResultsSummary
     {
+        private Map<NodeAttribute, Double> loadAttempted;
         private Map<NodeAttribute, Double> loadSucceeded;
         private Map<NodeAttribute, Double> loadFailedForServer;
         private Map<NodeAttribute, Double> loadFailedForNetwork;
         
+        private int requestsAttempted;
         private int requestsSucceeded;
         private int requestsFailedForServer;
         private int requestsFailedForNetwork;
         
         RequestResultsSummary()
         {
+            loadAttempted = new HashMap<>();
             loadSucceeded = new HashMap<>();
             loadFailedForServer = new HashMap<>();
             loadFailedForNetwork = new HashMap<>();
             
+            requestsAttempted = 0;
             requestsSucceeded = 0;
             requestsFailedForServer = 0;
             requestsFailedForNetwork = 0;
@@ -536,6 +545,9 @@ public class ClientRequestsTableGenerator
         
         RequestResultsSummary(RequestResultsSummary rrs)
         {
+            this.loadAttempted = new HashMap<>();
+            this.loadAttempted.putAll(rrs.loadAttempted);
+            
             this.loadSucceeded = new HashMap<>();
             this.loadSucceeded.putAll(rrs.loadSucceeded);
             
@@ -545,24 +557,35 @@ public class ClientRequestsTableGenerator
             this.loadFailedForNetwork = new HashMap<>();
             this.loadFailedForNetwork.putAll(rrs.loadFailedForNetwork);
             
+            this.requestsAttempted = rrs.requestsAttempted;
             this.requestsSucceeded = rrs.requestsSucceeded;
             this.requestsFailedForServer = rrs.requestsFailedForNetwork;
             this.requestsFailedForNetwork = rrs.requestsFailedForNetwork;
         }
     
-        RequestResultsSummary(final Map<NodeAttribute, Double> loadSucceeded, final Map<NodeAttribute, Double> loadFailedForServer, final Map<NodeAttribute, Double> loadFailedForNetwork,
-                final int requestsSucceeded, final int requestsFailedForServer, final int requestsFailedForNetwork)
-        {        
+        RequestResultsSummary(final Map<NodeAttribute, Double> loadAttemped, 
+                final Map<NodeAttribute, Double> loadSucceeded, 
+                final Map<NodeAttribute, Double> loadFailedForServer, 
+                final Map<NodeAttribute, Double> loadFailedForNetwork,
+                final int requestsAttempted, final int requestsSucceeded,
+                final int requestsFailedForServer, final int requestsFailedForNetwork)
+        {
+            this.loadAttempted = loadAttemped;
             this.loadSucceeded = loadSucceeded;
             this.loadFailedForServer = loadFailedForServer;
             this.loadFailedForNetwork = loadFailedForNetwork;
             
+            this.requestsAttempted = requestsAttempted;
             this.requestsSucceeded = requestsSucceeded;
             this.requestsFailedForServer = requestsFailedForServer;
             this.requestsFailedForNetwork = requestsFailedForNetwork;
         }
 
 
+        public Map<NodeAttribute, Double> getLoadAttempted()
+        {
+            return loadAttempted;
+        }
         
         public Map<NodeAttribute, Double> getLoadSucceeded()
         {
@@ -579,24 +602,10 @@ public class ClientRequestsTableGenerator
             return loadFailedForNetwork;
         }
         
-        public Map<NodeAttribute, Double> getLoadAttempted()
+        
+        public int getRequestsAttempted()
         {
-            Map<NodeAttribute, Double> attempted = new HashMap<>();
-            
-            loadSucceeded.forEach((attr, value) ->
-            {
-                attempted.merge(attr, value, Double::sum);
-            });
-            loadFailedForServer.forEach((attr, value) ->
-            {
-                attempted.merge(attr, value, Double::sum);
-            });
-            loadFailedForNetwork.forEach((attr, value) ->
-            {
-                attempted.merge(attr, value, Double::sum);
-            });
-            
-            return attempted;
+            return requestsAttempted;
         }
 
         public int getRequestsSucceeded()
@@ -612,19 +621,24 @@ public class ClientRequestsTableGenerator
         public int getRequestsFailedForNetwork()
         {
             return requestsFailedForNetwork;
-        } 
-
-        public int getRequestsAttempted()
-        {
-            return requestsSucceeded + requestsFailedForServer + requestsFailedForNetwork;
-        }        
+        }       
     }
 
     private static RequestResultsSummary sumRequestResultsSummary(RequestResultsSummary a, RequestResultsSummary b)
     {
+        Map<NodeAttribute, Double> loadAttempted = new HashMap<>();
         Map<NodeAttribute, Double> loadSucceeded = new HashMap<>();
         Map<NodeAttribute, Double> loadFailedForServer = new HashMap<>();
         Map<NodeAttribute, Double> loadFailedForNetwork = new HashMap<>();
+        
+        a.loadAttempted.forEach((attr, value) ->
+        {
+            loadAttempted.merge(attr, value, Double::sum);
+        });
+        b.loadAttempted.forEach((attr, value) ->
+        {
+            loadAttempted.merge(attr, value, Double::sum);
+        });
         
         a.loadSucceeded.forEach((attr, value) ->
         {
@@ -654,7 +668,8 @@ public class ClientRequestsTableGenerator
         });
         
         
-        return new RequestResultsSummary(loadSucceeded, loadFailedForServer, loadFailedForNetwork, 
+        return new RequestResultsSummary(loadAttempted, loadSucceeded, loadFailedForServer, loadFailedForNetwork, 
+                a.requestsAttempted + b.requestsAttempted,
                 a.requestsSucceeded + b.requestsSucceeded, 
                 a.requestsFailedForServer + b.requestsFailedForServer,
                 a.requestsFailedForNetwork + b.requestsFailedForNetwork);

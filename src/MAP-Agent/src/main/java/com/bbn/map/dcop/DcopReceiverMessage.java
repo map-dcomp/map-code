@@ -9,6 +9,7 @@ import java.util.Map.Entry;
 import com.bbn.map.AgentConfiguration.DcopAlgorithm;
 import com.bbn.map.dcop.acdiff.ACdiffDcopMessage;
 import com.bbn.map.dcop.cdiff.CdiffDcopMessage;
+import com.bbn.map.dcop.final_rcdiff.FinalRCDiffDcopMessage;
 import com.bbn.map.dcop.modular_acdiff.ModularACdiffDcopMessage;
 import com.bbn.map.dcop.modular_rcdiff.ModularRCdiffDcopMessage;
 import com.bbn.map.dcop.rcdiff.RCdiffDcopMessage;
@@ -85,6 +86,13 @@ public class DcopReceiverMessage implements Serializable {
             else if (DcopAlgorithm.MODULAR_ACDIFF.equals(algorithm)) {
                 ModularACdiffDcopMessage rcdiffMsg = (ModularACdiffDcopMessage) msg;
                 receiverMessageMap.put(entry.getKey(), new ModularACdiffDcopMessage(rcdiffMsg));
+            }
+            else if (DcopAlgorithm.FINAL_RCDIFF.equals(algorithm)) {
+                FinalRCDiffDcopMessage finalRCdiffMsg = (FinalRCDiffDcopMessage) msg;
+                receiverMessageMap.put(entry.getKey(), FinalRCDiffDcopMessage.deepCopy(finalRCdiffMsg));
+            } 
+            else {
+                throw new RuntimeException("Unknown DCOP algorithm " + algorithm);
             }
         }
     }
@@ -173,7 +181,7 @@ public class DcopReceiverMessage implements Serializable {
         } else {
             final DcopReceiverMessage other = (DcopReceiverMessage) obj;
             return Objects.equals(getSender(), other.getSender()) //
-                    && Objects.equals(getIteration(), other.getIteration()) //
+                    && getIteration() == other.getIteration() //
                     && Objects.equals(getReceiverMessageMap(), other.getReceiverMessageMap())
             ;
         }

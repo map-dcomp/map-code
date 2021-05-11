@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "Rserver01",
+    "region": "R",
+    "router": false,
+    "underlay": false
+}

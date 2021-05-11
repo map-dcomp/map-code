@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -46,6 +46,7 @@ import com.bbn.map.dns.NameRecord;
 import com.bbn.map.simulator.BackgroundNetworkLoad;
 import com.bbn.map.simulator.BaseNetworkLoad;
 import com.bbn.map.simulator.ClientLoad;
+import com.bbn.map.simulator.SimulationRunner;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
@@ -110,6 +111,7 @@ public class MapModule extends SimpleModule {
 
         // Add DNS deserializers
         addDeserializer(DnsRecord.class, new DnsRecordDeserializer());
+        addKeyDeserializer(DnsRecord.class, new DnsRecordKeyDeserializer());
 
         addDeserializer(BaseNetworkLoad.class, new BaseNetworkLoadDeserializer());
 
@@ -158,9 +160,12 @@ public class MapModule extends SimpleModule {
         @Override
         public Object deserializeKey(final String key, final DeserializationContext ctxt)
                 throws IOException, JsonProcessingException {
-            return new DnsNameIdentifier(key);
+            return stringToNodeIdentifier(key);
         }
-
+    }
+    
+    private static NodeIdentifier stringToNodeIdentifier(String str) {
+        return new DnsNameIdentifier(str);
     }
 
     /**
@@ -192,8 +197,12 @@ public class MapModule extends SimpleModule {
         @Override
         public Object deserializeKey(String key, DeserializationContext ctxt)
                 throws IOException, JsonProcessingException {
-            return new StringRegionIdentifier(key);
+            return stringToRegionIdentifier(key);
         }
+    }
+    
+    private static RegionIdentifier stringToRegionIdentifier(String str) {
+        return new StringRegionIdentifier(str);
     }
 
     /**
@@ -234,16 +243,20 @@ public class MapModule extends SimpleModule {
         @Override
         public Object deserializeKey(final String key, final DeserializationContext ctxt)
                 throws IOException, JsonProcessingException {
-            // "AppCoordinates {com.bbn, database-query, 1}"
-            final Matcher match = APPLICATION_COORDINATES_KEY_REGEXP.matcher(key);
-            if (match.matches()) {
-                final String group = match.group(1);
-                final String artifact = match.group(2);
-                final String version = match.group(3);
-                return new ApplicationCoordinates(group, artifact, version);
-            } else {
-                return new StringServiceIdentifier(key);
-            }
+            return stringToServiceIdentifier(key);
+        }
+    }
+    
+    private static ServiceIdentifier<?> stringToServiceIdentifier(String str) {
+        // "AppCoordinates {com.bbn, database-query, 1}"
+        final Matcher match = APPLICATION_COORDINATES_KEY_REGEXP.matcher(str);
+        if (match.matches()) {
+            final String group = match.group(1);
+            final String artifact = match.group(2);
+            final String version = match.group(3);
+            return new ApplicationCoordinates(group, artifact, version);
+        } else {
+            return new StringServiceIdentifier(str);
         }
     }
 
@@ -362,6 +375,38 @@ public class MapModule extends SimpleModule {
                 return mapper.treeToValue(node, DelegateRecord.class);
             } else {
                 throw new JsonMappingException(jp, "Cannot determine type of DnsRecord from: " + node);
+            }
+        }
+    }
+    
+    /**
+     * Used to deserialize a key {@link String} to {@link DnsRecord}.
+     * 
+     * @author awald
+     *
+     */
+    private static final class DnsRecordKeyDeserializer extends KeyDeserializer {
+        @Override
+        public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException {
+            
+            Pattern nameRecordPattern = Pattern.compile("NameRecord\\[(.+) -> (.+)\\]");
+            Pattern delegateRecordPattern = Pattern.compile("DelegateRecord\\[(.+) -> (.+)\\]");
+            
+            Matcher nameRecordMatcher = nameRecordPattern.matcher(key);
+            Matcher delegateRecordMatcher = delegateRecordPattern.matcher(key);
+            
+            if (nameRecordMatcher.matches()) {
+                ServiceIdentifier<?> service = stringToServiceIdentifier(nameRecordMatcher.group(1));
+                NodeIdentifier nodeId = stringToNodeIdentifier(nameRecordMatcher.group(2));
+                
+                return new NameRecord(null, SimulationRunner.TTL, service, nodeId);
+            } else if (delegateRecordMatcher.matches()) {
+                ServiceIdentifier<?> service = stringToServiceIdentifier(delegateRecordMatcher.group(1));
+                RegionIdentifier region = stringToRegionIdentifier(delegateRecordMatcher.group(2));
+                
+                return new DelegateRecord(null, SimulationRunner.TTL, service, region);
+            } else {
+                throw new JsonMappingException(ctxt.getParser(), "Cannot determine type of DnsRecord from: " + key);
             }
         }
     }

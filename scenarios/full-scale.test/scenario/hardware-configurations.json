@@ -1,0 +1,45 @@
+[
+  {
+    "name": "small",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 2
+    },
+    "maximumServiceContainers": 1
+  },
+  {
+    "name": "no_containers_small",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0
+  },
+  {
+    "name": "no_containers",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0
+  },
+  {
+    "name": "no_containers_medium",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0,
+    "emulabConfig": "d710"
+  },
+  {
+    "name": "no_containers_large",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0,
+    "emulabConfig": "d710",
+    "dcompConfig": "mergexp.machine.memory >= mergexp.unit.gb(4)"
+  }
+]

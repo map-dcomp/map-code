@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -31,14 +31,27 @@
 #BBN_LICENSE_END
 import warnings
 with warnings.catch_warnings():
-    import numpy as np
     import datetime
     import re
     import logging
     import os
     import os.path
     import json
+    import json
+    import csv
 
+
+class Base(object):
+    def __str__(self):
+        return str(self.__dict__)
+    
+    def __repr__(self):
+        type_ = type(self)
+        module = type_.__module__
+        qualname = type_.__qualname__        
+        return f"<{module}.{qualname} {str(self)}>"
+    
+    
 def timestamp_to_minutes(timestamp):
     """
     Convert a Java timestamp to fractional minutes
@@ -67,7 +80,7 @@ def timestamp_to_seconds(timestamp):
 
 def find_ncp_folder(node_base):
     """
-    Find the folder under node_base that contains events.csv and the timestamped folders.
+    Find the folder under node_base that contains the timestamped folders.
     This may be node_base or a directory under it.
     This method exists to handle the differences in the directory structure between lo-fi and hi-fi.
 
@@ -77,9 +90,10 @@ def find_ncp_folder(node_base):
     Return:
         Path: The path to use or None if not found
     """
-    lofi_events = node_base / 'events.csv'
-    if lofi_events.exists():
+    lofi_file = node_base / 'agent-configuration.json'
+    if lofi_file.exists():
         return node_base
+    
     agent_dir = node_base / 'agent'
     if not agent_dir.is_dir():
         return None
@@ -105,6 +119,7 @@ def fill_missing_times(all_times, time_data):
     Returns:
     numpy.array: filled values
     """
+    import numpy as np
 
     # make a copy so that the original value isn't modified 
     modified_time_data = time_data.copy()
@@ -134,6 +149,16 @@ def fill_missing_times(all_times, time_data):
     values_ar = np.nan_to_num(values_ar)
 
     return values_ar
+
+
+def log_timestamp_to_datetime(log_timestamp_str):
+    """
+    Arguments:
+        log_timestamp_str(str): the timestamp from a log file as a string
+    Returns:
+        datetime.datetime: the parsed datetime
+    """
+    return datetime.datetime.strptime(log_timestamp_str, '%Y-%m-%d/%H:%M:%S.%f/%z')
 
 
 def log_line_to_time(line, time_zone):
@@ -216,6 +241,9 @@ def setup_logging(
     else:
         logging.basicConfig(level=default_level)
 
+    # quiet down matplotlib font manager
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
+
 
 def skip_null_lines(f):
     """
@@ -231,11 +259,216 @@ def skip_null_lines(f):
        
 def set_figure_size(fig):
     """
-    Used to set the size of all graphs to the same size
+    Used to set the size of all graphs to the same size.
 
     Arguments:
         fig(Figure): matplotlib figure to set the size on
     """
     
     fig.set_size_inches(10, 6)
+    
+
+def get_plot_colors():
+    """
+    Colors used for plots. This can be used when one needs to directly assign colors to series.
+
+    Returns:
+        list(color tuples): colors to use for plots
+    """
+    # import matplotlib
+    # import matplotlib.cm
+    
+    #return matplotlib.cm.get_cmap("tab20").colors
+
+    # import matplotlib.pyplot as plt
+    # import matplotlib.cm as mplcm
+    # import matplotlib.colors as colors
+    # import numpy as np
+
+    # NUM_COLORS = 30
+    # 
+    # cm = plt.get_cmap('gist_rainbow')
+    # cNorm  = colors.Normalize(vmin=0, vmax=NUM_COLORS-1)
+    # scalarMap = mplcm.ScalarMappable(norm=cNorm, cmap=cm)
+    # colors = [scalarMap.to_rgba(i) for i in range(NUM_COLORS)]
+
+    colors = ["#eea100",
+              "#5f56dd",
+              "#74d546",
+              "#bd0096",
+              "#aad53b",
+              "#015ec6",
+              "#c4b100",
+              "#9f9eff",
+              "#00b35f",
+              "#ff75db",
+              "#05611f",
+              "#ff3b5f",
+              "#01d3da",
+              "#cb2119",
+              "#01b1fc",
+              "#f35c29",
+              "#92217a",
+              "#b3d07e",
+              "#c80049",
+              "#f8bb62",
+              "#ff92df",
+              "#8f5300",
+              "#f7b0e6",
+              "#923401",
+              "#996891",
+              "#ff935e",
+              "#a21344",
+              "#be836a",
+              "#ff8f9e",
+              "#8a3933"]
+    return colors
+
+
+def set_color_cycle(ax):
+    """
+    Used to set the color cycle on all graphs to the same colors.
+
+    Arguments:
+        ax(Axes): matplotlib Axes
+    """
+    
+    ax.set_prop_cycle(color=get_plot_colors())
+    
+
+def subplots():
+    """
+    Call matplotlib.pyplot.subplots() and then set the standard color cycle and figure size.
+
+    Returns:
+        Figure: matplotlib figure
+        Axes: matplotlib axes
+    """
+    import matplotlib.pyplot as plt
+    
+    fig, ax = plt.subplots()
+    set_figure_size(fig)
+    set_color_cycle(ax)
+    ax.grid(alpha=0.5, axis='y')
+    
+    return fig, ax
+
+
+def gather_all_services(scenario_dir):
+    """
+    Arguments:
+        scenario_dir(Path): path to where the scenario is
+    Returns:
+        set: all services in the scenario
+    """
+    location = scenario_dir / 'service-configurations.json'
+    if not location.exists():
+        raise RuntimeError("Cannot find path to service-configurations.json")
+    
+    with open(location) as f:
+        services = json.load(f)
+
+    all_services = set()
+    for service_config in services:
+        service = service_config['service']
+        app = service['artifact']
+        all_services.add(app)
+    return all_services
+
+
+def get_service_artifact(service_str):
+    """
+    Arguments:
+        service_str(str): service as a string
+    Returns:
+       str: the artifact from the string or None if parsing failed
+    """
+    match = re.match(r'^AppCoordinates {\S+,\s*(\S+),\s*\S+}$', service_str)
+    if match:
+        return match.group(1)
+    else:
+        return None
+
+
+
+def is_general_service_domain_name(domain_name):
+    """
+    Arguments:
+        domain_name(str): domain name for service
+    Returns:
+       boolean: True is the domain name has a service but no region and False otherwise
+    """
+    match = re.match(r'([^\.]+)\.map\.dcomp', domain_name)
+    if match:
+        return True
+    else:
+        return False
+
+
+def get_service_artifact_from_domain_name(domain_name):
+    """
+    Arguments:
+        domain_name(str): domain name for service
+    Returns:
+       str: the artifact from the domain name or None if parsing failed
+    """
+    match = re.match(r'(.+?)(\.[^\.]+)?\.map\.dcomp', domain_name)
+    if match:
+        return match.group(1)
+    else:
+        return None
+
+
+def gather_region_info(scenario_dir):
+    """
+    Arguments:
+        scenario_dir(Path): path to where the scenario is
+    Returns:
+        dict: node name (str) to region name (str)
+    """
+    node_regions = dict()
+    if not scenario_dir.exists():
+        return node_regions
+    
+    for node_info in scenario_dir.glob('*.json'):
+        if not node_info.is_file():
+            continue
+
+        try:
+            with open(node_info, 'r') as f:
+                node_data = json.load(f)
+        except json.decoder.JSONDecodeError:
+            get_logger().warning("Problem reading node information %s, skipping", node_info)
+        if 'region' in node_data:
+            node_name = node_info.stem
+            node_regions[node_name] = node_data['region']
+            node_regions[node_name.lower()] = node_data['region']
+        
+    return node_regions
+
+
+def gather_ip_to_node_info(scenario_dir):
+    """
+    Arguments:
+        scenario_dir(Path): path to where the scenario is
+    Returns:
+        dict: ip name (str) to node name (str)
+    """
+    ip_to_node_name_dict = dict()
+
+    host_ip_file = scenario_dir / 'host-ip.csv'
+    if not host_ip_file.exists():
+        return ip_to_node_name_dict
+
+    with open(host_ip_file) as f:
+        reader = csv.DictReader(f) 
+        for row in reader:
+            host = row['host'].lower()
+            ip = row['ip']
+
+            ip_to_node_name_dict[ip] = host
+
+    return ip_to_node_name_dict
+
+    
     

@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -31,23 +31,27 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.simulator;
 
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasKey;
+import static org.junit.Assert.assertThat;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
 
-import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bbn.map.AgentConfiguration;
 import com.bbn.map.Controller;
 import com.bbn.map.appmgr.util.AppMgrUtils;
+import com.bbn.map.dcop.DcopReceiverMessage;
 import com.bbn.map.dcop.DcopSharedInformation;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -104,7 +108,7 @@ public class TestDcopSharedInformation {
         try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
                 TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
-            final int numApRoundsToFinishSharing = SimUtils.computeRoundsToStabilize(sim);
+            final int numApRoundsToFinishSharing = SimUtils.computeRoundsToStabilize(sim) + 10;
 
             sim.startSimulation();
             sim.startClients();
@@ -113,14 +117,18 @@ public class TestDcopSharedInformation {
 
             // set shared information on the 2 DCOP nodes
             final Controller nodeA0 = sim.getControllerById(new DnsNameIdentifier("nodeA0"));
-            final TestDcopShared regionAShared = new TestDcopShared();
-            regionAShared.setMessage("RegionA");
+            final DcopSharedInformation regionAShared = new DcopSharedInformation();
+            final int regionAiteration = 1;
+            regionAShared.putMessageAtIteration(regionAiteration, new DcopReceiverMessage());
             nodeA0.setLocalDcopSharedInformation(regionAShared);
+            LOGGER.info("Running dcop on nodeA0: {}", nodeA0.isRunDCOP());
 
             final Controller nodeB0 = sim.getControllerById(new DnsNameIdentifier("nodeB0"));
-            final TestDcopShared regionBShared = new TestDcopShared();
-            regionBShared.setMessage("RegionB");
+            final DcopSharedInformation regionBShared = new DcopSharedInformation();
+            final int regionBiteration = 2;
+            regionBShared.putMessageAtIteration(regionBiteration, new DcopReceiverMessage());
             nodeB0.setLocalDcopSharedInformation(regionBShared);
+            LOGGER.info("Running dcop on nodeB0: {}", nodeB0.isRunDCOP());
 
             SimUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
             clock.stopClock();
@@ -130,28 +138,42 @@ public class TestDcopSharedInformation {
             final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionAResult = nodeA0
                     .getAllDcopSharedInformation();
             // ClassCastException is an error
-            final TestDcopShared regionASharedResultA = (TestDcopShared) regionAResult.get(regionA);
-            Assert.assertEquals(regionAShared, regionASharedResultA);
+            final DcopSharedInformation regionASharedResultA = regionAResult.get(regionA);
+            assertThat(regionASharedResultA, equalTo(regionAShared));
 
-            final TestDcopShared regionASharedResultB = (TestDcopShared) regionAResult.get(regionB);
-            Assert.assertEquals(regionBShared, regionASharedResultB);
+            final DcopSharedInformation regionASharedResultB = regionAResult.get(regionB);
+            assertThat(regionASharedResultB, equalTo(regionBShared));
 
             final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionBResult = nodeB0
                     .getAllDcopSharedInformation();
             // ClassCastException is an error
-            final TestDcopShared regionBSharedResultA = (TestDcopShared) regionBResult.get(regionA);
-            Assert.assertEquals(regionAShared, regionBSharedResultA);
+            final DcopSharedInformation regionBSharedResultA = regionBResult.get(regionA);
+            assertThat(regionBSharedResultA, equalTo(regionAShared));
 
-            final TestDcopShared regionBSharedResultB = (TestDcopShared) regionBResult.get(regionB);
-            Assert.assertEquals(regionBShared, regionBSharedResultB);
+            final DcopSharedInformation regionBSharedResultB = regionBResult.get(regionB);
+            assertThat(regionBSharedResultB, equalTo(regionBShared));
+
         } // use simulation
 
     }
 
     /**
-     * Example of how to share point to point information.
+     * Run {@link #testBasicSharing()} with direct DCOP communication.
      * 
-     * The topology looks like this.
+     * @throws URISyntaxException
+     *             test error
+     * @throws IOException
+     *             test error
+     */
+    @Ignore("Sharing of initial state and retry isn't implemented, see ticket 532")
+    @Test
+    public void testBasicSharingDirect() throws IOException, URISyntaxException {
+        AgentConfiguration.getInstance().setDcopShareDirect(true);
+        testBasicSharing();
+    }
+
+    /**
+     * Example of how to share point to point information.
      * 
      * @throws IOException
      *             if there is an error reading in the test files
@@ -190,27 +212,21 @@ public class TestDcopSharedInformation {
 
             // set shared information on the 3 DCOP nodes
             final Controller nodeA0 = sim.getControllerById(new DnsNameIdentifier("nodeA0"));
-            final TestDcopSharedP2P regionAShared = new TestDcopSharedP2P(regionA);
-            final String msgAB = "Message from A to B";
-            regionAShared.addMessage(regionB, msgAB);
-            final String msgAC = "Message from A to C";
-            regionAShared.addMessage(regionC, msgAC);
+            final DcopSharedInformation regionAShared = new DcopSharedInformation();
+            final int regionAIteration = 1;
+            regionAShared.putMessageAtIteration(regionAIteration, new DcopReceiverMessage());
             nodeA0.setLocalDcopSharedInformation(regionAShared);
 
             final Controller nodeB0 = sim.getControllerById(new DnsNameIdentifier("nodeB0"));
-            final TestDcopSharedP2P regionBShared = new TestDcopSharedP2P(regionB);
-            final String msgBA = "Message from B to A";
-            regionBShared.addMessage(regionA, msgBA);
-            final String msgBC = "Message from B to C";
-            regionBShared.addMessage(regionC, msgBC);
+            final DcopSharedInformation regionBShared = new DcopSharedInformation();
+            final int regionBIteration = 5;
+            regionBShared.putMessageAtIteration(regionBIteration, new DcopReceiverMessage());
             nodeB0.setLocalDcopSharedInformation(regionBShared);
 
             final Controller nodeC0 = sim.getControllerById(new DnsNameIdentifier("nodeC0"));
-            final TestDcopSharedP2P regionCShared = new TestDcopSharedP2P(regionC);
-            final String msgCA = "Message from C to A";
-            regionCShared.addMessage(regionA, msgCA);
-            final String msgCB = "Message from C to B";
-            regionCShared.addMessage(regionB, msgCB);
+            final DcopSharedInformation regionCShared = new DcopSharedInformation();
+            final int regionCIteration = 10;
+            regionCShared.putMessageAtIteration(regionCIteration, new DcopReceiverMessage());
             nodeC0.setLocalDcopSharedInformation(regionCShared);
 
             SimUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
@@ -238,23 +254,25 @@ public class TestDcopSharedInformation {
              * C will see messages from itself and A, but not from B because B is not a neighbor of C.
              */
 
-            // ClassCastException is an error
-
             final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionAResult = nodeA0
                     .getAllDcopSharedInformation();
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("regionAresult: {}", regionAResult);
             }
 
-            final TestDcopSharedP2P regionASharedResultB = (TestDcopSharedP2P) regionAResult.get(regionB);
-            Assert.assertEquals(regionB, regionASharedResultB.getSourceRegion());
-            final String resultMsgBA = regionASharedResultB.getMessage(regionA);
-            Assert.assertEquals(msgBA, resultMsgBA);
+            assertThat(regionAResult, hasKey(regionB));
+            final DcopSharedInformation regionASharedResultB = regionAResult.get(regionB);
+            assertThat(regionASharedResultB, equalTo(regionBShared));
 
-            final TestDcopSharedP2P regionASharedResultC = (TestDcopSharedP2P) regionAResult.get(regionC);
-            Assert.assertEquals(regionC, regionASharedResultC.getSourceRegion());
-            final String resultMsgCA = regionASharedResultC.getMessage(regionA);
-            Assert.assertEquals(msgCA, resultMsgCA);
+            // Assert.assertEquals(regionB,
+            // regionASharedResultB.getSourceRegion());
+            // final String resultMsgBA =
+            // regionASharedResultB.getMessage(regionA);
+            // Assert.assertEquals(msgBA, resultMsgBA);
+
+            assertThat(regionAResult, hasKey(regionC));
+            final DcopSharedInformation regionASharedResultC = regionAResult.get(regionC);
+            assertThat(regionASharedResultC, equalTo(regionCShared));
 
             final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionBResult = nodeB0
                     .getAllDcopSharedInformation();
@@ -262,10 +280,9 @@ public class TestDcopSharedInformation {
                 LOGGER.debug("regionBresult: {}", regionBResult);
             }
 
-            final TestDcopSharedP2P regionBSharedResultA = (TestDcopSharedP2P) regionBResult.get(regionA);
-            Assert.assertEquals(regionA, regionBSharedResultA.getSourceRegion());
-            final String resultMsgAB = regionBSharedResultA.getMessage(regionB);
-            Assert.assertEquals(msgAB, resultMsgAB);
+            assertThat(regionBResult, hasKey(regionA));
+            final DcopSharedInformation regionBSharedResultA = regionBResult.get(regionA);
+            assertThat(regionBSharedResultA, equalTo(regionAShared));
 
             final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionCResult = nodeC0
                     .getAllDcopSharedInformation();
@@ -273,127 +290,138 @@ public class TestDcopSharedInformation {
                 LOGGER.debug("regionCresult: {}", regionCResult);
             }
 
-            final TestDcopSharedP2P regionCSharedResultA = (TestDcopSharedP2P) regionCResult.get(regionA);
-            Assert.assertEquals(regionA, regionCSharedResultA.getSourceRegion());
-            final String resultMsgAC = regionCSharedResultA.getMessage(regionC);
-            Assert.assertEquals(msgAC, resultMsgAC);
+            assertThat(regionCResult, hasKey(regionA));
+            final DcopSharedInformation regionCSharedResultA = regionCResult.get(regionA);
+            assertThat(regionCSharedResultA, equalTo(regionAShared));
 
             LOGGER.info("End of tests");
         } // use simulation
 
     }
 
-    private static final class TestDcopShared extends DcopSharedInformation {
-
-        private static final long serialVersionUID = 1L;
-
-        private String message;
-
-        /**
-         * 
-         * @param str
-         *            the message to share
-         */
-        public void setMessage(final String str) {
-            message = str;
-        }
-
-        /**
-         * 
-         * @return the message that was shared
-         */
-        public String getMessage() {
-            return message;
-        }
-
-        @Override
-        public int hashCode() {
-            return message.hashCode();
-        }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            } else if (o instanceof TestDcopShared) {
-                final TestDcopShared other = (TestDcopShared) o;
-                return other.getMessage().equals(getMessage());
-            } else {
-                return false;
-            }
-        }
-
-        @Override
-        public String toString() {
-            return this.getClass().getSimpleName() + " [" + " message: " + message + " ]";
-
-        }
+    /**
+     * Execute {@link #testP2PSharing()} using direct DCOP communication.
+     * 
+     * @throws IOException
+     *             test error
+     * @throws URISyntaxException
+     *             test error
+     */
+    @Ignore("Sharing of initial state and retry isn't implemented, see ticket 532")
+    @Test
+    public void testP2PSharingDirect() throws URISyntaxException, IOException {
+        AgentConfiguration.getInstance().setDcopShareDirect(true);
+        testP2PSharing();
     }
 
-    private static final class TestDcopSharedP2P extends DcopSharedInformation {
+    /**
+     * Make sure that a second DCOP message is properly traversing the network.
+     * 
+     * @throws IOException
+     *             if there is an error reading in the test files
+     * 
+     * @throws URISyntaxException
+     *             if the test file paths cannot be properly converted to a URI
+     * 
+     */
+    @Test
+    public void test2MessageSharing() throws URISyntaxException, IOException {
+        final String regionAName = "A";
+        final RegionIdentifier regionA = new StringRegionIdentifier(regionAName);
+        final String regionBName = "B";
+        final RegionIdentifier regionB = new StringRegionIdentifier(regionBName);
+        final String regionCName = "C";
+        final RegionIdentifier regionC = new StringRegionIdentifier(regionCName);
+        final int numApRoundsToInitialize = 5;
 
-        private static final long serialVersionUID = 1L;
+        final URL baseu = Thread.currentThread().getContextClassLoader().getResource("ns2/test-dcop-sharing-multiple");
+        final Path baseDirectory = Paths.get(baseu.toURI());
 
-        private final RegionIdentifier sourceRegion;
+        final Path demandPath = null;
 
-        private Map<RegionIdentifier, String> messages = new HashMap<RegionIdentifier, String>();
+        final VirtualClock clock = new SimpleClock();
 
-        /**
-         * 
-         * @param sourceRegion
-         *            the region that the message originated from
-         */
-        /* package */ TestDcopSharedP2P(final RegionIdentifier sourceRegion) {
-            this.sourceRegion = sourceRegion;
-        }
+        try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, TestUtils.POLLING_INTERVAL_MS,
+                TestUtils.DNS_TTL, false, false, false, AppMgrUtils::getContainerParameters)) {
 
-        /**
-         * @return get the source region
-         */
-        public RegionIdentifier getSourceRegion() {
-            return sourceRegion;
-        }
+            final int numApRoundsToFinishSharing = SimUtils.computeRoundsToStabilize(sim) + 10;
 
-        /**
-         * @param destination
-         *            which region should be looking at the message
-         * @param message
-         *            the message to send.
-         */
-        public void addMessage(final RegionIdentifier destination, final String message) {
-            messages.put(destination, message);
-        }
+            sim.startSimulation();
+            sim.startClients();
 
-        /**
-         * 
-         * @return the message that was shared for the specified region
-         */
-        public String getMessage(final RegionIdentifier destination) {
-            return messages.get(destination);
-        }
+            SimUtils.waitForApRounds(sim, numApRoundsToInitialize);
 
-        @Override
-        public int hashCode() {
-            return messages.hashCode();
-        }
+            final Controller nodeA0 = sim.getControllerById(new DnsNameIdentifier("nodeA0"));
+            final Controller nodeB0 = sim.getControllerById(new DnsNameIdentifier("nodeB0"));
+            final Controller nodeC0 = sim.getControllerById(new DnsNameIdentifier("nodeC0"));
+            LOGGER.info("Running dcop on nodeA0: {}", nodeA0.isRunDCOP());
+            LOGGER.info("Running dcop on nodeB0: {}", nodeB0.isRunDCOP());
+            LOGGER.info("Running dcop on nodeC0: {}", nodeC0.isRunDCOP());
 
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            } else if (o instanceof TestDcopSharedP2P) {
-                final TestDcopSharedP2P other = (TestDcopSharedP2P) o;
-                return other.messages.equals(messages);
-            } else {
-                return false;
-            }
-        }
+            // set shared information on the 2 DCOP nodes
+            final DcopSharedInformation regionAShared1 = new DcopSharedInformation();
+            final int regionAiteration1 = 10;
+            regionAShared1.putMessageAtIteration(regionAiteration1, new DcopReceiverMessage());
+            nodeA0.setLocalDcopSharedInformation(regionAShared1);
 
-        @Override
-        public String toString() {
-            return this.getClass().getSimpleName() + " [" + " sourceRegion: " + sourceRegion + " messages: " + messages
-                    + " ]";
+            final DcopSharedInformation regionBShared1 = new DcopSharedInformation();
+            final int regionBiteration1 = 20;
+            regionBShared1.putMessageAtIteration(regionBiteration1, new DcopReceiverMessage());
+            nodeB0.setLocalDcopSharedInformation(regionBShared1);
 
-        }
+            final DcopSharedInformation regionCShared1 = new DcopSharedInformation();
+            final int regionCiteration1 = 30;
+            regionCShared1.putMessageAtIteration(regionCiteration1, new DcopReceiverMessage());
+            nodeC0.setLocalDcopSharedInformation(regionCShared1);
+
+            SimUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
+            
+            // set second shared information on the 2 DCOP nodes
+            final DcopSharedInformation regionAShared2 = new DcopSharedInformation();
+            final int regionAiteration2 = 11;
+            regionAShared2.putMessageAtIteration(regionAiteration2, new DcopReceiverMessage());
+            nodeA0.setLocalDcopSharedInformation(regionAShared2);
+
+            final DcopSharedInformation regionBShared2 = new DcopSharedInformation();
+            final int regionBiteration2 = 21;
+            regionBShared2.putMessageAtIteration(regionBiteration2, new DcopReceiverMessage());
+            nodeB0.setLocalDcopSharedInformation(regionBShared2);
+            
+            final DcopSharedInformation regionCShared2 = new DcopSharedInformation();
+            final int regionCiteration2 = 31;
+            regionCShared2.putMessageAtIteration(regionCiteration2, new DcopReceiverMessage());
+            nodeC0.setLocalDcopSharedInformation(regionCShared2);
+
+            SimUtils.waitForApRounds(sim, numApRoundsToFinishSharing);
+            
+            clock.stopClock();
+
+            // check that the data is consistent
+
+            final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionAResult = nodeA0
+                    .getAllDcopSharedInformation();            
+            final DcopSharedInformation regionASharedResultA = regionAResult.get(regionA);
+            assertThat(regionASharedResultA, equalTo(regionAShared2));
+            final DcopSharedInformation regionASharedResultB = regionAResult.get(regionB);
+            assertThat(regionASharedResultB, equalTo(regionBShared2));
+
+            final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionBResult = nodeB0
+                    .getAllDcopSharedInformation();
+            final DcopSharedInformation regionBSharedResultA = regionBResult.get(regionA);
+            assertThat(regionBSharedResultA, equalTo(regionAShared2));
+            final DcopSharedInformation regionBSharedResultB = regionBResult.get(regionB);
+            assertThat(regionBSharedResultB, equalTo(regionBShared2));
+            final DcopSharedInformation regionBSharedResultC = regionBResult.get(regionC);
+            assertThat(regionBSharedResultC, equalTo(regionCShared2));
+
+            final ImmutableMap<RegionIdentifier, DcopSharedInformation> regionCResult = nodeC0
+                    .getAllDcopSharedInformation();
+            final DcopSharedInformation regionCSharedResultB = regionCResult.get(regionB);
+            assertThat(regionCSharedResultB, equalTo(regionBShared2));
+            final DcopSharedInformation regionCSharedResultC = regionCResult.get(regionC);
+            assertThat(regionCSharedResultC, equalTo(regionCShared2));
+
+        } // use simulation
+
     }
 }

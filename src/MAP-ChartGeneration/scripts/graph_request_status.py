@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -43,6 +43,10 @@ Generates
 
 import warnings
 with warnings.catch_warnings():
+    # use a non-GUI backend for matplotlib
+    import matplotlib
+    matplotlib.use('Agg')
+    
     import re
     import sys
     import argparse
@@ -57,10 +61,6 @@ with warnings.catch_warnings():
     import csv
     import latency_analysis
     
-    # use a non-GUI backend for matplotlib
-    import matplotlib
-    matplotlib.use('Agg')
-    
     import matplotlib.pyplot as plt
     
 
@@ -69,18 +69,8 @@ script_dir=os.path.abspath(os.path.dirname(__file__))
 def get_logger():
     return logging.getLogger(__name__)
 
-class Base(object):
-    def __str__(self):
-        return str(self.__dict__)
     
-    def __repr__(self):
-        type_ = type(self)
-        module = type_.__module__
-        qualname = type_.__qualname__        
-        return f"<{module}.{qualname} {str(self)}>"
-
-    
-class ServiceCounts(Base):
+class ServiceCounts(map_utils.Base):
     def __init__(self, success_count, failure_count):
         self.success_count = success_count
         self.failure_count = failure_count
@@ -142,7 +132,6 @@ def process_server_node(node_dir, container_data_dir):
         dict: sums over time (service -> timestamp -> ServiceCounts)
         dict: values to increment at time, can be used to compute
               global sums (service -> timestamp -> ServiceCounts)
-        int: min timestamp
     """
 
     try:
@@ -150,7 +139,6 @@ def process_server_node(node_dir, container_data_dir):
 
         # service -> timestamp -> ServiceCounts
         counts = dict()
-        min_timestamp = None
         for service_dir in container_data_dir.iterdir():
             for container_dir in service_dir.iterdir():
                 for time_dir in container_dir.iterdir():
@@ -165,8 +153,6 @@ def process_server_node(node_dir, container_data_dir):
                                     continue
 
                                 time = int(row['timestamp'])
-                                if min_timestamp is None or time < min_timestamp:
-                                    min_timestamp = time
 
                                 service_data = counts.get(service, dict())
                                 count = service_data.get(time, ServiceCounts(0, 0))
@@ -179,7 +165,7 @@ def process_server_node(node_dir, container_data_dir):
 
         sums = compute_success_sums(counts)
 
-        return node_name, sums, counts, min_timestamp
+        return node_name, sums, counts
     except:
         get_logger().exception("Unexpected error")
 
@@ -195,7 +181,6 @@ def process_client_node(node_dir, container_data_dir):
         dict: sums over time (service -> timestamp -> ServiceCounts)
         dict: values to increment at time, can be used to compute
               global sums (service -> timestamp -> ServiceCounts)
-        int: min timestamp
     """
 
     try:
@@ -203,7 +188,6 @@ def process_client_node(node_dir, container_data_dir):
 
         # service -> timestamp -> ServiceCounts
         client_data = dict()
-        min_timestamp = None
         for service_dir in container_data_dir.iterdir():
             service = service_dir.name
 
@@ -218,9 +202,6 @@ def process_client_node(node_dir, container_data_dir):
                                 continue
 
                             time = int(row['timestamp'])
-                            if min_timestamp is None or time < min_timestamp:
-                                min_timestamp = time
-
 
                             service_data = client_data.get(service, dict())
                             count = service_data.get(time, ServiceCounts(0, 0))
@@ -234,7 +215,7 @@ def process_client_node(node_dir, container_data_dir):
 
         client_counts = compute_success_sums(client_data)
 
-        return client, client_counts, client_data, min_timestamp
+        return client, client_counts, client_data
     except:
         get_logger().exception("Unexpected error")
 
@@ -248,16 +229,15 @@ def output_node_graph(output, node_name, data, label):
         label (str): Client or Server
     """
 
-    fig, ax = plt.subplots()
+    fig, ax = map_utils.subplots()
     if node_name is not None:
         ax.set_title(f"{label} Request Status for {node_name}")
     else:
         ax.set_title(f"{label} Request Status")
-
     ax.set_xlabel("Time (minutes)")
     ax.set_ylabel("Cumulative Count")
-    ax.grid(alpha=0.5, axis='y')
-    for service, service_data in data.items():
+
+    for service, service_data in sorted(data.items()):
         pairs = sorted(service_data.items())
         times, values = zip(*pairs)
         success_counts = [c.success_count for c in values]
@@ -299,7 +279,6 @@ def gather_data(sim_output):
         dict: raw data per client (client -> service -> timestamp -> ServiceCounts)
         dict: sums over time per server (server -> service -> timestamp -> ServiceCounts)
         dict: raw data per server (server -> service -> timestamp -> ServiceCounts)
-        int: min_timestamp
     """
 
     with multiprocessing.Pool(processes=os.cpu_count()) as pool:
@@ -319,26 +298,19 @@ def gather_data(sim_output):
 
         client_data_sums = dict()
         client_data_counts = dict()
-        min_timestamp = None
         for result in client_results:
-            (client, client_sums, client_data, client_min_timestamp) = result.get()
-            if client_min_timestamp is not None:
-                if min_timestamp is None or client_min_timestamp < min_timestamp:
-                    min_timestamp = client_min_timestamp
+            (client, client_sums, client_data) = result.get()
             client_data_sums[client] = client_sums
             client_data_counts[client] = client_data
 
         server_data_sums = dict()
         server_data_counts = dict()
         for result in server_results:
-            (node_name, sums, counts, node_min_timestamp) = result.get()
-            if node_min_timestamp is not None:
-                if min_timestamp is None or node_min_timestamp < min_timestamp:
-                    min_timestamp = node_min_timestamp
+            (node_name, sums, counts) = result.get()
             server_data_sums[node_name] = sums
             server_data_counts[node_name] = counts
             
-    return client_data_sums, client_data_counts, server_data_sums, server_data_counts, min_timestamp
+    return client_data_sums, client_data_counts, server_data_sums, server_data_counts
 
 
 def compute_per_service(data_counts):
@@ -378,6 +350,7 @@ def relative_timestamps_service(data, min_timestamp):
     """
     Arguments:
         data (dict): service -> timestamp -> ServiceCounts
+        min_timestamp (int): first timestamp as milliseconds since the Epoch
 
     Returns:
         dict: service -> relative minutes -> ServiceCounts
@@ -398,6 +371,7 @@ def relative_timestamps_client(data, min_timestamp):
     """
     Arguments:
         data (dict): client -> service -> timestamp -> ServiceCounts
+        min_timestamp (int): first timestamp as milliseconds since the Epoch
 
     Returns:
         dict: client -> service -> relative minutes -> ServiceCounts
@@ -414,28 +388,34 @@ def main_method(args):
         get_logger().error("%s does not exist", sim_output)
         return 1
 
+    with open(args.first_timestamp_file) as f:
+        ts_str = f.readline().strip()
+        first_timestamp = map_utils.log_timestamp_to_datetime(ts_str)
+    get_logger().info("Simulation started at %s", first_timestamp)
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
 
     # client -> service -> timestamp -> ServiceCounts
-    (client_data_sums, client_data_counts, server_data_sums, server_data_counts, min_timestamp) = gather_data(sim_output)
+    (client_data_sums, client_data_counts, server_data_sums, server_data_counts) = gather_data(sim_output)
 
     # client graphs
-    client_data_sums_relative = relative_timestamps_client(client_data_sums, min_timestamp)
+    client_data_sums_relative = relative_timestamps_client(client_data_sums, first_timestamp_ms)
     output_per_node_graphs(output, client_data_sums_relative, 'Client')
 
     # client service graphs
     client_service_data_sums = compute_per_service(client_data_counts)
-    client_service_data_sums_relative = relative_timestamps_service(client_service_data_sums, min_timestamp)
+    client_service_data_sums_relative = relative_timestamps_service(client_service_data_sums, first_timestamp_ms)
     output_node_graph(output, None, client_service_data_sums_relative, 'Client')
 
     # server graphs
-    server_data_sums_relative = relative_timestamps_client(server_data_sums, min_timestamp)
+    server_data_sums_relative = relative_timestamps_client(server_data_sums, first_timestamp_ms)
     output_per_node_graphs(output, server_data_sums_relative, 'Server')
 
     # server service graphs
     server_service_data_sums = compute_per_service(server_data_counts)
-    server_service_data_sums_relative = relative_timestamps_service(server_service_data_sums, min_timestamp)
+    server_service_data_sums_relative = relative_timestamps_service(server_service_data_sums, first_timestamp_ms)
     output_node_graph(output, None, server_service_data_sums_relative, 'Server')
 
     
@@ -461,10 +441,14 @@ def main(argv=None):
     parser.add_argument("--debug", dest="debug", help="Enable interactive debugger on error", action='store_true')
     parser.add_argument("-s", "--sim-output", dest="sim_output", help="Chart output directory (Required)", required=True)
     parser.add_argument("-o", "--output", dest="output", help="Output directory (Required)", required=True)
+    parser.add_argument("--first-timestamp-file", dest="first_timestamp_file", help="Path to file containing the log timestamp that the simulation started", required=True)
 
     args = parser.parse_args(argv)
 
     map_utils.setup_logging(default_path=args.logconfig)
+    if 'multiprocessing' in sys.modules:
+        import multiprocessing_logging
+        multiprocessing_logging.install_mp_handler()
 
     if args.debug:
         import pdb, traceback

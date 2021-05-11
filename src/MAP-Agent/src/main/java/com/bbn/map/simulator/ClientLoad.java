@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -87,6 +87,8 @@ public class ClientLoad extends BaseNetworkLoad {
      *            see {@link #getNodeLoad()}
      * @param networkLoad
      *            see {@link #getNetworkLoad()}
+     * @param clientArguments
+     *            {@Link #getClientArguments()}
      */
     public ClientLoad(final long startTime,
             final long serverDuration,
@@ -94,11 +96,33 @@ public class ClientLoad extends BaseNetworkLoad {
             final int numClients,
             final ApplicationCoordinates service,
             final ImmutableMap<NodeAttribute, Double> nodeLoad,
-            final ImmutableMap<LinkAttribute, Double> networkLoad) {
+            final ImmutableMap<LinkAttribute, Double> networkLoad,
+            final ImmutableList<String> clientArguments) {
         super(startTime, networkDuration, service, networkLoad);
         this.serverDuration = serverDuration;
         this.nodeLoad = nodeLoad;
         this.numClients = numClients;
+        this.clientArguments = clientArguments;
+    }
+
+    private ImmutableList<String> clientArguments;
+
+    /**
+     * These arguments can be used by Java clients in the hifi testbed.
+     * 
+     * @return the client arguments
+     */
+    public ImmutableList<String> getClientArguments() {
+        return clientArguments;
+    }
+
+    /**
+     * 
+     * @param v
+     *            {@link #getClientArguments()}
+     */
+    public void setClientArguments(final ImmutableList<String> v) {
+        this.clientArguments = v;
     }
 
     private long serverDuration;

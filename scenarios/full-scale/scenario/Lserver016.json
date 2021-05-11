@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "Lserver016",
+    "region": "L",
+    "router": false,
+    "underlay": false
+}

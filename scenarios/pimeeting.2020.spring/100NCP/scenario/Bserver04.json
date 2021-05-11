@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": true,
+    "hardware": "no_containers",
+    "name": "Bserver04",
+    "region": "B",
+    "underlay": false
+}

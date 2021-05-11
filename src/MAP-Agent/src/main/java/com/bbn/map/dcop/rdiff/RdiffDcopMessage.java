@@ -2,12 +2,16 @@ package com.bbn.map.dcop.rdiff;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 
 import com.bbn.map.dcop.GeneralDcopMessage;
 import com.bbn.map.dcop.ServerClientService;
+import com.bbn.map.dcop.ServerClientServiceLoad;
+import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 
 /**
@@ -42,9 +46,13 @@ public class RdiffDcopMessage implements GeneralDcopMessage, Serializable {
     TREE
     }
     
-    private Map<RdiffMessageType, Map<ServerClientService, Double>> msgTypeClientServiceMap = new HashMap<>();
+    private final Map<RdiffMessageType, Set<ServerClientServiceLoad>> msgTypeClientServiceMap = new HashMap<>();
     
-    private Map<ServiceIdentifier<?>, RdiffTree> dataCenterTreeMap = new HashMap<>();
+    private final Map<ServerClientService, RegionIdentifier> dataCenterTreeMap = new HashMap<>();
+    
+    private final Map<ServerClientService, RegionIdentifier> pathToClientMap = new HashMap<>();
+    
+    private final Set<ServiceIdentifier<?>> serviceSet = new HashSet<>();
     
     /** Default constructor.
      * 
@@ -54,48 +62,55 @@ public class RdiffDcopMessage implements GeneralDcopMessage, Serializable {
     }
     
     /**
+     * @param msgTypeClientServiceMap .
      * @param dataCenterTreeMap .
+     * @param pathToClientMap .
+     * @param serviceSet .
      */
-    public RdiffDcopMessage(Map<ServiceIdentifier<?>, RdiffTree> dataCenterTreeMap) {
-        for (Entry<ServiceIdentifier<?>, RdiffTree> entry : dataCenterTreeMap.entrySet()) {
-            this.dataCenterTreeMap.put(entry.getKey(), new RdiffTree(entry.getValue()));
+    public RdiffDcopMessage(Map<RdiffMessageType, Set<ServerClientServiceLoad>> msgTypeClientServiceMap, Map<ServerClientService, RegionIdentifier> dataCenterTreeMap, Map<ServerClientService, RegionIdentifier> pathToClientMap, Set<ServiceIdentifier<?>> serviceSet) {
+        for (Entry<RdiffMessageType, Set<ServerClientServiceLoad>> entry : msgTypeClientServiceMap.entrySet()) {
+            Set<ServerClientServiceLoad> tupleSet = new HashSet<>();
+            for (ServerClientServiceLoad tuple : entry.getValue()) {
+                tupleSet.add(ServerClientServiceLoad.deepCopy(tuple));
+            }
+            this.msgTypeClientServiceMap.put(entry.getKey(), tupleSet);
         }
+        
+        
+        for (Entry<ServerClientService, RegionIdentifier> entry : dataCenterTreeMap.entrySet()) {
+            this.dataCenterTreeMap.put(new ServerClientService(entry.getKey()), entry.getValue());
+        }
+        
+        for (Entry<ServerClientService, RegionIdentifier> entry : pathToClientMap.entrySet()) {
+            this.pathToClientMap.put(new ServerClientService(entry.getKey()), entry.getValue());
+        }
+        
+        this.serviceSet.addAll(serviceSet);
     }
     
+    /**
+     * @return service 
+     */
+    public Set<ServiceIdentifier<?>> getServiceSet() {
+        return serviceSet;
+    }
+
     /** Copy constructor.
      * @param object is the object to be copied
      */
     public RdiffDcopMessage(RdiffDcopMessage object) {
-        this();
-        
-        for (Entry<RdiffMessageType, Map<ServerClientService, Double>> msgTypeEntry : object.getMsgTypeClientServiceMap().entrySet()) {
-            Map<ServerClientService, Double> clientServiceMap = msgTypeEntry.getValue();
-            
-            Map<ServerClientService, Double> cloneClientServiceMap = new HashMap<>();
-            for (Entry<ServerClientService, Double> entry : clientServiceMap.entrySet()) {
-                cloneClientServiceMap.put(new ServerClientService(entry.getKey()), entry.getValue());
-            }
-            
-            msgTypeClientServiceMap.put(msgTypeEntry.getKey(), cloneClientServiceMap);
-        }
-        
-        for (Entry<ServiceIdentifier<?>, RdiffTree> entry : object.getDataCenterTreeMap().entrySet()) {
-            dataCenterTreeMap.put(entry.getKey(), new RdiffTree(entry.getValue()));
-        }
+        this(object.getMsgTypeClientServiceMap(), object.getDataCenterTreeMap(), object.getPathToClientMap(), object.getServiceSet());
     }
     
     /**
      * @return the msgTypeClientServiceMap
      */
-    Map<RdiffMessageType, Map<ServerClientService, Double>> getMsgTypeClientServiceMap() {
+    Map<RdiffMessageType, Set<ServerClientServiceLoad>> getMsgTypeClientServiceMap() {
         return msgTypeClientServiceMap;
     }
-
-    /**
-     * @param msgTypeClientServiceMap the msgTypeClientServiceMap to set
-     */
-    void setMsgTypeClientServiceMap(Map<RdiffMessageType, Map<ServerClientService, Double>> msgTypeClientServiceMap) {
-        this.msgTypeClientServiceMap = msgTypeClientServiceMap;
+    
+    Set<ServerClientServiceLoad> getMessages(RdiffMessageType msgType) {
+        return msgTypeClientServiceMap.getOrDefault(msgType, new HashSet<>());
     }
 
     @Override
@@ -108,51 +123,51 @@ public class RdiffDcopMessage implements GeneralDcopMessage, Serializable {
             final RdiffDcopMessage other = (RdiffDcopMessage) obj;
             return Objects.equals(getMsgTypeClientServiceMap(), other.getMsgTypeClientServiceMap()) //
                     && Objects.equals(getDataCenterTreeMap(), other.getDataCenterTreeMap())
-            ;
+                    && Objects.equals(getPathToClientMap(), other.getPathToClientMap())
+                    && Objects.equals(getServiceSet(), other.getServiceSet())
+               ;
         }
     }
     
     @Override
     public int hashCode() {
-        return Objects.hash(msgTypeClientServiceMap, dataCenterTreeMap);
+        return Objects.hash(msgTypeClientServiceMap, dataCenterTreeMap, pathToClientMap, serviceSet);
     }
 
     /**
      * @return the dataCenterTree
      */
-    Map<ServiceIdentifier<?>, RdiffTree> getDataCenterTreeMap() {
+    Map<ServerClientService, RegionIdentifier> getDataCenterTreeMap() {
         return dataCenterTreeMap;
     }
-
+    
     /**
-     * @param dataCenterTreeMap .
+     * @return path to client 
      */
-    void setDataCenterTreeMap(Map<ServiceIdentifier<?>, RdiffTree> dataCenterTreeMap) {
-        this.dataCenterTreeMap = dataCenterTreeMap;
+    public Map<ServerClientService, RegionIdentifier>  getPathToClientMap() {
+        return pathToClientMap;
     }
 
     /**
      * @param msgType .
      * @param messageToSend .
      */
-    void addMessage(RdiffMessageType msgType, Map<ServerClientService, Double> messageToSend) {
-        Map<ServerClientService, Double>  rootClientServiceMap = msgTypeClientServiceMap.getOrDefault(msgType, new HashMap<>());
-        rootClientServiceMap.putAll(messageToSend);
-        msgTypeClientServiceMap.put(msgType, messageToSend);
+    void addMessage(RdiffMessageType msgType, ServerClientServiceLoad messageToSend) {
+        msgTypeClientServiceMap.computeIfAbsent(msgType, k -> new HashSet<>()).add(messageToSend);
+    }
+    
+    /**
+     * @param msgType .
+     * @param messageToSend .
+     */
+    void addMessage(RdiffMessageType msgType, Set<ServerClientServiceLoad> messageToSend) {
+        msgTypeClientServiceMap.computeIfAbsent(msgType, k -> new HashSet<>()).addAll(messageToSend);
     }
 
-    /* (non-Javadoc)
-     * @see java.lang.Object#toString()
-     */
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("RdiffDcopMessage [msgTypeClientServiceMap=");
-        builder.append(msgTypeClientServiceMap);
-        builder.append(", dataCenterTreeMap=");
-        builder.append(dataCenterTreeMap);
-        builder.append("]");
-        return builder.toString();
+        return "RdiffDcopMessage [msgTypeClientServiceMap=" + msgTypeClientServiceMap + ", dataCenterTreeMap="
+                + dataCenterTreeMap + ", pathToClientMap=" + pathToClientMap + ", serviceSet=" + serviceSet + "]";
     }
 }
 

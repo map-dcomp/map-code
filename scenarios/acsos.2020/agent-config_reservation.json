@@ -1,6 +1,0 @@
-{
-    "rlgAlgorithm": "STUB",
-    "rlgStubChooseNcp": "MOST_AVAILABLE_CONTAINERS",
-    "rlgLoadThreshold": 0.6,
-    "rlgPriorityPolicy": "FIXED_TARGET"
-}

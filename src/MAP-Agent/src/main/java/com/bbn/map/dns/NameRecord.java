@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -47,16 +47,14 @@ public final class NameRecord extends DnsRecord {
     /**
      * 
      * @param sourceRegion
-     *            passed to parent, passed to parent,
-     *            {@link DnsRecord#DnsRecord(RegionIdentifier, int,
-     * ServiceIdentifier<?>)
+     *            passed to parent, {@link DnsRecord#DnsRecord(RegionIdentifier,
+     * int, ServiceIdentifier<?>)
      * @param ttl
      *            passed to parent, {@link DnsRecord#DnsRecord(RegionIdentifier,
      * int, ServiceIdentifier<?>)
      * @param service
-     *            passed to parent, passed to parent,
-     *            {@link DnsRecord#DnsRecord(RegionIdentifier, int,
-     * ServiceIdentifier<?>)
+     *            passed to parent, {@link DnsRecord#DnsRecord(RegionIdentifier,
+     * int, ServiceIdentifier<?>)
      * @param node
      *            node to map name to
      */
@@ -66,6 +64,7 @@ public final class NameRecord extends DnsRecord {
             @JsonProperty("node") @Nonnull final NodeIdentifier node) {
         super(sourceRegion, ttl, service);
         this.node = node;
+        this.hashCode = getService().hashCode();
     }
 
     private final NodeIdentifier node;
@@ -78,9 +77,11 @@ public final class NameRecord extends DnsRecord {
         return node;
     }
 
+    private final int hashCode;
+
     @Override
     public int hashCode() {
-        return getService().hashCode();
+        return hashCode;
     }
 
     @Override
@@ -91,8 +92,14 @@ public final class NameRecord extends DnsRecord {
             return false;
         } else if (getClass().equals(o.getClass())) {
             final NameRecord other = (NameRecord) o;
-            return Objects.equal(getNode(), other.getNode())
-                    && Objects.equal(getSourceRegion(), other.getSourceRegion()) && getTtl() == other.getTtl();
+            if (this.hashCode != other.hashCode) {
+                return false;
+            } else {
+                return getTtl() == other.getTtl() //
+                        && Objects.equal(getService(), other.getService()) //
+                        && Objects.equal(getNode(), other.getNode()) //
+                        && Objects.equal(getSourceRegion(), other.getSourceRegion());
+            }
         } else {
             return false;
         }

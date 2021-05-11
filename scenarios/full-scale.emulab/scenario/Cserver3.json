@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "compute",
+    "name": "Cserver3",
+    "region": "C",
+    "router": false,
+    "underlay": false
+}

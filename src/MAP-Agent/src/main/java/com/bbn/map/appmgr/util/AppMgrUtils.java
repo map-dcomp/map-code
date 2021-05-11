@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -112,11 +112,10 @@ public final class AppMgrUtils {
      *            where to look for the application specification
      * @return the specification
      * @throws IllegalArgumentException
-     *             if s does not wrap an {@link ApplicationCoordinates} object.
-     *             This should never fail inside MAP.
+     *             if {@code s} does not wrap an {@link ApplicationCoordinates}
+     *             object. This should never fail inside MAP.
      * @throws NullPointerException
-     *             if the application specification cannot be found or the
-     *             container parameters are not specified
+     *             if the application specification cannot be found
      * 
      * @see ApplicationManagerApi#getApplicationSpecification(ApplicationCoordinates)
      */

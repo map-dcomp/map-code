@@ -1,0 +1,67 @@
+#!/bin/sh
+
+debug() { ! "${log_debug-false}" || log "DEBUG: $*" >&2; }
+log() { printf '%s\n' "$*"; }
+warn() { log "WARNING: $*" >&2; }
+error() { log "ERROR: $*" >&2; }
+fatal() { error "$*"; exit 1; }
+try() { "$@" || fatal "'$@' failed"; }
+
+mydir=$(cd "$(dirname "$0")" && pwd -L) || fatal "Unable to determine script directory"
+
+help() {
+    log "Usage $0 --output <output directory>"
+    exit
+}
+
+agent_configuration="${mydir}"/agent-config.json
+base_output=""
+demand_dir=${mydir}/demand
+
+# parse arguments
+while [ $# -gt 0 ]; do
+    case $1 in
+        --help|-h)
+            log "Help here"
+            ;;
+        --output)
+            if [ -z "$2" ]; then
+                fatal "--output is missing argument"
+            fi
+            base_output=${2}
+            shift
+            ;;
+        *)
+            error "Unknown argument $1"
+            help
+            ;;
+    esac
+    shift
+done
+
+if [ -z "${base_output}" ]; then
+   help
+fi
+
+if [ ! -d "${demand_dir}" ]; then
+    fatal "Cannot find demand directory: ${demand_dir}"
+fi
+
+try mkdir -p "${base_output}"
+
+scenario_dir="${mydir}"/scenario
+sim_output=${base_output}/sim-output
+
+agent_jar="${mydir}"/../map-sim-runner-executable.jar
+
+rm -fr "${sim_output}"
+try mkdir -p "${sim_output}"
+
+log "Running simulation"
+try java \
+    -jar "${agent_jar}" ${agent_configuration} \
+     --scenario "${scenario_dir}" \
+     -d "${demand_dir}" \
+     -o "${sim_output}"
+     
+try cp map.log "${sim_output}"

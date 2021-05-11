@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -40,9 +40,7 @@ import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.experimental.theories.DataPoints;
 import org.junit.experimental.theories.Theories;
@@ -59,7 +57,6 @@ import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.simulator.SimUtils;
 import com.bbn.map.simulator.Simulation;
 import com.bbn.map.simulator.TestUtils;
-import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
@@ -87,18 +84,6 @@ public class RegionalOverloadTest {
     @Rule
     public RuleChain chain = TestUtils.getStandardRuleChain()
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
-
-    /**
-     * Reset the {@link AgentConfiguration} object to default values. This is
-     * done before and after all tests to ensure that other tests are not
-     * effected by using the different algorithms here.
-     */
-    @Before
-    @After
-    public void resetAgentConfiguration() {
-        AgentConfiguration.resetToDefaults();
-        GlobalNetworkConfiguration.resetToDefaults();
-    }
 
     // CHECKSTYLE:OFF test data class
     private static final class Parameters {

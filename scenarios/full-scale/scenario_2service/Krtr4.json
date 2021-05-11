@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Krtr4",
+    "region": "K",
+    "router": true,
+    "underlay": false
+}

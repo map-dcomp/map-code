@@ -1,0 +1,11 @@
+{
+    "services_per_ncp": 1,
+    "client_request_cpu_load" : 0.2,
+    "client_request_network_tx" : 0.12,
+    "client_request_network_rx" : 0.012,
+    "minutes_per_priority_group" : 30,
+    "minutes_per_service_num" : 0,
+    "num_clients_per_service" : 68,
+    "feathering_factor" : 20,
+    "feathering_range_minutes" : 1
+}

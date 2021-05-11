@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -36,6 +36,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -129,13 +130,25 @@ public class FixedTargetServicePriorityManager extends AbstractPercentAllocation
             {
                 ServicePriorityStatus statusA = getServicePriorityStatus(a);
                 ServicePriorityStatus statusB = getServicePriorityStatus(b);
-                
+
                 // B is first so that we have descending order
                 return Integer.compare(statusB.getPriority(), statusA.getPriority());
             }
         });
-        
-        
+
+        // check for services that are considered active but are not in the services list for this priority iteration
+        for (Iterator<ServiceIdentifier<?>> iter = activeServices.iterator(); iter.hasNext();) {
+            ServiceIdentifier<?> activeService = iter.next();
+
+            if (!services.contains(activeService)) {
+                LOGGER.warn("Active service {} with load percentage {}, was not found in the list of services passed "
+                        + "into beginIteration for this priority management iteration: {}",
+                        activeService, loadPercentages.allocatedLoadPercentagePerService.get(activeService), services);
+                iter.remove();
+            }
+        }
+
+
         int totalPriority = 0;
         for (ServiceIdentifier<?> service : activeServices)
         {

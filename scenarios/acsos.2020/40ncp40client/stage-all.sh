@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -110,7 +110,7 @@ try cp -r "${scenario_dir}" "${stage_scenario_dir}"
 for num in 1 2; do
     for priority in 2 5; do
 
-        try "${mydir}"/../generate_service_configs.py \
+        try "${mydir}"/../../generate_service_configs.py \
             --scenario_dir "${scenario_dir}" \
             --num-priorities ${priority} \
             --num-apps-per-priority ${num} \
@@ -118,15 +118,20 @@ for num in 1 2; do
             --output "${stage_scenario_dir}"/service-configurations.json
 
         demand_dir="${batch_name}"/demand.p${priority}.${num}
-        try "${mydir}"/../generate_demand.py \
+        try "${mydir}"/../../generate_demand.py \
             --scenario_dir "${scenario_dir}" \
             --num-priorities ${priority} \
             --num-apps-per-priority ${num} \
             --params "${params}" \
             --output "${demand_dir}"
         
-        for algorithm in greedy-group reservation; do
+        for algorithm in greedy-group reservation no-map; do
             for container_algorithm in proportional round-robin; do
+
+                output_name=generated_${priority}_${num}_${algorithm}_${container_algorithm}
+                if [ "${algorithm}" = "no-map" ]; then
+                    output_name=${output_name}_single
+                fi
                 
                 try "${mydir}"/stage.sh \
                     --experiment ${experiment} \
@@ -135,42 +140,33 @@ for num in 1 2; do
                     --client-service-config "${mydir}"/../client-service-configuration.json \
                     --demand ${demand_dir} \
                     --scenario-dir "${stage_scenario_dir}" \
-                    --output "${batch_name}"/generated_${priority}_${num}_${algorithm}_${container_algorithm}
+                    --output "${batch_name}"/${output_name}
 
             done # container weight
         done # algorithm
 
-        # no map single container
-        algorithm=no-map
-        container_algorithm="single" # use this variable to handle the different spreads
-        try "${mydir}"/stage.sh \
-            --experiment ${experiment} \
-            --agent-configuration "${mydir}"/../agent-config_${algorithm}.json \
-            --scenario-name ${scenario} \
-            --client-service-config "${mydir}"/../client-service-configuration.json \
-            --demand ${demand_dir} \
-            --scenario-dir "${stage_scenario_dir}" \
-            --output "${batch_name}"/generated_${priority}_${num}_${algorithm}_${container_algorithm}
-        
         # no map even spread
         algorithm=no-map
-        container_algorithm="even" # use this variable to handle the different spreads
-        try "${mydir}"/../generate_service_configs-no-map.py \
-            --scenario_dir "${scenario_dir}" \
-            --num-priorities ${priority} \
-            --num-apps-per-priority ${num} \
-            --params "${params}" \
-            --output "${stage_scenario_dir}"/service-configurations.json
+        for container_algorithm in proportional round-robin; do
+            output_name=generated_${priority}_${num}_${algorithm}_${container_algorithm}_even
+            
+            try "${mydir}"/../../generate_service_configs-no-map.py \
+                --scenario_dir "${scenario_dir}" \
+                --num-priorities ${priority} \
+                --num-apps-per-priority ${num} \
+                --params "${params}" \
+                --output "${stage_scenario_dir}"/service-configurations.json
 
-        try "${mydir}"/stage.sh \
-            --experiment ${experiment} \
-            --agent-configuration "${mydir}"/../agent-config_${algorithm}.json \
-            --scenario-name ${scenario} \
-            --client-service-config "${mydir}"/../client-service-configuration.json \
-            --demand ${demand_dir} \
-            --scenario-dir "${stage_scenario_dir}" \
-            --output "${batch_name}"/generated_${priority}_${num}_${algorithm}_${container_algorithm}
+            try "${mydir}"/stage.sh \
+                --experiment ${experiment} \
+                --agent-configuration "${mydir}"/../agent-config_${algorithm}_${container_algorithm}.json \
+                --scenario-name ${scenario} \
+                --client-service-config "${mydir}"/../client-service-configuration.json \
+                --demand ${demand_dir} \
+                --scenario-dir "${stage_scenario_dir}" \
+                --output "${batch_name}"/${output_name}
 
+        done
         try rm -r ${demand_dir}
 
     done # priority

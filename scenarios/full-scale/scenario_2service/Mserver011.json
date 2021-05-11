@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "Mserver011",
+    "region": "M",
+    "router": false,
+    "underlay": false
+}

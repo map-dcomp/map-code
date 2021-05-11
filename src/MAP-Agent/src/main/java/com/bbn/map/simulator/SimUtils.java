@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -34,11 +34,18 @@ package com.bbn.map.simulator;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
 
 import com.bbn.map.AgentConfiguration;
 import com.bbn.map.Controller;
+import com.bbn.map.ta2.RegionalLink;
+import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+
+import edu.uci.ics.jung.graph.Graph;
+import edu.uci.ics.jung.graph.SparseMultigraph;
+import edu.uci.ics.jung.graph.util.Pair;
 
 /**
  * Some tools for working with simulations.
@@ -53,8 +60,8 @@ public final class SimUtils {
 
     /**
      * Each C/G operation in the AP program can take up to 1 times the network
-     * diameter to complete with Protelis 11. As of 10/25/2017 our program is G -> C -> G
-     * (measure, collect, broadcast), so the multiplier is 3.
+     * diameter to complete with Protelis 11. As of 10/25/2017 our program is G
+     * -> C -> G (measure, collect, broadcast), so the multiplier is 3.
      */
     private static final int AP_ROUNDS_MULTIPLIER = 3;
     /**
@@ -97,20 +104,66 @@ public final class SimUtils {
      */
     public static void waitForApRounds(@Nonnull final Simulation sim, final int numRounds) {
         final long timeToWait = AgentConfiguration.getInstance().getApRoundDuration().toMillis();
-    
+
         // get current max number of executions so we know how long to wait
         final Map<Controller, Long> currentMaxExecutions = sim.getAllControllers().stream()
                 .collect(Collectors.toMap(Function.identity(), e -> e.getExecutionCount()));
-    
+
         // poll the simulation until we have enough executions
         boolean doneWaiting = false;
         while (!doneWaiting) {
             sim.getClock().waitForDuration(timeToWait);
-    
+
             doneWaiting = currentMaxExecutions.entrySet().stream().allMatch(e -> {
                 return e.getKey().getExecutionCount() >= e.getValue() + numRounds;
             });
         }
     }
 
+    /**
+     * Compute a regional graph from a full network graph.
+     * 
+     * @param graph
+     *            the full network graph
+     * @return the region graph
+     * @param <N>
+     *            type of nodes
+     * @param <L>
+     *            type of the edges
+     * @param getRegion
+     *            used to get the region for a node
+     */
+    public static <N, L> Graph<RegionIdentifier, RegionalLink> computeRegionGraph(final Graph<N, L> graph,
+            final Function<N, RegionIdentifier> getRegion) {
+
+        final Graph<RegionIdentifier, RegionalLink> regionalGraph = new SparseMultigraph<>();
+        graph.getVertices().stream().forEach(node -> {
+            final RegionIdentifier region = getRegion.apply(node);
+            if (!regionalGraph.containsVertex(region)) {
+                regionalGraph.addVertex(region);
+            }
+
+            Stream.concat(graph.getInEdges(node).stream(), graph.getOutEdges(node).stream()).forEach(edge -> {
+                final Pair<N> endpoints = graph.getEndpoints(edge);
+
+                final RegionIdentifier leftRegion = getRegion.apply(endpoints.getFirst());
+                final RegionIdentifier rightRegion = getRegion.apply(endpoints.getSecond());
+
+                if (!leftRegion.equals(rightRegion)) {
+                    if (!regionalGraph.containsVertex(leftRegion)) {
+                        regionalGraph.addVertex(leftRegion);
+                    }
+                    if (!regionalGraph.containsVertex(rightRegion)) {
+                        regionalGraph.addVertex(rightRegion);
+                    }
+                    final RegionalLink rlink = new RegionalLink(leftRegion, rightRegion);
+                    if (!regionalGraph.containsEdge(rlink)) {
+                        regionalGraph.addEdge(rlink, leftRegion, rightRegion);
+                    }
+                }
+            });
+
+        });
+        return regionalGraph;
+    }
 }

@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": true,
+    "hardware": "no_containers",
+    "name": "Dserver04",
+    "region": "D",
+    "underlay": false
+}

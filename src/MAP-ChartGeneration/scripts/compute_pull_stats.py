@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -54,10 +54,9 @@ def get_logger():
     return logging.getLogger(__name__)
 
 
-logfile_dateformat = '%Y-%m-%d %H:%M:%S'
-pull_re = re.compile(r'(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*Pull image: (?P<registry>[^/]+)(?P<image>\S+)')
-pull_fail_re = re.compile(r'(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*Failed to pull image.*: (?P<registry>[^/]+)(?P<image>\S+)')
-pull_result_re = re.compile(r'(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*Pulling docker container result: (?P<result>true|false)')
+pull_re = re.compile(r'(?P<timestamp>\d{4}-\d{2}-\d{2}/\d{2}:\d{2}:\d{2}\.\d{3}/\S+).*Making HTTP POST request with URL \'.*/images/create\?fromImage=(?P<registry>[^/]+)(?P<image>[^&\s]+)')
+pull_fail_re = re.compile(r'(?P<timestamp>\d{4}-\d{2}-\d{2}/\d{2}:\d{2}:\d{2}\.\d{3}/\S+).*Failed to pull image.*: (?P<registry>[^/]+)(?P<image>\S+)')
+pull_result_re = re.compile(r'(?P<timestamp>\d{4}-\d{2}-\d{2}/\d{2}:\d{2}:\d{2}\.\d{3}/\S+).*Pulling docker container result: (?P<result>true|false)')
 
 
 def process_logfile(writer, node, agent_logfile):
@@ -72,13 +71,13 @@ def process_logfile(writer, node, agent_logfile):
             pull_result_match = pull_result_re.match(line)
 
             if pull_match is not None:
-                initial_pull_timestamp = datetime.datetime.strptime(pull_match.group('timestamp'), logfile_dateformat)
+                initial_pull_timestamp = map_utils.log_timestamp_to_datetime(pull_match.group('timestamp'))
                 current_image = pull_match.group('image')
                 pull_attempts = 1
             elif pull_fail_match is not None:
                 pull_attempts = pull_attempts + 1
             elif pull_result_match is not None:
-                final_timestamp = datetime.datetime.strptime(pull_result_match.group('timestamp'), logfile_dateformat)
+                final_timestamp = map_utils.log_timestamp_to_datetime(pull_result_match.group('timestamp'))
                 duration = final_timestamp - initial_pull_timestamp
                 writer.writerow([node, initial_pull_timestamp, final_timestamp, duration.total_seconds(), pull_attempts, pull_result_match.group('result'), current_image])
 

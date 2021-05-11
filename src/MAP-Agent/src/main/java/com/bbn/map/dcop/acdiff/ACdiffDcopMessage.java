@@ -61,7 +61,13 @@ public class ACdiffDcopMessage implements GeneralDcopMessage, Serializable {
      * @param object .
      */
     public ACdiffDcopMessage(ACdiffDcopMessage object) {
-        setMessageTypeMap(object.getMessageTypeMap());
+        object.getMessageTypeMap().forEach((msgType, set) -> {
+            final Set<ACdiffLoadMap> setCopy = new HashSet<>();
+            set.forEach(loadMap -> {
+                setCopy.add(new ACdiffLoadMap(loadMap));
+            });
+            this.messageTypeMap.put(msgType, setCopy);
+        });
     }
     
     /**

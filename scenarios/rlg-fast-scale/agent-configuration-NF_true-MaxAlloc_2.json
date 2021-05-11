@@ -1,0 +1,13 @@
+{
+  "useFailedRequestsInDemand": true,
+  "rlgMaxAllocationsPerRoundPerService": 2,
+  "rlgMaxShutdownsPerRoundPerService": 2,
+  "dcopCapacityThreshold": "0.75",
+  "dcopEstimationWindow": "PT3M",
+  "dcopRoundDuration": "PT5M",
+  "dcopAlgorithm": "FINAL_RCDIFF",
+  "extraIftopArguments": [
+    "-f",
+    "port 7000"
+  ]
+}

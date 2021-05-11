@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Drtr3",
+    "region": "D",
+    "router": true,
+    "underlay": false
+}

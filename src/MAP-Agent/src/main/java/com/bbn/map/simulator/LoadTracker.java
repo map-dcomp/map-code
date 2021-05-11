@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -64,10 +64,12 @@ import org.slf4j.LoggerFactory;
         boolean done = false;
         while (!done) {
             final T entry = loadQueue.peek();
+            LOGGER.trace("removeExpiredEntries: entry: {}, queue size: {}", entry, loadQueue.size());
             if (null != entry) {
                 final long endTime = entry.getStartTime() + entry.getDuration();
+                LOGGER.trace("removeExpiredEntries: endTime: {}, now: {}", endTime, now);
                 if (endTime <= now) {
-                    LOGGER.trace("Expiring entry now: {} end: {} start: {} duration: {}", now, endTime,
+                    LOGGER.trace("removeExpiredEntries: Expiring entry now: {} end: {} start: {} duration: {}", now, endTime,
                             entry.getStartTime(), entry.getDuration());
                     removeLoad(entry);
                     callback.accept(entry);

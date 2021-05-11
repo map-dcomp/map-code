@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -31,7 +31,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.dns;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.closeTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -51,8 +53,11 @@ import java.util.Set;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
 import org.junit.rules.RuleChain;
+import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +75,6 @@ import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlanBuilder;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
-import com.bbn.protelis.networkresourcemanagement.RegionNodeState;
 import com.bbn.protelis.networkresourcemanagement.RegionServiceState;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceReport;
@@ -89,8 +93,19 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * @author jschewe
  *
  */
+@RunWith(Theories.class)
 public class PlanTranslatorTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlanTranslatorTest.class);
+
+    /**
+     * @return the classes to use
+     */
+    @DataPoints
+    public static PlanTranslator[] translators() {
+        // CHECKSTYLE:OFF test values
+        return new PlanTranslator[] { new PlanTranslatorNoRecurse(TTL), new PlanTranslatorRecurse(TTL) };
+        // CHECKSTYLE:ON
+    }
 
     /**
      * Add test name to logging.
@@ -102,10 +117,11 @@ public class PlanTranslatorTest {
     private ImmutableMap<ApplicationCoordinates, ServiceConfiguration> serviceConfigurations;
     private static final int NUM_TEST_SERVICES = 5;
     private static final int TTL = 100;
+    private RegionIdentifier defaultRegion;
 
     private static final double DOUBLE_COMPARE_TOLERANCE = 0.0001;
 
-    private ApplicationCoordinates generateSerivceName(final int serviceIndex) {
+    private ApplicationCoordinates generateServiceName(final int serviceIndex) {
         return new ApplicationCoordinates("test", "service" + serviceIndex, "1");
     }
 
@@ -128,7 +144,7 @@ public class PlanTranslatorTest {
      */
     @Before
     public void setup() {
-        final RegionIdentifier defaultRegion = new StringRegionIdentifier("defaultRegion");
+        defaultRegion = new StringRegionIdentifier("defaultRegion");
 
         final ImmutableMap.Builder<NodeAttribute, Double> computeCapacity = ImmutableMap.builder();
         computeCapacity.put(NodeAttribute.TASK_CONTAINERS, DEFAULT_CONTAINER_CAPACITY);
@@ -143,7 +159,7 @@ public class PlanTranslatorTest {
         final ImmutableMap.Builder<ApplicationCoordinates, ServiceConfiguration> serviceBuilder = ImmutableMap
                 .builder();
         for (int i = 0; i < NUM_TEST_SERVICES; ++i) {
-            final ApplicationCoordinates serviceName = generateSerivceName(i);
+            final ApplicationCoordinates serviceName = generateServiceName(i);
             final String hostname = generateServiceHostname(serviceName);
             final String defaultNodeName = "defaultFor" + serviceName;
             final NodeIdentifier defaultNode = new DnsNameIdentifier(defaultNodeName);
@@ -161,12 +177,13 @@ public class PlanTranslatorTest {
 
     /**
      * See that the null plans return the default set of DNS entries.
+     * 
+     * @param translator
+     *            the translator to use
      */
-    @Test
-    public void testNoPlan() {
+    @Theory
+    public void testNoPlan(final PlanTranslator translator) {
         final RegionIdentifier region = new StringRegionIdentifier("test");
-
-        final PlanTranslator translator = new PlanTranslator(TTL);
 
         final LoadBalancerPlan loadBalancerPlan = LoadBalancerPlan.getNullLoadBalancerPlan(region);
 
@@ -185,17 +202,18 @@ public class PlanTranslatorTest {
 
     /**
      * Test simple RLG plan. - service1 nodeA1, nodeA2 - all others default
+     * 
+     * @param translator
+     *            the translator to use
      */
-    @Test
-    public void testSimpleRLGPlan() {
+    @Theory
+    public void testSimpleRLGPlan(final PlanTranslator translator) {
         final RegionIdentifier region = new StringRegionIdentifier("test");
         final NodeIdentifier nodeA1 = new DnsNameIdentifier("nodeA1");
         final NodeIdentifier nodeA1container0 = new DnsNameIdentifier("nodeA1c0");
         final NodeIdentifier nodeA2 = new DnsNameIdentifier("nodeA2");
         final NodeIdentifier nodeA2container0 = new DnsNameIdentifier("nodeA2c0");
-        final ApplicationCoordinates service1 = generateSerivceName(1);
-
-        final PlanTranslator translator = new PlanTranslator(TTL);
+        final ApplicationCoordinates service1 = generateServiceName(1);
 
         final LoadBalancerPlanBuilder servicePlanBuilder = new LoadBalancerPlanBuilder(region);
         servicePlanBuilder.addService(nodeA1, service1, 1);
@@ -249,11 +267,14 @@ public class PlanTranslatorTest {
     /**
      * Test simple DCOP plan. - service1 50% to regionA - service1 25% to
      * regionB - service1 25% to regionC
+     * 
+     * @param translator
+     *            the translator to use
      */
-    @Test
-    public void testSimpleDCOP() {
+    @Theory
+    public void testSimpleDCOP(final PlanTranslator translator) {
         final RegionIdentifier region = new StringRegionIdentifier("test");
-        final ApplicationCoordinates service1 = generateSerivceName(1);
+        final ApplicationCoordinates service1 = generateServiceName(1);
         final RegionIdentifier regionA = new StringRegionIdentifier("regionA");
         final RegionIdentifier regionB = new StringRegionIdentifier("regionB");
         final RegionIdentifier regionC = new StringRegionIdentifier("regionC");
@@ -261,8 +282,6 @@ public class PlanTranslatorTest {
         final double regionBWeight = 0.25;
         final double regionCWeight = 0.25;
         final double weightTolerance = 1E-6;
-
-        final PlanTranslator translator = new PlanTranslator(TTL);
 
         final ImmutableMap.Builder<RegionIdentifier, Double> service1Plan = ImmutableMap.builder();
         service1Plan.put(regionA, regionAWeight);
@@ -323,16 +342,19 @@ public class PlanTranslatorTest {
 
     /**
      * Test RLG plan with with varied container weights.
+     * 
+     * @param translator
+     *            the translator to use
      */
-    @Test
-    public void testWeightedContainerPlan() {
+    @Theory
+    public void testWeightedContainerPlan(final PlanTranslator translator) {
         Random rand = new Random();
 
         final RegionIdentifier region = new StringRegionIdentifier("test");
 
         final List<ServiceIdentifier<?>> services = new ArrayList<>();
         for (int s = 0; s < 1; s++) {
-            services.add(generateSerivceName(s));
+            services.add(generateServiceName(s));
         }
 
         final NodeIdentifier node = new DnsNameIdentifier("nodeA0");
@@ -361,7 +383,6 @@ public class PlanTranslatorTest {
         final ImmutableSet<ServiceReport> serviceReports = ImmutableSet.of(serviceReport);
         final RegionServiceState regionServiceState = new RegionServiceState(region, serviceReports);
 
-        final PlanTranslator translator = new PlanTranslator(TTL);
         ImmutableCollection<Pair<DnsRecord, Double>> dns = translator.convertToDns(loadBalancerPlan,
                 regionServiceState);
 
@@ -388,4 +409,179 @@ public class PlanTranslatorTest {
         }
     }
 
+    /**
+     * Test that we get the expected weights when mixing delegation and
+     * containers.
+     * 
+     * @param translator
+     *            the translator to test
+     */
+    @Theory
+    public void testMixed1(final PlanTranslator translator) {
+        final int numContainers = 18;
+        final double neighborRegionWeight = 0.24;
+        final double localRegionWeight = 0.75;
+        final double tolerance = 1E-2;
+
+        testMixedHelper(translator, neighborRegionWeight, localRegionWeight, numContainers, tolerance);
+    }
+
+    private void testMixedHelper(final PlanTranslator translator,
+            final double neighborRegionWeight,
+            final double localRegionWeight,
+            final int numContainers,
+            final double tolerance) {
+        final RegionIdentifier localRegion = new StringRegionIdentifier("local");
+        final RegionIdentifier neighborRegion = new StringRegionIdentifier("neighbor");
+        final ApplicationCoordinates service = generateServiceName(0);
+        final double weightSum = neighborRegionWeight + localRegionWeight;
+        final double expectedNeighborWeight = neighborRegionWeight / weightSum;
+        final double expectedLocalWeight = localRegionWeight / weightSum;
+
+        AppMgrUtils.populateApplicationManagerFromServiceConfigurations(serviceConfigurations);
+
+        final ImmutableMap.Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> overflowPlanBuilder = ImmutableMap
+                .builder();
+
+        final ImmutableSet.Builder<ServiceReport> serviceReports = ImmutableSet.builder();
+        final ImmutableMap.Builder<NodeIdentifier, ImmutableCollection<ContainerInfo>> servicePlanBuilder = ImmutableMap
+                .builder();
+
+        overflowPlanBuilder.put(service,
+                ImmutableMap.of(localRegion, localRegionWeight, neighborRegion, neighborRegionWeight));
+
+        final Set<NodeIdentifier> containers = new HashSet<>();
+        for (int i = 0; i < numContainers; ++i) {
+            final NodeIdentifier ncp = new DnsNameIdentifier("server" + i);
+
+            final NodeIdentifier container = new DnsNameIdentifier(ncp.getName() + "_c0");
+            containers.add(container);
+
+            final ContainerInfo info = new ContainerInfo(container, service, 1, false, false);
+            servicePlanBuilder.put(ncp, ImmutableSet.of(info));
+
+            final ImmutableMap<NodeIdentifier, ServiceState> serviceState = ImmutableMap.of(container,
+                    new ServiceState(service, ServiceStatus.RUNNING));
+            final ServiceReport serviceReport = new ServiceReport(ncp, 0, serviceState);
+            serviceReports.add(serviceReport);
+        }
+
+        // make sure there are entries for the other services
+        for (int i = 1; i < NUM_TEST_SERVICES; ++i) {
+            final ApplicationCoordinates otherService = generateServiceName(i);
+            overflowPlanBuilder.put(otherService, ImmutableMap.of(localRegion, 1D));
+
+            final NodeIdentifier ncp = new DnsNameIdentifier("other_server" + i);
+
+            final NodeIdentifier container = new DnsNameIdentifier(ncp.getName() + "_c0");
+
+            final ContainerInfo info = new ContainerInfo(container, otherService, 1, false, false);
+            servicePlanBuilder.put(ncp, ImmutableSet.of(info));
+
+            final ImmutableMap<NodeIdentifier, ServiceState> serviceState = ImmutableMap.of(container,
+                    new ServiceState(otherService, ServiceStatus.RUNNING));
+            final ServiceReport serviceReport = new ServiceReport(ncp, 0, serviceState);
+            serviceReports.add(serviceReport);
+        }
+
+        final RegionServiceState regionServiceState = new RegionServiceState(localRegion, serviceReports.build());
+
+        final ImmutableMap<NodeIdentifier, ImmutableCollection<ContainerInfo>> servicePlan = servicePlanBuilder.build();
+
+        final LoadBalancerPlan loadPlan = new LoadBalancerPlan(localRegion, servicePlan, overflowPlanBuilder.build());
+
+        final ImmutableCollection<Pair<DnsRecord, Double>> records = translator.convertToDns(loadPlan,
+                regionServiceState);
+        assertThat(records, notNullValue());
+
+        double actualLocalRegionWeight = 0;
+        double actualNeighborRegionWeight = 0;
+        for (final Pair<DnsRecord, Double> pair : records) {
+            if (pair.getLeft() instanceof NameRecord) {
+                final NameRecord record = (NameRecord) pair.getLeft();
+                if (containers.contains(record.getNode())) {
+                    // track anything to the containers that we created
+                    actualLocalRegionWeight += pair.getRight();
+                }
+            } else if (pair.getLeft() instanceof DelegateRecord) {
+                final DelegateRecord record = (DelegateRecord) pair.getLeft();
+                if (service.equals(record.getService())) {
+                    assertThat(record.getDelegateRegion(), equalTo(neighborRegion));
+                    actualNeighborRegionWeight += pair.getRight();
+                }
+            } else {
+                fail("Unknown DNS record type: " + pair.getLeft());
+            }
+        }
+
+        assertThat(actualLocalRegionWeight, closeTo(expectedLocalWeight, tolerance));
+        assertThat(actualNeighborRegionWeight, closeTo(expectedNeighborWeight, tolerance));
+    }
+
+    /**
+     * Test that we get the expected weights when mixing delegation and
+     * containers. Test 2.
+     * 
+     * @param translator
+     *            the translator to test
+     */
+    @Theory
+    public void testMixed2(final PlanTranslator translator) {
+        final int numContainers = 18;
+        final double neighborRegionWeight = 0.0164311773374704;
+        final double localRegionWeight = 0.9835688226625297;
+        final double tolerance = 1E-3;
+
+        testMixedHelper(translator, neighborRegionWeight, localRegionWeight, numContainers, tolerance);
+    }
+
+    /**
+     * Test that we get the expected weights when mixing delegation and
+     * containers. Test 3.
+     * 
+     * @param translator
+     *            the translator to test
+     */
+    @Theory
+    public void testMixed3(final PlanTranslator translator) {
+        final int numContainers = 18;
+        final double neighborRegionWeight = 0.4906497125397932;
+        final double localRegionWeight = 0.5093502874602067;
+        final double tolerance = 1E-3;
+
+        testMixedHelper(translator, neighborRegionWeight, localRegionWeight, numContainers, tolerance);
+    }
+
+    /**
+     * Test that we get the weights correct when the inputs sum to less than 1.
+     * 
+     * @param translator
+     *            the translator to test
+     */
+    @Theory
+    public void testSumLessThan1(final PlanTranslator translator) {
+        final int numContainers = 18;
+        final double neighborRegionWeight = 0.2;
+        final double localRegionWeight = 0.5;
+        final double tolerance = 1E-3;
+
+        testMixedHelper(translator, neighborRegionWeight, localRegionWeight, numContainers, tolerance);
+    }
+
+    /**
+     * Test that we get the weights correct when the inputs sum to greater than
+     * 1.
+     * 
+     * @param translator
+     *            the translator to test
+     */
+    @Theory
+    public void testSumGreaterThan1(final PlanTranslator translator) {
+        final int numContainers = 18;
+        final double neighborRegionWeight = 1.2;
+        final double localRegionWeight = 2.5;
+        final double tolerance = 1E-3;
+
+        testMixedHelper(translator, neighborRegionWeight, localRegionWeight, numContainers, tolerance);
+    }
 }

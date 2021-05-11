@@ -1,5 +1,10 @@
 package com.bbn.map.dcop;
 
+import static org.hamcrest.CoreMatchers.both;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.comparesEqualTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThan;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
@@ -13,11 +18,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
-import org.hamcrest.number.OrderingComparison;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.experimental.theories.DataPoints;
 import org.junit.experimental.theories.Theories;
@@ -37,10 +39,9 @@ import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.simulator.ClientSim;
 import com.bbn.map.simulator.Simulation;
+import com.bbn.map.simulator.SimulationRunner;
 import com.bbn.map.simulator.TestUtils;
-import com.bbn.map.utils.MapLoggingConfigurationFactory;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
-import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
@@ -60,11 +61,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  */
 @RunWith(Theories.class)
 public class DcopOverflowTest {
-    // put this first to ensure that the correct logging configuration is used
-    static {
-        System.setProperty("log4j.configurationFactory", MapLoggingConfigurationFactory.class.getName());
-    }
-
     private static final Logger LOGGER = LoggerFactory.getLogger(DcopOverflowTest.class);
 
     /**
@@ -84,27 +80,12 @@ public class DcopOverflowTest {
             .around(new TestUtils.Retry(TestUtils.DEFAULT_RETRY_COUNT));
 
     /**
-     * Reset the {@link AgentConfiguration} object to default values. This is
-     * done before and after all tests to ensure that other tests are not
-     * effected by using the different algorithms here.
-     */
-    @Before
-    @After
-    public void resetAgentConfiguration() {
-        AgentConfiguration.resetToDefaults();
-        GlobalNetworkConfiguration.resetToDefaults();
-    }
-
-    /**
      * Test using the topology test-dcop-overflow. Initially all traffic goes to
      * the single server in region A. There is 1 more request than the server
      * can handle. DCOP should recognize that region A is fully loaded and
      * distribute some of the traffic to region B. More demand shows up later in
      * the test and some of that load should get sent over to region B.
      * 
-     * This test ignores the DEFAULT_PLAN algorithm, which always produces
-     * default DCOP plans.
-     *
      * @param algorithm
      *            the DCOP algorithm to run the test with
      * @throws IOException
@@ -116,12 +97,12 @@ public class DcopOverflowTest {
     public void test(final DcopAlgorithm algorithm) throws IOException, URISyntaxException {
         Assume.assumeTrue("DEFAULT_PLAN algorithm does not provide a plan valid for this test",
                 !algorithm.equals(DcopAlgorithm.DEFAULT_PLAN));
+        Assume.assumeTrue("CDIFF_PLUS is under development", !algorithm.equals(DcopAlgorithm.CDIFF_PLUS));
+        Assume.assumeTrue("MODULAR_ACDIFF is under development", !algorithm.equals(DcopAlgorithm.MODULAR_ACDIFF));
+        Assume.assumeTrue("RC_DIFF is under development", !algorithm.equals(DcopAlgorithm.RC_DIFF));
+        Assume.assumeTrue("MODULAR_RCDIFF is under development", !algorithm.equals(DcopAlgorithm.MODULAR_RCDIFF));
 
         AgentConfiguration.getInstance().setDcopAlgorithm(algorithm);
-        // control the RLG algorithm running
-        AgentConfiguration.getInstance().setRlgAlgorithm(RlgAlgorithm.STUB);
-        AgentConfiguration.getInstance().setRlgPriorityPolicy(RlgPriorityPolicy.NO_PRIORITY);
-        AgentConfiguration.getInstance().setRlgStubChooseNcp(RlgStubChooseNcp.MOST_AVAILABLE_CONTAINERS);
 
         LOGGER.info("Running test with algorithm {}", AgentConfiguration.getInstance().getDcopAlgorithm());
 
@@ -131,13 +112,11 @@ public class DcopOverflowTest {
         final Duration dcopRoundDuration = Duration.ofSeconds(dcopRoundSeconds);
         final int rlgRoundSeconds = 10;
         final Duration rlgRoundDuration = Duration.ofSeconds(rlgRoundSeconds);
+        final double dcopThreshold = 0.5;
 
         final String clientNodeName = "clientPoolB";
         final String nodeB0name = "nodeB0";
         final NodeIdentifier nodeB0identifier = new DnsNameIdentifier(nodeB0name);
-
-        final String nodeA0name = "nodeA0";
-        final NodeIdentifier nodeA0identifier = new DnsNameIdentifier(nodeA0name);
 
         final String serviceGroup = "com.bbn";
         final String serviceName = "image-recognition-high";
@@ -157,17 +136,22 @@ public class DcopOverflowTest {
         AgentConfiguration.getInstance().setRlgEstimationWindow(rlgRoundDuration);
         AgentConfiguration.getInstance().setRlgAlgorithm(RlgAlgorithm.STUB);
         AgentConfiguration.getInstance().setRlgPriorityPolicy(RlgPriorityPolicy.NO_PRIORITY);
+        AgentConfiguration.getInstance().setRlgStubChooseNcp(RlgStubChooseNcp.MOST_AVAILABLE_CONTAINERS);
+        AgentConfiguration.getInstance().setDcopCapacityThreshold(dcopThreshold);
+        // don't let RLG shutdown containers for low load
+        AgentConfiguration.getInstance().setRlgUnderloadThreshold(0);
 
         final int expectedInitialRequests = 4;
-        final int expectedInitialSuccess = 3;
+        final int expectedInitialSuccess = 1;
         final int expectedInitialFailServer = 1;
-        final int expectedInitialFailNetwork = 0;
 
         // how many plans to check before giving up
-        final int maxNumPlans = 3;
+        final int maxNumPlans = 5;
         final BlockingQueue<RegionPlan> dcopPlans = new LinkedBlockingDeque<>();
         // how many minutes to wait for a plan to be created
         final int planCreationTimeoutMinutes = 3;
+
+        final int numDcopRoundsToWaitForOverflow = 4;
 
         final VirtualClock clock = new SimpleClock();
         try (Simulation sim = new Simulation("Simple", baseDirectory, demandPath, clock, pollingInterval, dnsTtlSeconds,
@@ -175,23 +159,16 @@ public class DcopOverflowTest {
 
             sim.startSimulation();
 
-            LOGGER.info("Waiting for all nodes to connect to their neighbors for AP");
-            sim.waitForAllNodesToConnectToNeighbors();
-            LOGGER.info("All nodes are connected for AP");
+            SimulationRunner.startAgentsAndClients(sim);
 
-            LOGGER.info("Starting clients");
-            sim.startClients();
-
-            // dcop for region A
-            final Controller nodeA0 = sim.getControllerById(nodeA0identifier);
-            nodeA0.addDcopPlanListener(Errors.rethrow().wrap(dcopPlans::put));
-
+            // dcop for region B
             final Controller nodeB0 = sim.getControllerById(nodeB0identifier);
             final RegionIdentifier regionB = nodeB0.getRegionIdentifier();
+            nodeB0.addDcopPlanListener(Errors.rethrow().wrap(dcopPlans::put));
 
             // Wait for everything to start and the clients to add load to the
             // network
-            clock.waitForDuration(dcopRoundDuration.toMillis() * 3);
+            clock.waitForDuration(dcopRoundDuration.toMillis() * numDcopRoundsToWaitForOverflow);
 
             // check for 1 failed request on the client pool
             final Optional<ClientSim> clientPoolOptional = sim.getClientSimulators().stream()
@@ -200,17 +177,20 @@ public class DcopOverflowTest {
             final ClientSim clientPool = clientPoolOptional.get();
 
             Assert.assertThat("Num requests attempted. Failure in the test framework.",
-                    clientPool.getNumRequestsAttempted(), OrderingComparison.comparesEqualTo(expectedInitialRequests));
+                    clientPool.getNumRequestsAttempted(), greaterThanOrEqualTo(expectedInitialRequests));
+
+            // some requests should fail
             Assert.assertThat("Num requests succeeded. Something unexpected happened with the initial client requests.",
-                    clientPool.getNumRequestsSucceeded(), OrderingComparison.comparesEqualTo(expectedInitialSuccess));
+                    clientPool.getNumRequestsSucceeded(),
+                    is(both(greaterThanOrEqualTo(expectedInitialSuccess)).and(lessThan(expectedInitialRequests))));
+
+            // the failed requests should be for server load
             Assert.assertThat(
                     "Num requests failed for server. Something unexpected happened with the initial client requests..",
-                    clientPool.getNumRequestsFailedForServerLoad(),
-                    OrderingComparison.comparesEqualTo(expectedInitialFailServer));
+                    clientPool.getNumRequestsFailedForServerLoad(), greaterThanOrEqualTo(expectedInitialFailServer));
             Assert.assertThat(
                     "Num requests failed for network. No requests should have failed because of network load.",
-                    clientPool.getNumRequestsFailedForNetworkLoad(),
-                    OrderingComparison.comparesEqualTo(expectedInitialFailNetwork));
+                    clientPool.getNumRequestsFailedForNetworkLoad(), comparesEqualTo(0));
 
             // read some number of DCOP plans and check for traffic being sent
             // to region B
@@ -232,6 +212,7 @@ public class DcopOverflowTest {
                     final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> detailedPlan = plan
                             .getPlan();
                     final ImmutableMap<RegionIdentifier, Double> servicePlan = detailedPlan.get(serviceIdentifier);
+
                     if (null != servicePlan) {
                         final Double regionBValue = servicePlan.get(regionB);
                         if (null != regionBValue) {

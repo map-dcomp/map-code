@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -79,6 +79,7 @@ public final class ChartGenerator {
     private static final int CHART_TYPE_PARAMETER_LOAD_NUM_ARGS = 5;
     private static final int CHART_TYPE_PARAMETER_LOG_ANALYSIS_NUM_ARGS = 4;
     private static final int CHART_TYPE_PARAMETER_DNS_ANALYSIS_NUM_ARGS = 5;
+    private static final int CHART_TYPE_PARAMETER_DNS_REGION_PLAN_UPDATES_NUM_ARGS = 5;
     private static final String CHART_TYPE_PARAMETER_LOAD = "load";
     private static final String CHART_TYPE_PARAMETER_LOAD_0 = "load_0";
     private static final String CHART_TYPE_PARAMETER_CLIENT_DEMAND = "client_demand";
@@ -89,6 +90,7 @@ public final class ChartGenerator {
     private static final String CHART_TYPE_PARAMETER_DNS_RECORD_COUNT = "dns_record_count";
     private static final String CHART_TYPE_PARAMETER_DCOP_PLAN_UPDATES = "dcop_plan_updates";
     private static final String CHART_TYPE_PARAMETER_RLG_PLAN_UPDATES = "rlg_plan_updates";
+    private static final String CHART_TYPE_PARAMETER_DNS_REGION_PLAN_UPDATES = "dns_region_plan_updates";
     private static final String CHART_TYPE_LOG_ANALYSIS = "log_analysis";
     private static final String CHART_TYPE_CLIENT_LATENCY_DNS_RESOLUTIONS = "latency_dns";
 
@@ -112,6 +114,7 @@ public final class ChartGenerator {
             { CHART_TYPE_PARAMETER_DNS_RECORD_COUNT, "[input folder]", "[output folder]" },
             { CHART_TYPE_PARAMETER_DCOP_PLAN_UPDATES, "[input folder]", "[output folder]", "[data sample interval]" },
             { CHART_TYPE_PARAMETER_RLG_PLAN_UPDATES, "[input folder]", "[output folder]", "[data sample interval]" },
+            { CHART_TYPE_PARAMETER_DNS_REGION_PLAN_UPDATES, "[scenario configuration folder]", "[input folder]", "[output folder]", "[data sample interval]"},
             { CHART_TYPE_LOG_ANALYSIS, "[matchers file]", "[input folder]", "[output folder]" } };
 
     /**
@@ -217,6 +220,19 @@ public final class ChartGenerator {
                         }
                     };
                     threadPoolSubmissions.add(threadPoolExecutor.submit(dcopPlanUpdateTableGeneratorWorker));
+                    
+                    Runnable dnsRegionPlanUpdateTableGeneratorWorker = new ChartGenerationModuleWorker(scenarioFolder,
+                            demandScenarioFolder, inputFolder, outputFolder, dataSampleInterval, startAtZero) {
+                        @Override
+                        public void run() {
+                            final DNSRegionPlanTableGenerator dnsRegionPlanTableGenerator = new DNSRegionPlanTableGenerator();
+                            dnsRegionPlanTableGenerator.processScenarioData(scenarioFolder, inputFolder,
+                                    new File(outputFolder + File.separator + CHART_TYPE_PARAMETER_DNS_REGION_PLAN_UPDATES),
+                                    dataSampleInterval);
+
+                        }
+                    };
+                    threadPoolSubmissions.add(threadPoolExecutor.submit(dnsRegionPlanUpdateTableGeneratorWorker));
 
                     Runnable dnsRecordCountTableGeneratorWorker = new ChartGenerationModuleWorker(scenarioFolder,
                             demandScenarioFolder, inputFolder, outputFolder, dataSampleInterval, startAtZero) {
@@ -381,7 +397,7 @@ public final class ChartGenerator {
                     System.exit(0);
                 }
                 break;
-
+            
             case CHART_TYPE_PARAMETER_RLG_PLAN_UPDATES:
                 if (args.length == 4) {
                     inputFolder = new File(args[p++]);
@@ -390,6 +406,19 @@ public final class ChartGenerator {
 
                     RLGPlanUpdateTableGenerator cg = new RLGPlanUpdateTableGenerator();
                     cg.processScenarioData(inputFolder, outputFolder, dataSampleInterval);
+                    System.exit(0);
+                }
+                break;
+
+            case CHART_TYPE_PARAMETER_DNS_REGION_PLAN_UPDATES:
+                if (args.length == CHART_TYPE_PARAMETER_DNS_REGION_PLAN_UPDATES_NUM_ARGS) {
+                    scenarioFolder = new File(args[p++]);
+                    inputFolder = new File(args[p++]);
+                    outputFolder = new File(args[p++]);
+                    dataSampleInterval = Long.parseLong(args[p++]);
+
+                    DNSRegionPlanTableGenerator cg = new DNSRegionPlanTableGenerator();
+                    cg.processScenarioData(scenarioFolder, inputFolder, outputFolder, dataSampleInterval);
                     System.exit(0);
                 }
                 break;

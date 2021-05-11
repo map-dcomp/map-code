@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Xmedrtr6",
+    "region": "Xmed",
+    "router": true,
+    "underlay": false
+}

@@ -5,7 +5,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import com.bbn.map.dcop.AbstractDcopAlgorithm;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.utils.ComparisonUtils;
 
 /**
  * @author khoihd
@@ -58,15 +60,16 @@ public class ModularACdiffLoadMap implements Serializable {
         } else {
             final ModularACdiffLoadMap other = (ModularACdiffLoadMap) obj;
             return Objects.equals(getRootID(), other.getRootID()) //
-                && Objects.equals(getHop(), other.getHop()) //
-                && Objects.equals(getLoadMap(), other.getLoadMap()) //
+                && getHop() == other.getHop() //
+                && ComparisonUtils.doubleMapEquals2(getLoadMap(), other.getLoadMap(), AbstractDcopAlgorithm.DOUBLE_TOLERANCE) //
             ;
         }
     }
     
     @Override
     public int hashCode() {
-        return Objects.hash(rootID, hop, loadMap);
+        // don't include anything that does a fuzzy comparison in equals
+        return Objects.hash(rootID, hop);
     }
 
     /**

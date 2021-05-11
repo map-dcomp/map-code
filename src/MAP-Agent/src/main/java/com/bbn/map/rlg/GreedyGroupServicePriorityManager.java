@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -117,6 +117,11 @@ public class GreedyGroupServicePriorityManager extends AbstractPercentAllocation
                 predictedGroupDemand += getServicePriorityStatus(groupService).getPredictedDemand();
             }
             
+            // This value ensures that if a high priority service loses a container to low priority service
+            // due to the high priority service having demand / allocation below the overload threshold
+            // that the deallocation won't cause demand / allocation to jump above the threshold and
+            // trigger an immediate reallocation for the high priority service.
+            final double maxTargetIncreaseForPredictedGroupDemand = predictedGroupDemand / TARGET_LOAD_PERCENTAGE + 1;
             
             // Determine the proportion of remaining capacity to allow this group to take.
             // Currently set to 1 for greedy allocation. If lower than 1
@@ -125,7 +130,7 @@ public class GreedyGroupServicePriorityManager extends AbstractPercentAllocation
             final double maxGroupAllocationProportion = 1;
 //          final double maxGroupAllocationProportion = getPriorityProportion(groupServices, remaining service groups yet to be assigned a target);
             final int groupTargetIncrease = (int)Math.min(Math.ceil(remainingCapacity * maxGroupAllocationProportion),
-                                                 Math.floor(predictedGroupDemand));
+                                                 Math.floor(maxTargetIncreaseForPredictedGroupDemand));
             LOGGER.debug("priorityGroupValue: {}, remainingCapacity: {}, maxGroupAllocationProportion: {}, remainingCapacity * maxGroupAllocationProportion: {}",
                     priorityGroupValue, remainingCapacity, maxGroupAllocationProportion, remainingCapacity * maxGroupAllocationProportion);
             LOGGER.debug("priorityGroupValue: {}, groupServices: {}, predictedGroupDemand: {}, groupTargetIncrease: {}",
@@ -216,8 +221,7 @@ public class GreedyGroupServicePriorityManager extends AbstractPercentAllocation
         
         for (ServiceIdentifier<?> service : getServices())
         {
-            double computeLoad = getServicePriorityStatus(service).getComputeLoad();
-            double predictedDemand = computeLoad / TARGET_LOAD_PERCENTAGE;
+            final double predictedDemand = getServicePriorityStatus(service).getComputeLoad();
             getServicePriorityStatus(service).setPredictedDemand(predictedDemand);
             LOGGER.debug("predictServiceContainerDemands: Predicted demand for service {}: {}", service, predictedDemand);
         }

@@ -1,0 +1,14 @@
+{
+  "dcopCapacityThreshold" : 0.8,
+  "dcopAlgorithm" : "DISTRIBUTED_ROUTING_DIFFUSION",
+  "dcopRoundDuration" : "PT5M",
+  "dcopEstimationWindow" : "PT1M",
+  "rlgAlgorithm" : "NO_MAP",
+  "rlgStubChooseNcp" : "MOST_AVAILABLE_CONTAINERS",
+  "rlgPriorityPolicy": "GREEDY_GROUP",
+  "containerWeightAlgorithm": "ROUND_ROBIN",
+  "rlgMaxAllocationsPerRoundPerService": 1,
+    "rlgMaxShutdownsPerRoundPerService": 1,
+  "iftopPriority" : 0,
+  "extraIftopArguments" : [ "-f", "port 7000" ]
+}

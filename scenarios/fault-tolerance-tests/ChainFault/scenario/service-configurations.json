@@ -1,0 +1,25 @@
+[
+    {
+	"service": {
+	    "group": "com.bbn",
+	    "artifact": "appP1N1",
+	    "version": "1"
+	},
+	"hostname": "appP1N1.map.dcomp",
+	"defaultNodes": {
+		"serverX1": 1
+	},
+	"defaultNodeRegion": "X",
+	"computeCapacity": {
+	    "TASK_CONTAINERS": "1",
+	    "CPU": "1"
+	},
+	"networkCapacity": {
+	    "DATARATE_TX": "100",
+	    "DATARATE_RX": "100"
+	},
+	"serverPort": 7000,
+	"imageName": "/v2/fake_load_server",
+	"priority": 1
+    }
+]

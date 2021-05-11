@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -42,23 +42,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.AgentConfiguration;
 import com.bbn.map.AgentConfiguration.RlgAlgorithm;
 import com.bbn.map.AgentConfiguration.RlgPriorityPolicy;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
 import com.bbn.map.rlg.RlgTestUtils.RegionData;
 import com.bbn.map.simulator.TestUtils;
-import com.bbn.protelis.networkresourcemanagement.GlobalNetworkConfiguration;
 import com.bbn.protelis.networkresourcemanagement.LoadBalancerPlan;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
@@ -95,25 +91,6 @@ public class RlgPriorityTest {
      * Simulated time interval between RLG rounds in milliseconds.
      */
     private static final long RLG_ROUND_TIME_INTERVAL_MS = 3000;
-
-    /**
-     * Sets up before each test by creating services and randomly assigning
-     * priorities.
-     */
-    @Before
-    public void setup() {
-        AgentConfiguration.resetToDefaults();
-        GlobalNetworkConfiguration.resetToDefaults();
-    }
-
-    /**
-     * Tears down after each test.
-     */
-    @After
-    public void tearDown() {
-        AgentConfiguration.resetToDefaults();
-        GlobalNetworkConfiguration.resetToDefaults();
-    }
 
     /**
      * Tests RLG's ability to behave in accordance to a particular priority

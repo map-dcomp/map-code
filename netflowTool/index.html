@@ -3,7 +3,7 @@
 <script src="js/d3.v5.min.js"></script>
 <link href = "css/jquery-ui.css"
          rel = "stylesheet">
-<script src="js/jquery-3.4.1.js"></script>
+<script src="js/jquery-3.5.1.js"></script>
 <script src="js/jquery-ui.js"></script>
 <style>
 
@@ -151,23 +151,6 @@ menu:not([title]):before{
 
 <body>
 
-<!--<label for="name">New Node Name</label>
-<input name="name">-->
-<div id="popup">
-  	<!-- Include a header DIV with the same name as the draggable DIV, followed by "header" -->
-  	<div id="popupheader" style="width:780px; height:29px; background-color:#204395">
-		<span id="popTitle"><font color="white" size="5">Node Name</font></span>
-		<span class=closer id="closer"><font size="5">X</font></span>
-	</div>
-	
-</div>
-
-<div id="popup2">
-  <!-- Include a header DIV with the same name as the draggable DIV, followed by "header" -->
-  <div id="popupheader2" style="width:780px; height:29px; background-color:#204395">
-  <span id="popTitle"><font color="white" size="5">Node Name</font></span>
-  <span class=closer id="closer"><font size="5">X</font></span>
-</div>
 
 </div>
 
@@ -177,7 +160,7 @@ menu:not([title]):before{
 	<menu title="Replay" id="replay"></menu>
 	<menu title="Set Detail" id="setDetail"></menu>
 	<menu title="Swap" id="swap"></menu>
-	<menu title="Move" id="move"></menu>
+  <menu title="Show/Hide Times" id="keyTimes"></menu>
 	<menu title="Apply Filters">
 		<menu title="Filter by Size">
 		    	<menu title="Include" id="includeSize"></menu>
@@ -207,7 +190,7 @@ menu:not([title]):before{
 		
 	</div>&nbsp;&nbsp;&nbsp;
         <span id='current_time'></span><span>Minutes from start</span>
-        <div>Selected Link: <span id='selected_link'</span</div>
+        <div>Selected Link: <span id='selected_link'></span></div>
 </div>
 
 
@@ -223,12 +206,75 @@ menu:not([title]):before{
 	
 	<span id="slot3"></span>
 </div>
-<br>
-<div id="graphRow"></div>
-<br>
-<div id="graphRow2"></div>
-<div id="piePopup" style="width:100px; height:50px; padding:10; background-color:lightgrey; opacity:0; display:none; z-index: 200"></div>
+<div id="visRow2">
+	<span id="slot4"></span>
+	
+	<span id="slot5"></span>
+</div>
+<div id="visRow3">
+	<span id="slot6"></span>
+	
+	<span id="slot7"></span>
+</div>
+<div id="visRow4">
+	<span id="slot8"></span>
+	
+	<span id="slot9"></span>
+</div>
+<div id="visRow5">
+	<span id="slot10"></span>
+	
+	<span id="slot11"></span>
+</div>
+<div id="visRow6">
+	<span id="slot12"></span>
+	
+	<span id="slot13"></span>
+</div>
+<div id="visRow7">
+	<span id="slot14"></span>
+	
+	<span id="slot15"></span>
+</div>
+<div id="visRow8">
+	<span id="slot16"></span>
+	
+	<span id="slot17"></span>
+</div>
+<div id="visRow9">
+	<span id="slot18"></span>
+	
+	<span id="slot19"></span>
+</div>
+<div id="visRow10">
+	<span id="slot20"></span>
+	
+	<span id="slot21"></span>
+</div>
+<div id="visRow11">
+	<span id="slot22"></span>
+	
+	<span id="slot23"></span>
+</div>
+<div id="visRow12">
+	<span id="slot24"></span>
+	
+	<span id="slot25"></span>
+</div>
+<div id="visRow13">
+	<span id="slot26"></span>
+	
+	<span id="slot27"></span>
+</div>
 
+<div id="visRow13">
+	<span id="slot28"></span>
+	
+	<span id="slot29"></span>
+</div>
+
+<div id="piePopup" style="width:100px; height:50px; padding:10; background-color:lightgrey; opacity:0; display:none; z-index: 200"></div>
+<div id="nodePopup" style="width:150px; height:60px; padding:10; background-color:lightgrey; opacity:0; display:none; z-index: 200"></div>
 </body>
 <script language="javascript" src="js/main.js"></script>
 </html>

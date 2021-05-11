@@ -5,8 +5,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import com.bbn.map.dcop.AbstractDcopAlgorithm;
 import com.bbn.map.dcop.GeneralDcopMessage;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.utils.ComparisonUtils;
 
 /**
  * @author khoihd
@@ -71,7 +73,7 @@ public class CdiffDcopMessage implements GeneralDcopMessage, Serializable {
      * @param object .
      */
     public CdiffDcopMessage(CdiffDcopMessage object) {
-        this.cdiffLoadMap.putAll(object.getCdiffLoadMap());
+        object.getCdiffLoadMap().forEach((key, map) -> this.cdiffLoadMap.put(key, new HashMap<>(map)));
         this.messageType = object.getMessageType();
         this.hop = object.getHop();
     }
@@ -98,16 +100,17 @@ public class CdiffDcopMessage implements GeneralDcopMessage, Serializable {
             return false;
         } else {
             final CdiffDcopMessage other = (CdiffDcopMessage) obj;
-            return Objects.equals(getCdiffLoadMap(), other.getCdiffLoadMap()) &&
+            return ComparisonUtils.doubleMapEquals2(getCdiffLoadMap(), other.getCdiffLoadMap(), AbstractDcopAlgorithm.DOUBLE_TOLERANCE) &&
                     Objects.equals(getMessageType(), other.getMessageType()) &&
-                    Objects.equals(getHop(), other.getHop())
+                    getHop() == other.getHop() 
             ;
         }
     }
     
     @Override
     public int hashCode() {
-        return Objects.hash(cdiffLoadMap, messageType, hop);
+        // don't include anything that does a fuzzy comparison in equals
+        return Objects.hash(messageType, hop);
     }
 
     /**

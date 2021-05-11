@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Ortr3",
+    "region": "O",
+    "router": false,
+    "underlay": false
+}

@@ -1,0 +1,58 @@
+[
+    {
+	"time": 5400000,
+	"nodes": ["Dserver06"]
+    },
+    {
+	"time": 5400000,
+	"nodes": ["Dserver07"]
+    },
+    {
+	"time": 5400000,
+	"nodes": ["Dserver08"]
+    },
+    {
+	"time": 5400000,
+	"nodes": ["Dserver09"]
+    },
+    {
+	"time": 5400000,
+	"nodes": ["Dserver10"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver11"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver12"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver13"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver14"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver15"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver16"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver17"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver18"]
+    },
+    {
+	"time": 6000000,
+	"nodes": ["Dserver19"]
+    }
+]

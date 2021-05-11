@@ -1,6 +1,6 @@
 package com.bbn.map.dcop.modular_acdiff;
 
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,7 +27,6 @@ import com.bbn.map.dcop.modular_acdiff.ModularACdiffDcopMessage.ModularACdiffMes
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
@@ -185,7 +184,7 @@ public class ModularACdiffAlgorithm extends AbstractDcopAlgorithm {
         
 //        if (currentDcopRun != 1) {
         if (currentDcopRun == 0) {
-            return defaultPlan(summary);
+            return defaultPlan(summary, 0);
         }
         
         final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = allocateComputeBasedOnNetwork(
@@ -206,7 +205,7 @@ public class ModularACdiffAlgorithm extends AbstractDcopAlgorithm {
         
         executeGblock(demandMap, getAvailableCapacity());
                 
-        final LocalTime stopTime = LocalTime.now().plus(AgentConfiguration.getInstance().getDcopAcdiffTimeOut());
+        final LocalDateTime stopTime = LocalDateTime.now().plus(AgentConfiguration.getInstance().getDcopAcdiffTimeOut());
                 
         while (READING_MESSAGES) {            
             if (AgentConfiguration.getInstance().getDcopAcdiffSimulateMessageDrops()) {
@@ -272,7 +271,7 @@ public class ModularACdiffAlgorithm extends AbstractDcopAlgorithm {
             LOGGER.info("Dcop Run {} Region {} has getClientLoadMap {}", currentDcopRun, getRegionID(), getClientKeepLoadMap());
 //            LOGGER.info("DCOP Run {} Region {} end the current cycle", currentDcopRun, getRegionID());
 
-            if (LocalTime.now().isAfter(stopTime)) {
+            if (LocalDateTime.now().isAfter(stopTime)) {
                 break;
             }
         }              
@@ -1392,8 +1391,7 @@ public class ModularACdiffAlgorithm extends AbstractDcopAlgorithm {
         
 //        LOGGER.info("DCOP Run {} Region {} sends the current batch of messages", currentDcopRun, getRegionID());
         
-        final DcopSharedInformation messageToSend = new DcopSharedInformation(inbox);
-        getDcopInfoProvider().setLocalDcopSharedInformation(messageToSend);
+        getDcopInfoProvider().setLocalDcopSharedInformation(inbox);
     }
     
     /**
@@ -1442,8 +1440,7 @@ public class ModularACdiffAlgorithm extends AbstractDcopAlgorithm {
                 
         LOGGER.info("DCOP Run {} Region {} write new Inbox {}", currentDcopRun, getRegionID(), inbox);
         
-        final DcopSharedInformation messageToSend = new DcopSharedInformation(inbox);
-        getDcopInfoProvider().setLocalDcopSharedInformation(messageToSend);
+        getDcopInfoProvider().setLocalDcopSharedInformation(inbox);
     }
 
     /** Initialize newIteration by taking the max iteration from the inbox and increment it.
@@ -1456,10 +1453,11 @@ public class ModularACdiffAlgorithm extends AbstractDcopAlgorithm {
         
         LOGGER.info("DCOP Run {} Region {} read inbox {}", currentDcopRun, getRegionID(), inbox);
                 
-        summary = getDcopInfoProvider().getRegionSummary(ResourceReport.EstimationWindow.LONG);
+        summary = getDcopInfoProvider().getDcopResourceSummary();
                 
         retrieveAggregateCapacity(summary);
         retrieveNeighborSetFromNetworkLink(summary);
+        retrieveAllService(summary);
         
         getNeighborSet().forEach(neighbor -> messageMapToSend.put(neighbor, new ModularACdiffDcopMessage()));
         getNeighborSet().forEach(neighbor -> storedMessages.put(neighbor, new ModularACdiffDcopMessage()));

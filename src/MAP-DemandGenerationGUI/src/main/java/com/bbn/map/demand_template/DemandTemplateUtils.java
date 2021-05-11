@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -50,6 +50,7 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.simulator.ClientLoad;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 
@@ -151,7 +152,7 @@ public final class DemandTemplateUtils
                             && networkLoad != null)
                     {
                         ClientLoad load = new ClientLoad(startTime, serverDuration, networkDuration,
-                                numClients, service, ImmutableMap.copyOf(nodeLoad), ImmutableMap.copyOf(networkLoad));
+                                numClients, service, ImmutableMap.copyOf(nodeLoad), ImmutableMap.copyOf(networkLoad), ImmutableList.of());
                         
         
                         loads.add(load);

@@ -1,9 +1,13 @@
 package com.bbn.map.dcop;
 
+import java.io.Serializable;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -13,8 +17,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bbn.map.AgentConfiguration;
+import com.bbn.map.ap.TotalDemand;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.ApplicationManagerApi;
+import com.bbn.map.common.value.ApplicationCoordinates;
+import com.bbn.map.common.value.ApplicationSpecification;
+import com.bbn.map.dcop.final_rcdiff.FinalRCDiffProposal;
+import com.bbn.map.dcop.final_rcdiff.FinalRCDiffTuple;
+import com.bbn.map.ta2.RegionalLink;
+import com.bbn.map.ta2.RegionalTopology;
 import com.bbn.map.utils.MAPServices;
 import com.bbn.map.utils.MapUtils;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
@@ -25,6 +36,7 @@ import com.bbn.protelis.networkresourcemanagement.RegionPlan;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
+import com.bbn.protelis.utils.ComparisonUtils;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 
@@ -38,7 +50,7 @@ public abstract class AbstractDcopAlgorithm {
     /**
      *  Tolerance used in comparing double values.
      */
-    protected static final double DOUBLE_TOLERANCE = 1E-6;
+    public static final double DOUBLE_TOLERANCE = ComparisonUtils.NODE_ATTRIBUTE_COMPARISON_TOLERANCE;
     /**
      *  The iteration where regions write data center tree.
      */
@@ -48,9 +60,15 @@ public abstract class AbstractDcopAlgorithm {
      */
     protected static final int DCOP_ITERATION_LIMIT = AgentConfiguration.getInstance().getDcopIterationLimit();
     /**
+     *  Minimum container count enforced by RLG.
+     */
+    private static final double MINIMUM_SERVICE_CAPACITY = 1D;
+    /**
      *  Set of network neighbors from network capacity.
      */
     private final Set<RegionIdentifier> neighborSet = new HashSet<>();
+    
+    private final Set<ServiceIdentifier<?>> allServiceSet = new HashSet<>();
     
     /** Positive if incoming and negative if outgoing
      */
@@ -95,15 +113,22 @@ public abstract class AbstractDcopAlgorithm {
      */
     protected Map<RegionIdentifier, GeneralDcopMessage> waitForMessagesFromNeighbors(int iteration)
             throws InterruptedException {
+        final long start = System.currentTimeMillis();
+        
         final Duration apRoundDuration = AgentConfiguration.getInstance().getApRoundDuration();
         final Map<RegionIdentifier, GeneralDcopMessage> receivedMsgMap = new HashMap<>();
         int noMessageToRead = getNeighborSet().size();
 
+        final Duration timeout = AgentConfiguration.getInstance().getDcopSynchronousMessageTimeout();
+        final LocalDateTime stopTime = LocalDateTime.now().plus(timeout); 
         do {
             receivedMsgMap.clear();
 
             final ImmutableMap<RegionIdentifier, DcopSharedInformation> allSharedInformation = getDcopInfoProvider().getAllDcopSharedInformation();
                                     
+            LOGGER.info("Looking for messages at iteration {} from neighbors: {} in: {} to: {}", iteration,
+                    getNeighborSet(), allSharedInformation, getRegionID());
+            
             for (RegionIdentifier neighbor : getNeighborSet()) {                
                 if (null != allSharedInformation.get(neighbor)) {
                     DcopReceiverMessage abstractMsg = allSharedInformation.get(neighbor).getMessageAtIteration(iteration);
@@ -115,12 +140,22 @@ public abstract class AbstractDcopAlgorithm {
                     }
                 }
             }
+            if (LocalDateTime.now().isAfter(stopTime)) {
+                LOGGER.warn("Region {} times out when waiting for message after {} seconds", getRegionID(),
+                        timeout.getSeconds());
+                break;
+            }
+            
             // only wait if the region hasn't received all messages
             if (receivedMsgMap.size() < noMessageToRead) {
                 Thread.sleep(apRoundDuration.toMillis());
             }
-        } while (receivedMsgMap.size() < noMessageToRead);
+        } 
+        while (receivedMsgMap.size() < noMessageToRead);
 
+        final long end = System.currentTimeMillis();
+        LOGGER.info("Wait for messages took {} ms", (end - start));
+        
         return receivedMsgMap;
     }
     
@@ -258,7 +293,7 @@ public abstract class AbstractDcopAlgorithm {
      * @return
      *   Double.compare(a, b) if the absolute difference is > DOUBLE_TOLERANCE, return 0 otherwise
      */
-    protected int compareDouble(double a, double b) {
+    public static int compareDouble(double a, double b) {
         double absDiff = Math.abs(a - b);
         
         if (Double.compare(absDiff, DOUBLE_TOLERANCE) <= 0) return 0;
@@ -268,27 +303,77 @@ public abstract class AbstractDcopAlgorithm {
     
     /**
      * @param summary .
-     * @return the plan by default when this region processes all the load
+     * @param dcopRun .
+     * @return return null if dcopRun >= 1, otherwise return default plan that sheds all load to the data center
      */
-    protected RegionPlan defaultPlan(ResourceSummary summary) {
-        Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> servicePlanBuilder = new Builder<>();
-        Builder<RegionIdentifier, Double> regionPlanBuilder = new Builder<>();
-
-        regionPlanBuilder.put(getRegionID(), 1.0);
-        for (RegionIdentifier neighbor : getNeighborSet()) {
-            regionPlanBuilder.put(neighbor, 0.0);
+    protected RegionPlan defaultPlan(ResourceSummary summary, int dcopRun) {
+        // Return null plan if DCOP run >= 1
+        // Only return non-empty plan in the first DCOP run
+        if (dcopRun >= 1) {
+            return null;
         }
-
-        ImmutableMap<RegionIdentifier, Double> regionPlan = regionPlanBuilder.build();
-
-        for (ServiceIdentifier<?> serviceID : summary.getServerDemand().keySet()) {
-            servicePlanBuilder.put(serviceID, regionPlan);
+        
+        Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> servicePlanBuilder = new Builder<>();
+        
+        for (final ApplicationSpecification spec : AppMgrUtils.getApplicationManager().getAllApplicationSpecifications()) {
+            final ApplicationCoordinates service = spec.getCoordinates();
+            if (!MAPServices.UNPLANNED_SERVICES.contains(service)) {
+                // add to overflow plan
+                Builder<RegionIdentifier, Double> regionPlan = defaultRegionPlanBuilder(service);
+                servicePlanBuilder.put(service, regionPlan.build());
+            }
         }
 
         ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> defaultPlan = servicePlanBuilder.build();
-        LOGGER.info("Plan by default " + defaultPlan);
+        LOGGER.info("Plan by default " + defaultPlan);      
         
-        return new RegionPlan(summary.getRegion(), defaultPlan);
+        final RegionPlan rplan = new RegionPlan(summary.getRegion(), defaultPlan);
+        
+        return rplan;
+    }
+    
+    /**
+     * @param service .
+     * @return default region plan that pushes all load of this service to server
+     */
+    private Builder<RegionIdentifier, Double> defaultRegionPlanBuilder(ServiceIdentifier<?> service) {
+        Builder<RegionIdentifier, Double> regionPlanBuilder = new Builder<>();
+        
+        RegionIdentifier defaultRegion = defaultRegion(service);
+        
+//        if (defaultRegion != null && !getRegionID().equals(defaultRegion)) {
+//            regionPlanBuilder.put(defaultRegion, 1D);
+//            regionPlanBuilder.put(getRegionID(), 0D);
+//            for (RegionIdentifier neighbor : neighborSet) {
+//                if (!neighbor.equals(defaultRegion)) {
+//                    regionPlanBuilder.put(neighbor, 0D);
+//                }
+//            } 
+//        }
+//        else {
+//            regionPlanBuilder.put(getRegionID(), 1D);
+//            neighborSet.forEach(neighbor -> regionPlanBuilder.put(neighbor, 0D));
+//        }
+        
+        regionPlanBuilder.put(defaultRegion, 1D);
+        return regionPlanBuilder;
+    }
+    
+    private Builder<RegionIdentifier, Double> keepAlRegionPlan(ServiceIdentifier<?> service) {
+        Builder<RegionIdentifier, Double> regionPlanBuilder = new Builder<>();
+        
+        regionPlanBuilder.put(getRegionID(), 1D);
+//        neighborSet.forEach(neighbor -> regionPlanBuilder.put(neighbor, 0D));
+        
+        return regionPlanBuilder;
+    }
+    
+    /**
+     * @param service .
+     * @return the default region of the service
+     */
+    protected static RegionIdentifier defaultRegion(ServiceIdentifier<?> service) {
+        return AppMgrUtils.getApplicationSpecification(AppMgrUtils.getApplicationManager(), service).getServiceDefaultRegion();
     }
     
     /**
@@ -355,19 +440,15 @@ public abstract class AbstractDcopAlgorithm {
 
                 if (null != client && regionID.equals(server)) {
                     plannedServiceFlowData.forEach((service, serviceData) -> {
-                        networkPerService.merge(service, serviceData.getOrDefault(LinkAttribute.DATARATE_RX, 0D),
-                                Double::sum);
-                        networkPerService.merge(service, serviceData.getOrDefault(LinkAttribute.DATARATE_TX, 0D),
-                                Double::sum);
+                        final double serviceNetworkDemand = serviceData.getOrDefault(LinkAttribute.DATARATE_RX, 0D)
+                                + serviceData.getOrDefault(LinkAttribute.DATARATE_TX, 0D);
+                        networkPerService.merge(service, serviceNetworkDemand, Double::sum);
 
                         final Map<RegionIdentifier, Double> networkPerSource = networkPerServicePerSource
                                 .computeIfAbsent(service, k -> new HashMap<>());
-                        networkPerSource.merge(client, serviceData.getOrDefault(LinkAttribute.DATARATE_RX, 0D),
-                                Double::sum);
-                        networkPerSource.merge(client, serviceData.getOrDefault(LinkAttribute.DATARATE_TX, 0D),
-                                Double::sum);
+                        networkPerSource.merge(client, serviceNetworkDemand, Double::sum);
                     });
-                } // client not null
+                } // client not null and server is in this region
             });
         });
 
@@ -428,12 +509,24 @@ public abstract class AbstractDcopAlgorithm {
      */
     protected void retrieveAggregateCapacity(ResourceSummary summary) {
         final NodeAttribute containersAttribute = MapUtils.COMPUTE_ATTRIBUTE;
+                
+        double capacity = 0D;
         
         if (summary.getServerCapacity().containsKey(containersAttribute)) {
-            regionCapacity = summary.getServerCapacity().get(containersAttribute).doubleValue();
+            capacity = summary.getServerCapacity().get(containersAttribute).doubleValue();
         }
         
-        regionCapacity *= AgentConfiguration.getInstance().getDcopCapacityThreshold();
+//        regionCapacity = capacity;
+        
+        // (region capacity - (number of services in region - 1) * 1.0 min service capacity) * DCOP threshold
+        int numServiceInRegionMinusOne = summary.getServerDemand().size();
+        
+        regionCapacity = (capacity - (numServiceInRegionMinusOne - 1) * MINIMUM_SERVICE_CAPACITY) * AgentConfiguration.getInstance().getDcopCapacityThreshold();
+        
+        // Region capacity might be negative if numServiceInRegionMinusOne is large and capacity is small
+        if (compareDouble(regionCapacity, 0D) < 0) {
+            regionCapacity = 0D;
+        }
      }
     
     /**
@@ -525,9 +618,46 @@ public abstract class AbstractDcopAlgorithm {
      * @postcondition neighborSet contains the set of neighbors
      */
     protected void retrieveNeighborSetFromNetworkLink(ResourceSummary summary) {
-        neighborSet.addAll(summary.getNetworkCapacity().keySet());
+        // To get the most up-to-date neighbor set
+        neighborSet.clear();
+        
+        neighborSet.addAll(dcopInfoProvider.getAllDcopSharedInformation().keySet());
         neighborSet.remove(regionID);
-        LOGGER.info("My neighbors are: {}", getNeighborSet().toString());
+        neighborSet.remove(RegionIdentifier.UNKNOWN);
+        LOGGER.info("My neighbors are: {}", getNeighborSet());
+    }
+    
+    /**
+     * @param topology .
+     * @postcondition neighborSet contains the set of neighbors
+     */
+    protected void retrieveNeighborSetFromTopology(RegionalTopology topology) {
+        // To get the most up-to-date neighbor set
+        neighborSet.clear();
+        
+        neighborSet.addAll(topology.getNeighboringRegions(regionID));
+        neighborSet.remove(regionID);
+        neighborSet.remove(RegionIdentifier.UNKNOWN);
+        LOGGER.info("My neighbors are: {}", getNeighborSet());
+    }
+    
+    /**
+     * Get all valid services from network demand for computing DCOP plans. <br>
+     * Getting from network demand since it reflects the services in the inferred server demand.
+     * @param summary .
+     * @postcondition allServiceSet for DCOP plan
+     */
+    protected void retrieveAllService(ResourceSummary summary) {
+        for (Entry<RegionIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> entry : summary.getNetworkDemand().entrySet()) {
+            for (Entry<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> innerEntry : entry.getValue().entrySet()) {
+                for (ServiceIdentifier<?> service : innerEntry.getValue().keySet()) {
+                    if (!MAPServices.UNPLANNED_SERVICES.contains(service)) {
+                        allServiceSet.add(service);
+                    }
+                }
+            }
+        }
+        LOGGER.info("All services in network demand are: {}", allServiceSet);
     }
 
 
@@ -608,13 +738,12 @@ public abstract class AbstractDcopAlgorithm {
      * @return DCOP plan
      */
     protected RegionPlan computeRegionDcopPlan(ResourceSummary summary, int lastIteration, boolean isRootKeepTheRest) {
-        Map<ServiceIdentifier<?>, Double> keepLoadMap = new HashMap<>();
-        getClientKeepLoadMap().forEach((client, map) -> map.forEach((service, load) -> updateKeyLoadMap(keepLoadMap, service, load, true)));
+//        Map<ServiceIdentifier<?>, Double> keepLoadMap = new HashMap<>();
         
-        // Return default plan if totalLoads coming is 0
         Map<ServiceIdentifier<?>, Double> incomingLoadMap = new HashMap<>();
         Map<ServiceIdentifier<?>, Map<RegionIdentifier, Double>> outgoingLoadMap = new HashMap<>();
         
+        // Compute incoming and outgoing load map
         for (Entry<RegionIdentifier, Map<ServiceIdentifier<?>, Double>> neighborEntry : getFlowLoadMap().entrySet()) {
             RegionIdentifier neighbor = neighborEntry.getKey();
             for (Entry<ServiceIdentifier<?>, Double> serviceEntry : neighborEntry.getValue().entrySet()) {
@@ -630,63 +759,274 @@ public abstract class AbstractDcopAlgorithm {
                     updateKeyKeyLoadMap(outgoingLoadMap, service, neighbor, -load, true);
                 }
             }
-        }        
+        }
+        
+        double totalIncoming = sumValues(incomingLoadMap);
+        double totalOutgoing = sumKeyKeyValues(outgoingLoadMap);
+        LOGGER.info("DCOP Run {} Region {} has totalIncoming {}", lastIteration, getRegionID(), totalIncoming);
+        LOGGER.info("DCOP Run {} Region {} has totalOutgoing {}", lastIteration, getRegionID(), totalOutgoing);
+        
+        if (compareDouble(totalIncoming - totalOutgoing, getRegionCapacity()) > 0) {
+            // Only print out the warning for non data center regions
+            if (!getDatacenters().contains(getRegionID())) {
+                LOGGER.info("DCOP Run {} Region {} has MORE LOAD THAN CAPACITY: {} > {}", lastIteration, getRegionID(), (totalIncoming - totalOutgoing), getRegionCapacity());
+            }
+        }
         
         if (compareDouble(sumValues(incomingLoadMap), 0) == 0) {
-            RegionPlan defaultRegionPlan = defaultPlan(summary);
+            RegionPlan defaultRegionPlan = defaultPlan(summary, lastIteration);
             LOGGER.info("DCOP Run {} Region Plan Region {}: {}", lastIteration, getRegionID(), defaultRegionPlan);
             return defaultRegionPlan;
         }
-    
+
         Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> servicePlanBuilder = new Builder<>();
-        Builder<RegionIdentifier, Double> regionPlanBuilder;
-    
+
         for (Entry<ServiceIdentifier<?>, Double> serviceEntry : incomingLoadMap.entrySet()) {
             ServiceIdentifier<?> service = serviceEntry.getKey();
             double totalLoadFromThisService = serviceEntry.getValue();
-    
-            regionPlanBuilder = new Builder<>();
-            if (!outgoingLoadMap.containsKey(service) || compareDouble(totalLoadFromThisService, 0) == 0) {
-                for (RegionIdentifier neighbor : getNeighborSet()) {
-                    regionPlanBuilder.put(neighbor, 0.0);
-                }
-                regionPlanBuilder.put(getRegionID(), 1.0);
-            } else {
-                
+
+            Builder<RegionIdentifier, Double> regionPlanBuilder = new Builder<>();
+            // No incoming load
+            if (compareDouble(totalLoadFromThisService, 0) == 0) {
+                regionPlanBuilder = defaultRegionPlanBuilder(service);
+            }
+            // Keep all if there is incoming load but no outgoing load
+            else if (!outgoingLoadMap.containsKey(service)) {
+                regionPlanBuilder = keepAlRegionPlan(service);
+            }
+            // There is incoming load and outgoing load
+            else {
                 double totalRatio = 0;
                 
-                for (RegionIdentifier neighbor : getNeighborSet()) {
-                    double load = outgoingLoadMap.get(service).getOrDefault(neighbor, 0.0);
-                    regionPlanBuilder.put(neighbor, load / totalLoadFromThisService);
-                    totalRatio += load / totalLoadFromThisService;
+                // Create a set of neighbors with zero rate
+                // Create a list of neighbors with non-zero rate which self ID will be the last element if in the list
+
+                // Set the last region to 1D - totalLoad
+                
+                Set<RegionIdentifier> regionsWithZeroRatio = new HashSet<>();
+                List<RegionIdentifier> regionsWithNonZeroRate = new ArrayList<>();
+               
+                
+                Set<RegionIdentifier> regionPlanSet = new HashSet<>();
+                regionPlanSet.addAll(outgoingLoadMap.getOrDefault(service, new HashMap<>()).keySet());
+                
+                // Create a set of regions with zero rate and the list of regions with non-zero rate
+//                for (RegionIdentifier neighbor : getNeighborSet()) {
+                
+                for (RegionIdentifier region : regionPlanSet) {
+                    double load = outgoingLoadMap.get(service).getOrDefault(region, 0D);
+                    double ratio = load / totalLoadFromThisService;
+                    if (compareDouble(ratio, 0D) == 0) {
+                        regionsWithZeroRatio.add(region);
+                    }
+                    else {
+                        regionsWithNonZeroRate.add(region);
+                        totalRatio += ratio;
+                    }
                 }
                 
-                if (isRootKeepTheRest) {
-                    regionPlanBuilder.put(getRegionID(), 1 - totalRatio);
-                } else {
-                    regionPlanBuilder.put(getRegionID(), keepLoadMap.getOrDefault(service, 0D) / totalLoadFromThisService);
+                // Add self region to either zero or non-zero 
+                if (compareDouble(1D - totalRatio, 0D) == 0) {
+                    regionsWithZeroRatio.add(getRegionID());
                 }
+                else {
+                    // self region is the last element
+                    regionsWithNonZeroRate.add(getRegionID());
+                }
+                
+                // Create plan for regions with 0 rate
+                for (RegionIdentifier region : regionsWithZeroRatio) {
+                    regionPlanBuilder.put(region, 0D);
+                }
+                
+                // List of regions with non-zero ratio
+                double finalTotalRatio = 0D;
+                for (int i = 0; i < regionsWithNonZeroRate.size(); i++) {
+                    RegionIdentifier region = regionsWithNonZeroRate.get(i);
+                    
+                    if (i == regionsWithNonZeroRate.size() - 1) {
+                        regionPlanBuilder.put(region, 1D - finalTotalRatio);
+                    }
+                    else {
+                        double load = outgoingLoadMap.get(service).getOrDefault(region, 0D);
+                        double ratio = load / totalLoadFromThisService;
+                        regionPlanBuilder.put(region, ratio);
+                        finalTotalRatio += ratio;
+                    }
+                }
+                      
+//                for (RegionIdentifier neighbor : getNeighborSet()) {
+//                    double load = outgoingLoadMap.get(service).getOrDefault(neighbor, 0D);
+//                    regionPlanBuilder.put(neighbor, load / totalLoadFromThisService);
+//                    totalRatio += load / totalLoadFromThisService;
+//                }
+//                
+//                
+//                // Ignore isRootKeepTheRest == False since it will never happen
+//                if (isRootKeepTheRest) {
+//                    regionPlanBuilder.put(getRegionID(), 1 - totalRatio);
+//                } else {
+//                    regionPlanBuilder.put(getRegionID(), keepLoadMap.getOrDefault(service, 0D) / totalLoadFromThisService);
+//                }
             }
             ImmutableMap<RegionIdentifier, Double> regionPlan = regionPlanBuilder.build();
             
             if (compareDouble(sumValues(regionPlan), 1) != 0) {
                 LOGGER.info("DCOP Run {} Region Plan Region {} DOES NOT ADD UP TO ONE: {}", lastIteration, getRegionID(), regionPlan);
             }
-    
+
             servicePlanBuilder.put(service, regionPlan);
         }
-    
-        ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> dcopPlan = servicePlanBuilder
-                .build();
-    
+        
+//        // Create DCOP plan for services that are not in servicePlanBuilder
+//        Set<ServiceIdentifier<?>> serviceNotInDcopPlan = new HashSet<>(getAllServiceSet());
+//        serviceNotInDcopPlan.removeAll(servicePlanBuilder.build().keySet());        
+//        
+//        for (ServiceIdentifier<?> service : serviceNotInDcopPlan) {
+//            Builder<RegionIdentifier, Double> defaultRegionPlanBuilder = defaultRegionPlanBuilder(service);
+//            servicePlanBuilder.put(service, defaultRegionPlanBuilder.build());            
+//        }
+        
+        for (final ApplicationSpecification spec : AppMgrUtils.getApplicationManager().getAllApplicationSpecifications()) {
+            final ApplicationCoordinates service = spec.getCoordinates();
+            
+            // If the service is not UNPLANNED, and the service is not in the servicePlanBuilder
+            if (!MAPServices.UNPLANNED_SERVICES.contains(service) && !servicePlanBuilder.build().keySet().contains(service)) {
+                // add to overflow plan
+                Builder<RegionIdentifier, Double> regionPlan = defaultRegionPlanBuilder(service);
+                servicePlanBuilder.put(service, regionPlan.build());
+            }
+        }
+
+        ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> dcopPlan = servicePlanBuilder.build();
+
         LOGGER.info("DCOP Run {} Region Plan Region {}: {}", lastIteration, getRegionID(), dcopPlan);
-    
+
         final RegionPlan rplan = new RegionPlan(summary.getRegion(), dcopPlan);
-    
+
         return rplan;
     }
+    
+    /**
+     * Server - - RegionID - child - - Client .
+     * @param server is the data center
+     * @param client is the client
+     * @param iteration current DCOP run or iteration
+     * @param topology is used to retrieve the path from server to client
+     * @param parent parent region
+     * @return the child
+     */
+    protected RegionIdentifier findNeighbor(RegionIdentifier server, RegionIdentifier client, int iteration, RegionalTopology topology, RegionIdentifier parent) {
+        if (topology == null) {return null;}
+        
+        // Path is: server - node1 - node2 - ... - nodeN - client
+        for (RegionalLink entry : topology.getPath(server, client)) {
+            LOGGER.info("Iteration {} Region {} has links from server {} to client {}: {}", iteration, regionID, server, client, entry);
+            
+            // If this region is the server 
+            // Then there is only one edge: server (self region) - node1 
+            if (getRegionID().equals(server)) {
+                if (isLinkContains(entry, getRegionID())) {
+                    return getOtherRegion(entry, getRegionID());
+                }
+            }
+            // Otherwise, return the link with self region but not parent (not return the parent - regionID) link
+            else {
+                // Look for the link that contains self region, but does not contain the parent
+                if (isLinkContains(entry, getRegionID()) && !isLinkContains(entry, parent)) {
+                    return getOtherRegion(entry, getRegionID());
+                }
+            }            
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Check if a link has a region.
+     * @param link .
+     * @param region .
+     * @return true if link has the region
+     */
+    private boolean isLinkContains(RegionalLink link, RegionIdentifier region) {
+        return region.equals(link.getLeft()) || region.equals(link.getRight());
+    }
+    
+    /**
+     * Return the other region. Assume that the link has the region
+     * @param link .
+     * @param region .
+     * @return the other region, which supposed to be the child
+     */
+    private RegionIdentifier getOtherRegion(RegionalLink link, RegionIdentifier region) {
+        RegionIdentifier left = link.getLeft();
+        RegionIdentifier right = link.getRight();
+        
+        return left.equals(region) ? right : left; 
+    }
 
+    /**
+     * Provided attribute -> load for each service.
+     * Build service -> regionID -> attribute -> load
+     * 
+     * Provided flow -> attribute -> double for each service
+     * Build neighbor -> flow -> service -> attribute -> double
+     * @param dcopInfoProvider .
+     * @param serviceSet .
+     * @return inferred server demand
+     */
+    protected ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferTotalDemand(
+            DcopInfoProvider dcopInfoProvider, Set<ServiceIdentifier<?>> serviceSet) {
+        
+        // Server demand builder
+        Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> sDemandBuilder = new Builder<>();
+        
+        // Build sDemand builder
+        for (ServiceIdentifier<?> service : serviceSet) {
+            TotalDemand totalDemand = dcopInfoProvider.getTotalDemandForService(service);
+            sDemandBuilder.put(service, totalDemand.getServerDemand());
+        }
+        return sDemandBuilder.build();
+    }
+    
+    /**
+     * Provided attribute -> load for each service.
+     * Build service -> regionID -> attribute -> load
+     *
+     * Provided flow -> attribute -> double for each service
+     * Build neighbor -> flow -> service -> attribute -> double
+     * @param dcopInfoProvider .
+     * @param serviceSet .
+     * @param hardcodeDemand hard-coded demand value
+     * @return inferred server demand with hard-coded value
+     */
+    protected ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferHardCodeTotalDemand(
+            DcopInfoProvider dcopInfoProvider, Set<ServiceIdentifier<?>> serviceSet, double hardcodeDemand) {
 
+        // Server demand builder
+        Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> sDemandBuilder = new Builder<>();
+
+        // Build sDemand builder
+        for (ServiceIdentifier<?> service : serviceSet) {
+            TotalDemand totalDemand = dcopInfoProvider.getTotalDemandForService(service);
+//                sDemandBuilder.put(service, totalDemand.getServerDemand());
+
+            Builder<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> hardCodedDemand = new Builder<>();
+
+            for (Map.Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> entry : totalDemand.getServerDemand().entrySet()) {
+                Builder<NodeAttribute, Double> demandBuilder = new Builder<>();
+
+                for (Entry<NodeAttribute, Double> demandEntry : entry.getValue().entrySet()) {
+                    demandBuilder.put(demandEntry.getKey(), hardcodeDemand);
+                }
+                hardCodedDemand.put(entry.getKey(), demandBuilder.build());
+            }
+            sDemandBuilder.put(service, hardCodedDemand.build());
+        }
+
+        return sDemandBuilder.build();
+    }
+    
     /**
      * @author khoihd
      *
@@ -697,6 +1037,188 @@ public abstract class AbstractDcopAlgorithm {
             // Sort by Descending
             return Integer.compare(getPriority(o2), getPriority(o1));
         }
+    }
+    
+    /**
+     * @author khoihd
+     *
+     */
+    public class ServiceAscendingPriorityComparator implements Comparator<ServiceIdentifier<?>> {
+        @Override
+        public int compare(ServiceIdentifier<?> o1, ServiceIdentifier<?> o2) {
+            // Sort by Ascending
+            return Integer.compare(getPriority(o1), getPriority(o2));
+        }
+    }
+    
+    /**
+     * @author khoihd
+     * Prioritize tuples with smaller hops, larger data rate, smaller link delay, then sink region in lexicographic order
+     */
+    public static class SortRCDiffTuple implements Comparator<FinalRCDiffTuple>, Serializable {
+        /**
+         * 
+         */
+        private static final long serialVersionUID = 440858726558744647L;
+
+        @Override
+        public int compare(FinalRCDiffTuple left, FinalRCDiffTuple right) {            
+            int compare = 0;
+
+            // Choose tuples with smaller delay first
+            // Then tuple with higher data rate
+            // Then tuple with smaller hops
+            // Then tuple with regions based on alphabetical
+            
+            compare = Integer.compare(left.getHop(), right.getHop());
+            if (compare == 0) {
+                compare = compareDouble(right.getDatarate(), left.getDatarate());      
+            }
+            if (compare == 0) {
+                compare = compareDouble(left.getDelay(), right.getDelay());
+            }
+            if (compare == 0) {
+                compare = compareRegions(left.getChild(), right.getChild());
+            }
+            
+            return compare;
+        }
+    }
+    
+    /**
+     * @author khoihd
+     * Prioritize tuples with smaller hops, then sink region in lexicographic order
+     */
+    public static class SortLexicographicRCDiffTuple implements Comparator<FinalRCDiffTuple>, Serializable {
+        /**
+         * 
+         */
+        private static final long serialVersionUID = 440858726558744647L;
+
+        @Override
+        public int compare(FinalRCDiffTuple left, FinalRCDiffTuple right) {            
+            int compare = 0;
+            
+            // Smaller hop is better
+            compare = Integer.compare(left.getHop(), right.getHop());
+            if (compare == 0) {
+                compare = compareRegions(left.getChild(), right.getChild());
+            }
+            
+            return compare;
+        }
+    }
+    
+    /**
+     * @author khoihd
+     * Prioritize tuples with smaller delay, larger data rate, smaller hops, then sink region in lexicographic order
+     */
+    public static class SortProposal implements Comparator<FinalRCDiffProposal>, Serializable {
+        /**
+         * 
+         */
+        private static final long serialVersionUID = 6817675667929766458L;
+
+        @Override
+        public int compare(FinalRCDiffProposal leftProposal, FinalRCDiffProposal rightProposal) {            
+            FinalRCDiffTuple left = leftProposal.getTuple();
+            FinalRCDiffTuple right = rightProposal.getTuple();
+            
+            return new SortRCDiffTuple().compare(left, right);
+        }
+    }
+    
+    /**
+     * @author khoihd
+     * Prioritize tuples with smaller hops, then sink region in lexicographic order
+     */
+    public static class SortLexicographicProposal implements Comparator<FinalRCDiffProposal>, Serializable {
+        /**
+         * 
+         */
+        private static final long serialVersionUID = -3630937797770575945L;
+
+        @Override
+        public int compare(FinalRCDiffProposal leftProposal, FinalRCDiffProposal rightProposal) {            
+            FinalRCDiffTuple left = leftProposal.getTuple();
+            FinalRCDiffTuple right = rightProposal.getTuple();
+            
+            return new SortLexicographicRCDiffTuple().compare(left, right);
+
+        }
+    }
+    
+    /**
+     * @author khoihd
+     *
+     */
+    public static class SortRegionIdentifierComparator implements Comparator<RegionIdentifier>, Serializable {
+        /**
+         * 
+         */
+        private static final long serialVersionUID = -1592957603621470995L;
+
+        @Override
+        public int compare(RegionIdentifier region1, RegionIdentifier region2) {
+            return region1.getName().compareTo(region2.getName());
+        }
+    }
+    
+    /**
+     * Compare regions in lexicographic ordering. The data center is consider to be 'greater' than non-datacenter region
+     * @param left .
+     * @param right .
+     * @return
+     */
+    private static int compareRegions(RegionIdentifier left, RegionIdentifier right) {
+        Set<RegionIdentifier> datacenters = getDatacenters();
+        
+        int compare = 0;
+        if (datacenters.contains(left) && datacenters.contains(right)) {
+            compare = left.getName().compareTo(right.getName());     
+        }
+        // If the left child is one of the data centers => prioritize the right child
+        else if (datacenters.contains(left)) {
+            compare = 1;
+        }
+        // If the right child is one of the data centers => prioritize the left child
+        else if (datacenters.contains(right)) {
+            compare = -1;
+        }
+        else {
+            compare = left.getName().compareTo(right.getName());     
+        }
+        
+        return compare;
+    }
+    
+    /**
+     * .
+     * @return all data centers
+     */
+    protected static Set<RegionIdentifier> getDatacenters() {
+        Set<RegionIdentifier> datacenters = new HashSet<>();
+        for (ServiceIdentifier<?> service : getAllPlannedServices()) {
+            datacenters.add(defaultRegion(service));
+        }
+        
+        return datacenters;
+    }
+
+    
+    /**
+     * @return all planned services
+     */
+    protected static Set<ServiceIdentifier<?>> getAllPlannedServices() {
+        Set<ServiceIdentifier<?>> plannedServices = new HashSet<>();
+        for (final ApplicationSpecification spec : AppMgrUtils.getApplicationManager().getAllApplicationSpecifications()) {
+            final ApplicationCoordinates service = spec.getCoordinates();
+            if (!MAPServices.UNPLANNED_SERVICES.contains(service)) {
+                plannedServices.add(service);
+            }
+        }
+        
+        return plannedServices;
     }
 
 
@@ -713,5 +1235,12 @@ public abstract class AbstractDcopAlgorithm {
      */
     public Map<RegionIdentifier, Map<ServiceIdentifier<?>, Double>> getClientKeepLoadMap() {
         return clientLoadMap;
+    }
+
+    /**
+     * @return the allServiceSet
+     */
+    public Set<ServiceIdentifier<?>> getAllServiceSet() {
+        return allServiceSet;
     }
 }

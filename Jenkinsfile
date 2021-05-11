@@ -38,17 +38,23 @@ pipeline {
                 stage('Gather tool results') {
                         // any post build steps that can fail need to be here to ensure that the email is sent out in the end
                         steps {
-                          recordIssues \
-                              qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]], \
-                              tools: [spotBugs(pattern: '**/build/reports/spotbugs/*.xml'), \
-			              checkStyle(pattern: '**/build/reports/checkstyle/*.xml')]
-			
-                          junit testResults: "**/build/test-results/**/*.xml", keepLongStdio: true
-                          recordIssues tool: taskScanner(excludePattern: 'gradle-repo/**,maven-repo/**', includePattern: '**/*.java,**/*.sh,**/*.py', highTags: 'FIXME,HACK', normalTags: 'TODO')
-         		 
-                          recordIssues tool: java()
-                        }
-                }
+			  timeout(time: 1, unit: 'HOURS') {
+
+                            // exclude P2Protelis as it has its own build
+                            recordIssues \
+                                filters: [excludeFile('src/P2Protelis/*')], \
+                                  qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]], \
+                                  tools: [spotBugs(pattern: '**/build/reports/spotbugs/*.xml'), \
+  			                  checkStyle(pattern: '**/build/reports/checkstyle/*.xml')]
+  			
+                            junit testResults: "**/build/test-results/**/*.xml", keepLongStdio: false
+			    
+                            recordIssues tool: taskScanner(excludePattern: 'gradle-repo/**,maven-repo/**,src/P2Protelis/**', includePattern: '**/*.java,**/*.sh,**/*.py', highTags: 'FIXME,HACK', normalTags: 'TODO')
+           		 
+                            recordIssues tool: java()
+			  } // timeout
+                        } // steps
+                } // stage
 
 		stage('Archive artifacts') {
 		        steps {

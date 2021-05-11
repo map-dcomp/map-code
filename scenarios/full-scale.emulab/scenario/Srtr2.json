@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "router",
+    "name": "Srtr2",
+    "region": "S",
+    "router": true,
+    "underlay": false
+}

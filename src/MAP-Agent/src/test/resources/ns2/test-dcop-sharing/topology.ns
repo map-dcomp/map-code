@@ -1,6 +1,8 @@
 set ns [new Simulator]
 source tb_compat.tcl
 
+# A0 - A1 - B1 - B0
+
 # NCPs
 set nodeA0 [$ns node]
 tb-set-node-os $nodeA0 XEN46-64-STD

@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "rohu_no_containers",
+    "name": "B5rtr1",
+    "region": "B5",
+    "underlay": false
+}

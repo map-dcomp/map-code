@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Frtr7",
+    "region": "F",
+    "router": false,
+    "underlay": false
+}

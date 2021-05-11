@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -54,7 +54,6 @@ import org.apache.logging.log4j.Logger;
 
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.utils.JsonUtils;
-import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
@@ -104,12 +103,15 @@ public class NetworkLoadTable {
                 final ResourceReport report = mapper.readValue(reader, ResourceReport.class);
                 final long reportTime = report.getTimestamp();
 
-                final SortedMap<Long, NodeData> nodeTimeData = data.computeIfAbsent(report.getNodeName(),
-                        k -> new TreeMap<>());
-                final NodeData nodeData = nodeTimeData.computeIfAbsent(reportTime, k -> new NodeData());
+                if (reportTime > 0) {
+                    final SortedMap<Long, NodeData> nodeTimeData = data.computeIfAbsent(report.getNodeName(),
+                            k -> new TreeMap<>());
+                    final NodeData nodeData = nodeTimeData.computeIfAbsent(reportTime, k -> new NodeData());
 
-                gatherNodeData(reportTime, report, nodeData);
-                gatherContainerData(reportTime, report, nodeData);
+                    gatherNodeData(reportTime, report, nodeData);
+                } else {
+                    LOGGER.warn("Found data with time ({}) not > 0. Ignoring: {}", reportTime, report);
+                }
             } catch (JsonParseException | JsonMappingException e) {
                 LOGGER.error("Error parsing JSON file {}", resourceReportLongFile, e);
             } catch (NoSuchFileException | FileNotFoundException e) {
@@ -209,36 +211,6 @@ public class NetworkLoadTable {
 
             });
         }
-
-    }
-
-    private void gatherContainerData(final long time, final ResourceReport report, final NodeData nodeData) {
-        report.getContainerReports().forEach((container, creport) -> {
-            final ContainerData containerData = nodeData.containerData.computeIfAbsent(creport.getContainerName(),
-                    k -> new ContainerData());
-            gatherContainerData(time, creport, containerData);
-        });
-    }
-
-    private void gatherContainerData(final long time,
-            final ContainerResourceReport creport,
-            final ContainerData containerData) {
-        creport.getNetworkLoad().forEach((neighbor, neighborLoad) -> {
-            neighborLoad.forEach((source, sourceLoad) -> {
-                sourceLoad.forEach((service, serviceLoad) -> {
-                    final String serviceArtifact;
-                    if (service instanceof ApplicationCoordinates) {
-                        serviceArtifact = ((ApplicationCoordinates) service).getArtifact();
-                    } else {
-                        serviceArtifact = service.toString();
-                    }
-                    final NetworkData serviceData = containerData.serviceData.computeIfAbsent(serviceArtifact,
-                            k -> new NetworkData());
-                    serviceData.rx += serviceLoad.getOrDefault(LinkAttribute.DATARATE_RX, 0D);
-                    serviceData.tx += serviceLoad.getOrDefault(LinkAttribute.DATARATE_TX, 0D);
-                });
-            });
-        });
 
     }
 

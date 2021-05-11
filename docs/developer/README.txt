@@ -8,24 +8,12 @@ Get the submodules setup
 
 If you are on Windows and cannot execute the setup script, open it in a text editor and execute the git commands in the file to setup your environment.
 
-Install eclipse, Neon has been tested.
+Install eclipse
 Install the checkstyle plugin for eclipse.
-
-Install gradle support http://www.vogella.com/tutorials/EclipseGradle/article.html only stel 2
-
-Install scala support using update site http://download.scala-ide.org/sdk/lithium/e46/scala212/stable/site
-At a minimum install  "Scala", "Scala IDE for Eclipse".
-
-If you get errors about incompatible versions of the scala compiler.
-  * Go into the eclipse project properties
-  * Got down to "Scala Compiler"
-  * Select "Use Project Settings"
-  * Select a "Scala Installation" of "Latest 2.11 bundle (dynamic)"
-
 
 Get the initial build setup
 
-  1. cd src && ./gradlew build -x test
+  1. cd src && ./gradlew assemble
   2. cd src && ./gradlew cleanEclipseClasspath eclipseClasspath
   3. Tell eclipse to import a project and select the directory 
 
@@ -42,7 +30,7 @@ Run static FindBugs and Checkstyle on a project:
 
     ./gradlew spotbugsMain spotbugsTest checkstyleMain checkstyleTest
     
-Then look in `build/reports/checkstyle` and `build/reports/spotbugs` for the results. The checkstyle reports are HTML, so can be opened in a browser. The SpotBugs results are in XML, so you should download FindBugs from http://findbugs.sourceforge.net/ and then use the GUI to view the xml files that are created.
+Then look in `build/reports/checkstyle` and `build/reports/spotbugs` for the results. The checkstyle reports are HTML, so can be opened in a browser. The SpotBugs results are in XML, so you should download SpotBugs from https://spotbugs.readthedocs.io/en/stable/installing.html and then use the GUI to view the xml files that are created.
 
 To suppress SpotBugs warnings you can use @SuppressFBWarning(value="findbugs_check_name", justification="reason").
 For example
@@ -78,7 +66,7 @@ Running the visualization
 This assumes that you have run src/build.sh recently.
 
     cd src
-    ./gradlew :MAP-Visualization:build -x test
+    ./gradlew :MAP-Visualization:assemble
     java -jar MAP-Visualization/build/libs/MAP-Visualization-0.0.1-executable.jar
     
 

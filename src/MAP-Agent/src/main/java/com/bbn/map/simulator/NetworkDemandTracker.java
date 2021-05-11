@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -37,15 +37,14 @@ import java.util.Map;
 
 import javax.annotation.Nonnull;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.bbn.map.AgentConfiguration;
 import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.bbn.protelis.utils.ImmutableUtils;
 import com.google.common.collect.ImmutableMap;
 
 /**
@@ -56,13 +55,57 @@ import com.google.common.collect.ImmutableMap;
  */
 public class NetworkDemandTracker {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(NetworkDemandTracker.class);
+    private final NetworkDemandAlgorithm helperShort;
+    private final NetworkDemandAlgorithm helperLong;
+    private final Object helperLock = new Object();
 
-    private final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory = new HashMap<>();
+    /**
+     * Default constructor.
+     */
+    public NetworkDemandTracker() {
+        if (AgentConfiguration.DemandComputationAlgorithm.MOVING_AVERAGE
+                .equals(AgentConfiguration.getInstance().getDemandComputationAlgorithm())) {
+            this.helperLong = new MovingAverageNetworkDemandAlgorithm(
+                    AgentConfiguration.getInstance().getDcopEstimationWindow().toMillis());
+            this.helperShort = new MovingAverageNetworkDemandAlgorithm(
+                    AgentConfiguration.getInstance().getRlgEstimationWindow().toMillis());
+        } else if (AgentConfiguration.DemandComputationAlgorithm.EXPONENTIAL_DECAY
+                .equals(AgentConfiguration.getInstance().getDemandComputationAlgorithm())) {
+            this.helperLong = new ExponentialDecayNetworkDemandAlgorithm(
+                    AgentConfiguration.getInstance().getDcopExponentialDemandDecay());
+            this.helperShort = new ExponentialDecayNetworkDemandAlgorithm(
+                    AgentConfiguration.getInstance().getRlgExponentialDemandDecay());
+        } else {
+            throw new IllegalArgumentException("Unknown demand computation algorithm: "
+                    + AgentConfiguration.getInstance().getDemandComputationAlgorithm());
+        }
+    }
+
+    private static Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> mergeIfceData(
+            final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> oldIfceData,
+            final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> newIfceData) {
+
+        // merge newIfceData into oldIfceData
+        newIfceData.forEach((flow, flowData) -> {
+            oldIfceData.merge(flow, flowData, (oldFlowData, newFlowData) -> {
+                newFlowData.forEach((service, serviceData) -> {
+                    oldFlowData.merge(service, serviceData, (oldServiceData, newServiceData) -> {
+                        newServiceData.forEach((attr, value) -> {
+                            oldServiceData.merge(attr, value, Double::sum);
+                        });
+                        return oldServiceData;
+                    }); // merge attributes
+                });
+                return oldFlowData;
+            }); // merge flowData
+        });
+
+        return oldIfceData;
+    }
 
     /**
      * Update the current demand state. Used for
-     * {@link #computeNetworkDemand(long, com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow)}.
+     * {@link #computeNetworkDemand(com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow)}.
      * 
      * @param timestamp
      *            the time that the value was measured at
@@ -71,117 +114,98 @@ public class NetworkDemandTracker {
      */
     public void updateDemandValues(final long timestamp,
             @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
-        updateDemandValues(timestamp, networkLoad, networkLoadHistory);
-    }
 
-    private static void updateDemandValues(final long timestamp,
-            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad,
-            final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory) {
-        // add new entry
-        networkLoadHistory.put(timestamp, networkLoad);
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> newNetworkLoad;
+        synchronized (failedRequests) {
+            // modify the compute load based on the failed requests
+            if (!failedRequests.isEmpty()) {
 
-        // clean out old entries
-        final long historyCutoff = timestamp
-                - Math.max(AgentConfiguration.getInstance().getDcopEstimationWindow().toMillis(),
-                        AgentConfiguration.getInstance().getRlgEstimationWindow().toMillis());
+                final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> newLoad = new HashMap<>();
+                // put all of networkLoad into newLoad as mutable Maps so that
+                // the merge below works
+                networkLoad.forEach((ifce, ifceData) -> {
+                    final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> newIfceData = new HashMap<>();
 
-        final Iterator<Map.Entry<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>>> networkIter = networkLoadHistory
-                .entrySet().iterator();
-        while (networkIter.hasNext()) {
-            final Map.Entry<Long, ?> entry = networkIter.next();
-            if (entry.getKey() < historyCutoff) {
+                    ifceData.forEach((flow, flowData) -> {
+                        final Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>> newFlowData = new HashMap<>();
+                        flowData.forEach((service, serviceData) -> {
+                            final Map<LinkAttribute, Double> newServiceData = new HashMap<>(serviceData);
+                            newFlowData.put(service, newServiceData);
+                        });
+                        newIfceData.put(flow, newFlowData);
+                    });
+                    newLoad.put(ifce, newIfceData);
+                });
 
-                if (LOGGER.isTraceEnabled()) {
-                    LOGGER.trace("Removing network demand value {} because it's time {} is before {}", entry.getValue(),
-                            entry.getKey(), historyCutoff);
-                }
+                final Iterator<Map.Entry<Long, Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>>> iter = failedRequests
+                        .entrySet().iterator();
+                while (iter.hasNext()) {
+                    final Map.Entry<Long, Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>> entry = iter
+                            .next();
+                    final long endTime = entry.getKey();
+                    if (endTime > timestamp) {
+                        // make atTime a deep copy of entry.getValue() from failedRequests to prevent any objects in failedRequests from getting into newLoad and being affected by the merge
+                        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> atTime = new HashMap<>();
+                        entry.getValue().forEach((ifce, ifceData) -> {
+                            ifceData.forEach((flow, flowData) -> {
+                                flowData.forEach((service, serviceData) -> {
+                                    serviceData.forEach((attr, value) -> {
+                                        atTime.computeIfAbsent(ifce, k -> new HashMap<>())
+                                            .computeIfAbsent(flow, k -> new HashMap<>())
+                                            .computeIfAbsent(service, k -> new HashMap<>())
+                                            .put(attr, value);
+                                    });
+                                });
+                            });
+                        });
 
-                networkIter.remove();
+                        // merge networkLoad and atTime into newLoad
+                        atTime.forEach((ifce, ifceData) -> {
+                            newLoad.merge(ifce, ifceData, NetworkDemandTracker::mergeIfceData);
+                        });
+                    } else {
+                        iter.remove();
+                    }
+                } // foreach failed request
+
+                newNetworkLoad = ImmutableUtils.makeImmutableMap4(newLoad);
+            } // if there are failed requests
+            else {
+                newNetworkLoad = networkLoad;
             }
+        } // critical section
+
+        synchronized (helperLock) {
+            helperLong.updateDemandValues(timestamp, newNetworkLoad);
+            helperShort.updateDemandValues(timestamp, newNetworkLoad);
         }
     }
 
     /**
      * Compute the current network demand per interface.
      * 
-     * @param now
-     *            the current time
      * @param estimationWindow
      *            the window over which to compute the demand
-     * @return the demand value
+     * 
+     * @return the demand value as of the last call to
+     *         {@link #updateDemandValues(long, ImmutableMap)}
      */
     @Nonnull
     public ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand(
-            final long now,
             @Nonnull final ResourceReport.EstimationWindow estimationWindow) {
-        return computeNetworkDemand(now, estimationWindow, networkLoadHistory);
-    }
-
-    private ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand(
-            final long now,
-            @Nonnull final ResourceReport.EstimationWindow estimationWindow,
-            @Nonnull final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory) {
-        final long duration;
-        switch (estimationWindow) {
-        case LONG:
-            duration = AgentConfiguration.getInstance().getDcopEstimationWindow().toMillis();
-            break;
-        case SHORT:
-            duration = AgentConfiguration.getInstance().getRlgEstimationWindow().toMillis();
-            break;
-        default:
-            throw new IllegalArgumentException("Unknown estimation window: " + estimationWindow);
+        synchronized (helperLock) {
+            switch (estimationWindow) {
+            case LONG:
+                return helperLong.computeNetworkDemand();
+            case SHORT:
+                return helperShort.computeNetworkDemand();
+            default:
+                throw new IllegalArgumentException("Unknown estimation window: " + estimationWindow);
+            }
         }
-
-        final long cutoff = now - duration;
-        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> sums = new HashMap<>();
-        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Integer>>>> counts = new HashMap<>();
-        historyMapCountSum(networkLoadHistory, cutoff, sums, counts);
-
-        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportDemand = historyMapAverage(
-                sums, counts);
-
-        return reportDemand;
     }
 
-    private static <K1, K2, K3, K4> void historyMapCountSum(
-            final Map<Long, ImmutableMap<K1, ImmutableMap<K2, ImmutableMap<K3, ImmutableMap<K4, Double>>>>> history,
-            final long historyCutoff,
-            final Map<K1, Map<K2, Map<K3, Map<K4, Double>>>> sums,
-            final Map<K1, Map<K2, Map<K3, Map<K4, Integer>>>> counts) {
-        history.forEach((timestamp, historyValue) -> {
-            if (timestamp >= historyCutoff) {
-
-                historyValue.forEach((k1, v1) -> {
-                    final Map<K2, Map<K3, Map<K4, Double>>> sum1 = sums.computeIfAbsent(k1, k -> new HashMap<>());
-                    final Map<K2, Map<K3, Map<K4, Integer>>> count1 = counts.computeIfAbsent(k1, k -> new HashMap<>());
-
-                    v1.forEach((k2, v2) -> {
-                        final Map<K3, Map<K4, Double>> sum2 = sum1.computeIfAbsent(k2, k -> new HashMap<>());
-                        final Map<K3, Map<K4, Integer>> count2 = count1.computeIfAbsent(k2, k -> new HashMap<>());
-
-                        v2.forEach((k3, v3) -> {
-                            final Map<K4, Double> sum3 = sum2.computeIfAbsent(k3, k -> new HashMap<>());
-                            final Map<K4, Integer> count3 = count2.computeIfAbsent(k3, k -> new HashMap<>());
-
-                            v3.forEach((k4, value) -> {
-                                final double newSum = sum3.getOrDefault(k4, 0D) + value;
-                                final int newCount = count3.getOrDefault(k4, 1) + 1;
-
-                                sum3.put(k4, newSum);
-                                count3.put(k4, newCount);
-                            }); // v3.forEach
-
-                        }); // v2.forEach
-                    }); // v1.forEach
-                }); // historyValue.forEach
-
-            } // inside window
-        }); // history.forEach
-
-    }
-
-    private static <K1, K2, K3, K4> ImmutableMap<K1, ImmutableMap<K2, ImmutableMap<K3, ImmutableMap<K4, Double>>>> historyMapAverage(
+    /* package */ static <K1, K2, K3, K4> ImmutableMap<K1, ImmutableMap<K2, ImmutableMap<K3, ImmutableMap<K4, Double>>>> historyMapAverage(
             final Map<K1, Map<K2, Map<K3, Map<K4, Double>>>> sums,
             final Map<K1, Map<K2, Map<K3, Map<K4, Integer>>>> counts) {
         final ImmutableMap.Builder<K1, ImmutableMap<K2, ImmutableMap<K3, ImmutableMap<K4, Double>>>> result = ImmutableMap
@@ -202,7 +226,7 @@ public class NetworkDemandTracker {
 
                     sum3.forEach((k4, value) -> {
                         final int count = count3.get(k4);
-                        final double average = value / count;
+                        final double average = (count > 0 ? value / count : 0.0);
                         average3.put(k4, average);
                     }); // sum3.forEach
 
@@ -217,6 +241,55 @@ public class NetworkDemandTracker {
         }); // sums.forEach
 
         return result.build();
+    }
+
+    private final Map<Long, Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>> failedRequests = new HashMap<>();
+
+    /**
+     * Note that a request has failed.
+     * 
+     * @param networkEndTime
+     *            the expected end time of the load had the request succeeded
+     * @param rawLoad
+     *            the expected load had the request succeeded
+     * @param ifce
+     *            the interface that the request was received on
+     * @param client
+     *            the client making the request
+     * @param server
+     *            the server that failed the request
+     * @param service
+     *            the requested service
+     */
+    public void addFailedRequest(final InterfaceIdentifier ifce,
+            final NodeIdentifier client,
+            final NodeIdentifier server,
+            final ServiceIdentifier<?> service,
+            final long networkEndTime,
+            final Map<LinkAttribute, Double> rawLoad) {
+
+        final Map<LinkAttribute, Double> rawLoad2 = new HashMap<>(rawLoad);
+        final Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>> serviceLoad = new HashMap<>();
+        serviceLoad.put(service, rawLoad2);
+
+        final NodeNetworkFlow flow = new NodeNetworkFlow(client, server, server);
+        final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> flowLoad = new HashMap<>();
+        flowLoad.put(flow, serviceLoad);
+
+        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> networkLoad = new HashMap<>();
+        networkLoad.put(ifce, flowLoad);
+
+        synchronized (failedRequests) {
+            failedRequests.merge(networkEndTime, networkLoad, (oldLoad, newLoad) -> {
+
+                // merge newLoad into oldLoad
+                newLoad.forEach((i, ifceData) -> {
+                    oldLoad.merge(i, ifceData, NetworkDemandTracker::mergeIfceData);
+                });
+
+                return oldLoad;
+            });
+        }
     }
 
 }

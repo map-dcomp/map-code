@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -37,10 +37,6 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 
@@ -51,7 +47,6 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.bbn.map.AgentConfiguration;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.map.common.value.ApplicationSpecification;
@@ -61,67 +56,107 @@ import com.bbn.map.dns.DnsRecord;
 import com.bbn.map.dns.NameRecord;
 import com.bbn.map.utils.WeightedRoundRobin;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableCollection;
-
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Simulated DNS.
  */
 @ThreadSafe
-public class DNSSim implements DNSUpdateService {
+public abstract class DNSSim implements DNSUpdateService {
 
     private final Object lock = new Object();
+
+    /**
+     * 
+     * @return lock to use to protect internal variables
+     */
+    protected final Object getLock() {
+        return lock;
+    }
 
     private final Logger logger;
 
     private final DNSSim parent;
+
     /**
-     * fqdn -> region -> state
+     * 
+     * @return parent DNS
      */
-    private final Map<ServiceIdentifier<?>, DnsRecordList> entries = new HashMap<>();
+    protected final DNSSim getParent() {
+        return parent;
+    }
+
     private final VirtualClock clock;
-    // used to get the clock and delegate DNS servers
+
+    /**
+     * 
+     * @return clock to use to report time
+     */
+    protected final VirtualClock getClock() {
+        return clock;
+    }
+
+    // used to delegate DNS servers
     private final Simulation simulation;
-    private final String name;
+
+    /**
+     * 
+     * @return simulation object for getting regional DNS objects
+     */
+    protected final Simulation getSimulation() {
+        return simulation;
+    }
+
+    private final RegionIdentifier region;
+
+    /**
+     * 
+     * @return region of the DNS
+     */
+    protected final RegionIdentifier getRegion() {
+        return region;
+    }
 
     /**
      * Simulate a DNS that has no parent to delegate to.
      * 
-     * @param name
-     *            of the DNS for logging
+     * @param region
+     *            {@link #getRegion()}
      * @param simulation
      *            used to get the clock for clock expiration and delegate DNS
      *            servers
      */
-    public DNSSim(@Nonnull final Simulation simulation, @Nonnull final String name) {
-        this.name = name;
+    public DNSSim(@Nonnull final Simulation simulation, @Nonnull final RegionIdentifier region) {
+        this.region = region;
         this.parent = null;
         this.simulation = simulation;
         this.clock = simulation.getClock();
-        this.logger = LoggerFactory.getLogger(this.getClass().getName() + "." + name);
+        this.logger = LoggerFactory.getLogger(this.getClass().getName() + "." + this.region.getName());
     }
 
     /**
      * Simulate a DNS that has a parent that can be asked about names not stored
      * in this DNS.
      * 
-     * @param name
-     *            of the DNS for logging
+     * @param region
+     *            {@link #getRegion()}
      * @param parent
      *            the parent DNS server
      * @param simulation
      *            used to get the clock for clock expiration and delegate DNS
      *            servers
      */
-    public DNSSim(@Nonnull final Simulation simulation, @Nonnull final String name, @Nonnull final DNSSim parent) {
-        this.name = name;
+    public DNSSim(@Nonnull final Simulation simulation,
+            @Nonnull final RegionIdentifier region,
+            @Nonnull final DNSSim parent) {
+        this.region = region;
         this.simulation = simulation;
         this.clock = simulation.getClock();
         this.parent = parent;
-        this.logger = LoggerFactory.getLogger(this.getClass().getName() + "." + name);
+        this.logger = LoggerFactory.getLogger(this.getClass().getName() + "." + this.region.getName());
     }
 
     /**
@@ -134,36 +169,29 @@ public class DNSSim implements DNSUpdateService {
      *            the weight of the record
      */
     public void addRecord(@Nonnull final DnsRecord record, final double weight) {
-        logger.info("{}: Simulation time {} - adding a record {} with weight {}", name, clock.getCurrentTime(), record,
-                weight);
+        logger.info("{}: Simulation time {} - adding a record {} with weight {}", this.region.getName(),
+                clock.getCurrentTime(), record, weight);
 
         synchronized (lock) {
             internalAddRecord(record, weight);
         }
     }
 
-    private void internalAddRecord(@Nonnull final DnsRecord record, final double weight) {
-        final ServiceIdentifier<?> service = record.getService();
-        final DnsRecordList state = entries.computeIfAbsent(service, v -> new DnsRecordList());
-        state.addRecord(record, weight);
-    }
+    /**
+     * Add a record, the lock is already held.
+     * 
+     * @param record
+     *            the record to add
+     * @param weight
+     *            the weight for the record
+     */
+    protected abstract void internalAddRecord(@Nonnull DnsRecord record, double weight);
 
     /**
      * @param visitor
      *            executed for each record in the DNS
      */
-    @SuppressFBWarnings(value = "UC_USELESS_OBJECT", justification = "Copying map to avoid long synchronization section")
-    public void foreachRecord(@Nonnull final BiConsumer<DnsRecord, Double> visitor) {
-        final Map<ServiceIdentifier<?>, DnsRecordList> entriesCopy;
-        synchronized (lock) {
-            // copy to avoid the visitor from blocking
-            entriesCopy = new HashMap<>(entries);
-        }
-
-        entriesCopy.forEach((fqdn, recordList) -> {
-            recordList.foreachRecord(visitor);
-        });
-    }
+    public abstract void foreachRecord(@Nonnull BiConsumer<DnsRecord, Double> visitor);
 
     /**
      * 
@@ -178,18 +206,7 @@ public class DNSSim implements DNSUpdateService {
     }
 
     @Override
-    public boolean replaceAllRecords(@Nonnull final ImmutableCollection<Pair<DnsRecord, Double>> records) {
-        synchronized (lock) {
-            logger.info("{}: simulation time {} - Replacing all records with {}", name, clock.getCurrentTime(),
-                    records);
-
-            entries.clear();
-            records.forEach(rec -> internalAddRecord(rec.getLeft(), rec.getRight()));
-
-            logger.trace("Finished with replacement of records entries {}", entries);
-        }
-        return true;
-    }
+    public abstract boolean replaceAllRecords(@Nonnull ImmutableCollection<Pair<DnsRecord, Double>> records);
 
     /**
      * Find a DNS record. This will check the parent DNS if not found locally.
@@ -204,29 +221,7 @@ public class DNSSim implements DNSUpdateService {
      * @return the record found, will be null if not found in this DNS or it's
      *         parent
      */
-    /* package */ DnsRecord lookup(final String clientName, @Nonnull final ServiceIdentifier<?> service) {
-        synchronized (lock) {
-            final DnsRecordList state = entries.get(service);
-            if (null != state) {
-                if (logger.isTraceEnabled()) {
-                    logger.trace("Finding record for {} in {}", service, state);
-                }
-                final DnsRecord record = state.getNextRecord();
-
-                return record;
-            }
-        }
-
-        // didn't find it locally, check the parent if one exists
-        if (null != parent) {
-            logger.trace("Checking parent for for {} entries: {}", service, entries);
-
-            final DnsRecord record = parent.lookup(clientName, service);
-            return record;
-        } else {
-            return null;
-        }
-    }
+    /* package */ abstract DnsRecord lookup(String clientName, @Nonnull ServiceIdentifier<?> service);
 
     /**
      * Map FQDNs to MAP nodes. This method will follow {@link DelegateRecord}s
@@ -240,52 +235,20 @@ public class DNSSim implements DNSUpdateService {
      * @throws DNSLoopException
      *             if there is a loop in the DNS setup
      */
-    public NodeIdentifier resolveService(final String clientName, final ServiceIdentifier<?> service)
-            throws DNSLoopException {
-        logger.trace("Top of resolve service for {}", service);
-
-        final List<DNSSim> checked = new LinkedList<>();
-
-        NameRecord retRecord = null;
-        DNSSim dns = this;
-        while (null == retRecord) {
-            if (checked.contains(dns)) {
-                throw new DNSLoopException("DNS Loop detected for service: " + service + " checked entries: " + checked
-                        + " most recent dns: " + dns);
-            }
-
-            final DnsRecord record = dns.lookup(clientName, service);
-            if (null == record) {
-                // can't continue checking
-                break;
-            }
-            checked.add(dns);
-
-            if (record instanceof NameRecord) {
-                retRecord = (NameRecord) record;
-            } else if (record instanceof DelegateRecord) {
-                final DelegateRecord delegateRecord = (DelegateRecord) record;
-                dns = simulation.getRegionalDNS(delegateRecord.getDelegateRegion());
-                logger.trace("Delegating to {} for {}", delegateRecord.getDelegateRegion(), service);
-            } else {
-                throw new IllegalArgumentException("Unknown DNS record type: " + record.getClass().getName());
-            }
-        }
-
-        if (null == retRecord) {
-            // cannot resolve the name
-            return null;
-        } else {
-            logServiceResolution(clientName, service, retRecord);
-
-            return retRecord.getNode();
-        }
-
-    }
+    public abstract NodeIdentifier resolveService(String clientName, ServiceIdentifier<?> service)
+            throws DNSLoopException;
 
     private final Object logLock = new Object();
 
-    private void logServiceResolution(final String clientName,
+    /**
+     * @param clientName
+     *            the client
+     * @param service
+     *            the service
+     * @param retRecord
+     *            the record that was resolved
+     */
+    protected final void logServiceResolution(final String clientName,
             final ServiceIdentifier<?> service,
             final NameRecord retRecord) {
         // synchronize to keep log consistent
@@ -300,7 +263,7 @@ public class DNSSim implements DNSUpdateService {
                 final String row = String.format("%d,%s,%s,%s", now, clientName, appSpec.getServiceHostname(),
                         retRecord.getNode().getName());
 
-                final Path path = outputDirectory.resolve(String.format("dns-%s.csv", name));
+                final Path path = outputDirectory.resolve(String.format("dns-%s.csv", this.region.getName()));
                 final boolean writeHeader = !Files.exists(path);
 
                 try (BufferedWriter logFileWriter = Files.newBufferedWriter(path, Charset.defaultCharset(),
@@ -336,15 +299,12 @@ public class DNSSim implements DNSUpdateService {
      * record has a weight and the record to use is chosen from the list based
      * on the weight.
      */
-    private static final class DnsRecordList extends WeightedRoundRobin<DnsRecord> {
-        DnsRecordList() {
-            super(AgentConfiguration.getInstance().getDnsWeightPrecision());
-        }
+    protected static final class DnsRecordList extends WeightedRoundRobin<DnsRecord> {
     }
 
     @Override
     public String toString() {
-        return "DNSSim [" + name + "]";
+        return "DNSSim [" + this.region + "]";
     }
 
     /**

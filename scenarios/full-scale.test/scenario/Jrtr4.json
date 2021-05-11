@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "Jrtr4",
+    "region": "J",
+    "router": false,
+    "underlay": false
+}

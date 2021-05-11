@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -31,11 +31,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 BBN_LICENSE_END*/
 package com.bbn.map.utils;
 
-import static org.junit.Assert.assertEquals;
+import static org.hamcrest.Matchers.closeTo;
+import static org.junit.Assert.assertThat;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Random;
 
 import org.junit.Rule;
@@ -44,6 +44,8 @@ import org.junit.rules.RuleChain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.RoundRobinAlgorithm;
 import com.bbn.map.dns.PlanTranslatorTest;
 import com.bbn.map.simulator.TestUtils;
 
@@ -72,34 +74,59 @@ public class WeightedRoundRobinTest {
     @Test
     public void test() {
         final long precision = 1000;
+        weightedRoundRobinTest(precision, RoundRobinAlgorithm.COUNTERS, false, 0);
+    }
+
+    private void weightedRoundRobinTest(final long precision,
+            final RoundRobinAlgorithm rrAlgorithm,
+            final boolean preferUnused,
+            final int numShuffles) {
+        AgentConfiguration.getInstance().setRoundRobinAlgorithm(rrAlgorithm);
+        AgentConfiguration.getInstance().setRandomRoundRobinPreferUnused(preferUnused);
+        AgentConfiguration.getInstance().setRandomRoundRobinNumShuffles(numShuffles);
+
         final double tolerance = 2.0 / precision;
+        final long numRecordsToGather = 2 * precision;
 
-        WeightedRoundRobin<Object> wrr = new WeightedRoundRobin<Object>(precision);
+        final WeightedRoundRobin<Object> wrr = new WeightedRoundRobin<Object>();
 
-        Map<Object, Double> expectedWeights = new HashMap<>();
+        final Map<Object, Double> expectedWeights = new HashMap<>();
 
         double totalWeight = 0;
 
+        final Random random = new Random();
+
         for (int n = 0; n < precision; n++) {
-            Random random = new Random();
-            double weight = random.nextDouble();
-            Object record = Integer.valueOf(n);
+            final double weight = random.nextDouble();
+            final Object record = Integer.valueOf(n);
             expectedWeights.put(record, weight);
             totalWeight += weight;
 
             wrr.addRecord(record, weight);
         }
 
-        Map<Object, Double> actualRecordProportions = new HashMap<>();
+        final Map<Object, Double> actualRecordProportions = new HashMap<>();
 
-        for (int n = 0; n < precision; n++) {
+        for (long n = 0; n < numRecordsToGather; n++) {
             actualRecordProportions.merge(wrr.getNextRecord(), 1.0, Double::sum);
         }
 
-        for (Entry<Object, Double> entry : actualRecordProportions.entrySet()) {
-            LOGGER.info("expected: {}, actual: {}, tolerance: {}", expectedWeights.get(entry.getKey()) / totalWeight,
-                    entry.getValue() / precision, tolerance);
-            assertEquals(expectedWeights.get(entry.getKey()) / totalWeight, entry.getValue() / precision, tolerance);
+        for (final Map.Entry<Object, Double> entry : actualRecordProportions.entrySet()) {
+            final double expectedValue = expectedWeights.get(entry.getKey()) / totalWeight;
+            final double actualValue = entry.getValue() / numRecordsToGather;
+            LOGGER.info("expected: {}, actual: {}, tolerance: {}", expectedValue, actualValue, tolerance);
+            assertThat(actualValue, closeTo(expectedValue, tolerance));
         }
+    }
+
+    /**
+     * Tests weighted round robin by adding weighted records and comparing
+     * expected percentages to occurrence count percentages. This uses the
+     * random record list.
+     */
+    @Test
+    public void testRandomRecordList() {
+        final long precision = 1000;
+        weightedRoundRobinTest(precision, RoundRobinAlgorithm.RANDOM_RECORDS, true, 3);
     }
 }

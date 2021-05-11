@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -32,6 +32,7 @@ BBN_LICENSE_END*/
 package com.bbn.map.utils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;
@@ -46,9 +48,13 @@ import javax.annotation.concurrent.ThreadSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bbn.map.AgentConfiguration;
+import com.bbn.map.AgentConfiguration.DnsResolutionType;
+import com.bbn.map.AgentConfiguration.RoundRobinAlgorithm;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java8.util.Objects;
 
 /**
  * Implements a weighted round robin.
@@ -72,38 +78,157 @@ public class WeightedRoundRobin<T> {
      * the weights are stored as an integer between 0 and precision. The larger
      * the number, the closer to the desired weight. However with large numbers
      * it takes a long time to get through all of the possible values.
-     * 
-     * @param precision
-     *            the precision for the weight computation
      */
-    public WeightedRoundRobin(final long precision) {
-        weightPrecision = precision;
+    public WeightedRoundRobin() {
+        this.weightPrecision = AgentConfiguration.getInstance().getDnsWeightPrecision();
+        this.dnsResolutionType = AgentConfiguration.getInstance().getDnsResolutionType();
+        this.randomRoundRobinPreferUnused = AgentConfiguration.getInstance().getRandomRoundRobinPreferUnused();
+        this.randomRoundRobinNumShuffles = AgentConfiguration.getInstance().getRandomRoundRobinNumShuffles();
+        this.roundRobinAlgorithm = AgentConfiguration.getInstance().getRoundRobinAlgorithm();
     }
+
+    private final RoundRobinAlgorithm roundRobinAlgorithm;
+
+    private final DnsResolutionType dnsResolutionType;
+
+    private final boolean randomRoundRobinPreferUnused;
+
+    private final int randomRoundRobinNumShuffles;
 
     private final long weightPrecision;
 
     private int recordUseWeightIndex = 0;
 
     private void recomputeUseWeight() {
+        if (records.isEmpty()) {
+            // nothing to do
+            return;
+        }
+
+        if (!internalRecomputeUseWeight(weightPrecision)) {
+            LOGGER.warn(
+                    "Computed all zero weights! Total Weight: {} Weight Precision {} Records: {}. Trying again with weight precision: {}",
+                    totalWeight, weightPrecision, records, records.size());
+            if (!internalRecomputeUseWeight(records.size())) {
+                throw new RuntimeException(
+                        String.format("Computed all zero weights! Total Weight: %f Weight Precision %f Records: %s.",
+                                totalWeight, weightPrecision, records));
+            }
+        }
+        LOGGER.trace(
+                "After recomputing use weight totalWeight: {} weightPrecision: {} recordCount: {} records: {} recordsToReturn: {}",
+                totalWeight, weightPrecision, records.size(), records, recordsToReturn);
+    }
+
+    private boolean internalRecomputeUseWeight(final double localWeightPrecision) {
+        if (DnsResolutionType.RECURSIVE.equals(dnsResolutionType)
+                || DnsResolutionType.RECURSIVE_TWO_LAYER.equals(dnsResolutionType)) {
+            recordsToReturn.clear();
+        }
+
+        final Set<RecordData<T>> usedRecords = records.stream() //
+                .filter(rd -> !rd.used) //
+                .collect(Collectors.toSet());
+
+        final List<T> preferredRecordsToReturn = new LinkedList<>();
+        final List<T> otherRecordsToReturn = new LinkedList<>();
+
         boolean foundNonZeroWeight = false;
         for (final RecordData<T> data : records) {
-            final long w = Math.round(data.weight / totalWeight * weightPrecision);
+            final long w = Math.round(data.weight / totalWeight * localWeightPrecision);
             if (w > 0) {
                 foundNonZeroWeight = true;
             }
-            data.useCount = w;
+            if (w > Integer.MAX_VALUE) {
+                throw new ArithmeticException("Use weight is too large to store in an integer: " + w);
+            }
+            data.useCount = (int) w;
+
+            if (RoundRobinAlgorithm.RANDOM_RECORDS.equals(roundRobinAlgorithm) && data.useCount > 0) {
+                final List<T> toAdd = Collections.nCopies(data.useCount, data.record);
+                if (randomRoundRobinPreferUnused && usedRecords.contains(data)) {
+                    preferredRecordsToReturn.addAll(toAdd);
+                } else {
+                    otherRecordsToReturn.addAll(toAdd);
+                }
+            }
         }
         if (!foundNonZeroWeight) {
-            throw new RuntimeException("Internal error, computed all zero weights!");
+            return false;
         }
 
-        LOGGER.trace("After recomputing use weight totalWeight: {} weightPrecision: {} recordCount: {} records: {}",
-                totalWeight, weightPrecision, records.size(), records);
+        if (RoundRobinAlgorithm.RANDOM_RECORDS.equals(roundRobinAlgorithm)) {
+            final List<T> best = findBestList(preferredRecordsToReturn, otherRecordsToReturn);
+            recordsToReturn.addAll(best);
+            recordUseWeightIndex = 0;
+        }
+
+        // clear used bit on the records
+        records.forEach(r -> r.used = false);
+
+        return true;
+    }
+
+    private List<T> findBestList(final List<T> preferredRecordsToReturn, final List<T> otherRecordsToReturn) {
+        if (randomRoundRobinNumShuffles < 2) {
+            // shuffle and set preferred
+            Collections.shuffle(preferredRecordsToReturn);
+            Collections.shuffle(otherRecordsToReturn);
+            final List<T> best = new LinkedList<>(preferredRecordsToReturn);
+            best.addAll(otherRecordsToReturn);
+            return best;
+        } else {
+            // compute best sequence
+            int shortestLongestStreak = Integer.MAX_VALUE;
+            List<T> bestList = null;
+
+            for (int i = 0; i < randomRoundRobinNumShuffles; ++i) {
+                final List<T> preferredRecordsToReturnCopy = new LinkedList<>(preferredRecordsToReturn);
+                final List<T> otherRecordsToReturnCopy = new LinkedList<>(otherRecordsToReturn);
+
+                // shuffle
+                Collections.shuffle(preferredRecordsToReturnCopy);
+                Collections.shuffle(otherRecordsToReturnCopy);
+
+                // create a new list
+                final List<T> check = new LinkedList<>(preferredRecordsToReturnCopy);
+                check.addAll(otherRecordsToReturnCopy);
+
+                // check for longest streak
+                T streak = null;
+                int frequency = 0;
+                int longestStreak = 0;
+                for (final T element : check) {
+                    if (null == streak) {
+                        // initial condition
+                        streak = element;
+                    }
+
+                    if (Objects.equals(streak, element)) {
+                        ++frequency;
+                    } else {
+                        if (frequency > longestStreak) {
+                            longestStreak = frequency;
+                        }
+                        streak = element;
+                        frequency = 1;
+                    }
+                } // foreach element in check
+
+                if (longestStreak < shortestLongestStreak) {
+                    shortestLongestStreak = longestStreak;
+                    bestList = check;
+                }
+            } // foreach attempt to find the best sequence
+
+            return bestList;
+        } // find best list
     }
 
     private final Map<T, Integer> recordIndexMap = new HashMap<>();
     private final List<RecordData<T>> records = new ArrayList<>();
     private double totalWeight = 0;
+    private final List<T> recordsToReturn = new ArrayList<>();
 
     /**
      * This method will add a new record or increase the weight of an existing
@@ -116,7 +241,7 @@ public class WeightedRoundRobin<T> {
      */
     public synchronized void addRecord(final T record, final double weight) {
         LOGGER.trace("Adding record {} with weight {}", record, weight);
-        
+
         final Integer recordIndex = recordIndexMap.get(record);
         if (null != recordIndex) {
             final RecordData<T> recordData = records.get(recordIndex);
@@ -214,31 +339,38 @@ public class WeightedRoundRobin<T> {
         if (records.isEmpty()) {
             return null;
         } else {
-            final int startingIndex = recordUseWeightIndex;
-            LOGGER.trace("getNextRecord starting at index {}", startingIndex);
-
-            // loop until we find a use value that is greater than 0
-            while (true) {
-                final int recordIndex = recordUseWeightIndex;
-                final RecordData<T> data = records.get(recordIndex);
-
-                // always increment index
+            if (RoundRobinAlgorithm.RANDOM_RECORDS.equals(roundRobinAlgorithm)) {
+                final T record = recordsToReturn.get(recordUseWeightIndex);
                 incrementRecordIndex();
+                return record;
+            } else {
+                final int startingIndex = recordUseWeightIndex;
+                LOGGER.trace("getNextRecord starting at index {}", startingIndex);
 
-                if (data.active && data.useCount > 0) {
-                    // found record to use
-                    final T record = data.record;
+                // loop until we find a use value that is greater than 0
+                while (true) {
+                    final int recordIndex = recordUseWeightIndex;
+                    final RecordData<T> data = records.get(recordIndex);
 
-                    LOGGER.trace("Found record to use with useCount: {} record: {}", data.useCount, record);
+                    // always increment index
+                    incrementRecordIndex();
 
-                    // note that it's been used
-                    data.useCount = data.useCount - 1;
-                    return record;
-                }
+                    if (data.active && data.useCount > 0) {
+                        // found record to use
+                        final T record = data.record;
 
-                if (startingIndex == recordUseWeightIndex) {
-                    // looped, everything must be zero, reset the data
-                    recomputeUseWeight();
+                        LOGGER.trace("Found record to use with useCount: {} record: {}", data.useCount, record);
+
+                        // note that it's been used
+                        data.useCount = data.useCount - 1;
+                        data.used = true;
+                        return record;
+                    }
+
+                    if (startingIndex == recordUseWeightIndex) {
+                        // looped, everything must be zero, reset the data
+                        recomputeUseWeight();
+                    }
                 }
             }
         }
@@ -253,8 +385,15 @@ public class WeightedRoundRobin<T> {
      * Reset the record index if it's off the end of the records list.
      */
     private void checkRecordIndex() {
-        if (recordUseWeightIndex >= records.size()) {
-            recordUseWeightIndex = 0;
+        if (RoundRobinAlgorithm.RANDOM_RECORDS.equals(roundRobinAlgorithm)) {
+            if (recordUseWeightIndex >= recordsToReturn.size()) {
+                // recompute the randomized list
+                recomputeUseWeight();
+            }
+        } else {
+            if (recordUseWeightIndex >= records.size()) {
+                recordUseWeightIndex = 0;
+            }
         }
     }
 
@@ -278,6 +417,7 @@ public class WeightedRoundRobin<T> {
             this.record = record;
             this.weight = weight;
             this.active = true;
+            this.used = false;
         }
 
         /**
@@ -293,13 +433,18 @@ public class WeightedRoundRobin<T> {
         /**
          * How many times to use this record before it's reset.
          */
-        public long useCount;
+        public int useCount;
 
         /**
          * True if active, false if it should be skipped. This allows one to
          * avoid needing to remove from the list and reset the index map.
          */
         public boolean active;
+
+        /**
+         * If true, this record has been used since the last recompute.
+         */
+        public boolean used;
 
         @Override
         public String toString() {

@@ -1,0 +1,36 @@
+[
+  {
+    "name": "compute",
+    "capacity": {
+      "CPU": 1,
+      "MEMORY": 2
+    },
+    "maximumServiceContainers": 1
+  },
+  {
+    "name": "client",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0
+  },
+  {
+    "name": "leader",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0
+  },
+  {
+    "name": "router",
+    "capacity": {
+      "CPU": 0,
+      "MEMORY": 0
+    },
+    "maximumServiceContainers": 0,
+    "emulabConfig": "d710",
+    "dcompConfig": "mergexp.machine.memory >= mergexp.unit.gb(4)"
+  }
+]

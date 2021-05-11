@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -88,7 +88,7 @@ public abstract class AbstractAllocationTargetSPM implements ServicePriorityMana
     @Override
     public void beginIteration(Collection<ServiceIdentifier<?>> services, Set<ResourceReport> resourceReports, LoadPercentages loadPercentages)
     {
-        LOGGER.debug("beginIteration: services: {}, resourceReports: {}", services, resourceReports);        
+        LOGGER.debug("beginIteration: services: {}, resourceReports: {}, loadPercentages: {}", services, resourceReports);
         
         Map<ServiceIdentifier<?>, Integer> servicePriorities = new HashMap<>();
         Map<ServiceIdentifier<?>, Integer> serviceAllocatedContainers = new HashMap<>();

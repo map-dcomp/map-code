@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": true,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Sclient05",
+    "region": "S",
+    "router": false,
+    "underlay": false
+}

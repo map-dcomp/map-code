@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -43,10 +43,15 @@ import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -55,8 +60,11 @@ import org.apache.logging.log4j.Logger;
 
 import com.bbn.map.ServiceConfiguration;
 import com.bbn.map.common.value.ApplicationCoordinates;
+import com.bbn.map.simulator.Simulation;
 import com.bbn.map.utils.JsonUtils;
+import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
+import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringServiceIdentifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -438,35 +446,41 @@ public final class ChartGenerationUtils {
     }
 
     /**
-     * Find the node folder under search base. This is the folder that contains
+     * Find the node folders under search base. These are the folders that contain
      * all of the timestamp folders.
      * 
      * @param searchBase
      *            the base directory to search in, this directory MUST contain
      *            only files for 1 NCP
-     * @return the folder or null if one is not found
+     * @return a List of the folders
      * @throws IOException
      *             if there was a problem walking the directory structure
      */
-    public static Path findNcpFolder(final Path searchBase) throws IOException {
-        final Path firstLongResourceReportPath = Files.walk(searchBase).filter(Files::isRegularFile)
+    public static List<Path> findNcpFolders(final Path searchBase) throws IOException {
+        
+        List<Path> nodeDumpParentFolders = new LinkedList<>();
+        
+        final List<Path> longResourceReportPaths = Files.walk(searchBase).filter(Files::isRegularFile)
                 .filter(p -> p.getFileName().toString().equals(LoadChartGenerator.RESOURCE_REPORT_LONG_FILENAME))
-                .findFirst().orElse(null);
-        LOGGER.trace("Found resource report at {}", firstLongResourceReportPath);
-        if (null == firstLongResourceReportPath) {
-            return null;
-        } else {
-            final Path firstTimeDir = firstLongResourceReportPath.getParent();
-            LOGGER.trace("First time dir is {}", firstTimeDir);
-            if (null == firstTimeDir) {
-                return null;
+                .collect(Collectors.toList());
+        
+        LOGGER.trace("Found resource reports at {}", longResourceReportPaths);
+        
+        for (Path longResourceReportPath : longResourceReportPaths) {
+            final Path timeDir = longResourceReportPath.getParent();
+            LOGGER.trace("First time dir is {}", timeDir);
+            
+            if (timeDir != null) {
+                final Path nodeDir = timeDir.getParent();
+                LOGGER.trace("Node dir is {}", nodeDir);
+                
+                if (nodeDir != null && !nodeDumpParentFolders.contains(nodeDir)) {
+                    nodeDumpParentFolders.add(nodeDir);
+                }
             }
-
-            final Path nodeDir = firstTimeDir.getParent();
-            LOGGER.trace("Node dir is {}", nodeDir);
-
-            return nodeDir;
         }
+        
+        return nodeDumpParentFolders;
     }
 
     /**
@@ -519,53 +533,59 @@ public final class ChartGenerationUtils {
     public static void visitTimeFolders(final Path inputFolder, final TimeFolderVisitor visitor) {
         try (DirectoryStream<Path> inputFolderStream = Files.newDirectoryStream(inputFolder)) {
             for (final Path nodeBaseFolder : inputFolderStream) {
-                if (Files.isDirectory(nodeBaseFolder)) {
-                    try {
-                        final Path nodeFolder = ChartGenerationUtils.findNcpFolder(nodeBaseFolder);
-                        LOGGER.trace("Found NCP directory at {} from {}", nodeFolder, nodeBaseFolder);
-                        if (null == nodeFolder) {
-                            continue;
-                        }
-
-                        final Path nodeFilename = nodeFolder.getFileName();
-                        if (null == nodeFilename) {
-                            continue;
-                        }
-
-                        // if the folder is for an NCP
-                        if (!nodeFilename.toString().equals(ChartGenerator.SIMULATION_FILES_FOLDER_NAME)) {
-                            final String nodeName = ChartGenerationUtils.getNodeNameFromNodeFolder(nodeFolder); // nodeFolder.getName();
-
-                            try (DirectoryStream<Path> stream = Files.newDirectoryStream(nodeFolder)) {
-                                for (final Path timeFolder : stream) {
-                                    // check if timeFolder is in fact a folder
-                                    if (Files.isDirectory(timeFolder)) {
-                                        final Path timeFilename = timeFolder.getFileName();
-                                        if (null == timeFilename) {
-                                            continue;
-                                        }
-
-                                        try {
-                                            final long time = Long.parseLong(timeFilename.toString());
-                                            visitor.visit(nodeName, timeFolder, time);
-                                        } catch (final NumberFormatException e) {
-                                            LOGGER.debug("Skipping folder '{}', which is not a time folder.",
-                                                    timeFolder, e);
-                                        }
-                                    } // time directory
+                final Path nodeNamePath = nodeBaseFolder.getFileName();
+                
+                if (nodeNamePath != null) {
+                    final String nodeName = nodeNamePath.toString();                
+                    
+                    if (Files.isDirectory(nodeBaseFolder)) {
+                        try {
+                            final List<Path> nodeDumpParentFolders = ChartGenerationUtils.findNcpFolders(nodeBaseFolder);
+                            
+                            for (Path nodeDumpParentFolder : nodeDumpParentFolders) {
+                                if (null == nodeDumpParentFolder) {
+                                    continue;
                                 }
-                            } catch (final NotDirectoryException e) {
-                                LOGGER.error("Node folder {} is not a directory, skipping", nodeFolder);
-                                continue;
-                            } catch (final IOException e) {
-                                LOGGER.error("Error closing timeFolder directory stream", e);
-                                continue;
+        
+                                final Path nodeFilename = nodeDumpParentFolder.getFileName();
+                                if (null == nodeFilename) {
+                                    continue;
+                                }
+        
+                                // if the folder is for an NCP
+                                if (!nodeFilename.toString().equals(ChartGenerator.SIMULATION_FILES_FOLDER_NAME)) {    
+                                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(nodeDumpParentFolder)) {
+                                        for (final Path timeFolder : stream) {
+                                            // check if timeFolder is in fact a folder
+                                            if (Files.isDirectory(timeFolder)) {
+                                                final Path timeFilename = timeFolder.getFileName();
+                                                if (null == timeFilename) {
+                                                    continue;
+                                                }
+        
+                                                try {
+                                                    final long time = Long.parseLong(timeFilename.toString());
+                                                    visitor.visit(nodeName, timeFolder, time);
+                                                } catch (final NumberFormatException e) {
+                                                    LOGGER.debug("Skipping folder '{}', which is not a time folder.",
+                                                            timeFolder, e);
+                                                }
+                                            } // time directory
+                                        }
+                                    } catch (final NotDirectoryException e) {
+                                        LOGGER.error("Node folder {} is not a directory, skipping", nodeDumpParentFolder);
+                                        continue;
+                                    } catch (final IOException e) {
+                                        LOGGER.error("Error closing timeFolder directory stream", e);
+                                        continue;
+                                    }
+                                } // NCP folder
                             }
-                        } // NCP folder
-                    } catch (final IOException e) {
-                        LOGGER.error("Error finding first long resource report", e);
-                    }
-                } // node folder
+                        } catch (final IOException e) {
+                            LOGGER.error("Error finding first long resource report", e);
+                        }
+                    } // node folder
+                }
             } // foreach node folder
 
         } catch (final NotDirectoryException e) {
@@ -701,6 +721,27 @@ public final class ChartGenerationUtils {
     }
     
     /**
+     * Converts a folder service string of form [group].[artifact]_[version] to a shortened service name.
+     * 
+     * @param groupArtifactVersion
+     *          the service folder [group].[artifact]_[version] name
+     * @return the shortened service name
+     */
+    public static String serviceGroupArtifactVersionFolderNameToService(String groupArtifactVersion)
+    {
+        Pattern pattern = Pattern.compile("(.+)\\.(.+)_(.+?)");
+        Matcher matcher = pattern.matcher(groupArtifactVersion);
+        
+        if (matcher.matches())
+        {
+            String artifact = matcher.group(2);
+            return artifact;
+        }
+        
+        return groupArtifactVersion;
+    }
+    
+    /**
      * Reads the service configurations file for a scenario to find the services.
      * 
      * @param scenarioFolder
@@ -710,7 +751,7 @@ public final class ChartGenerationUtils {
     public static Set<ServiceIdentifier<?>> getScenarioServices(File scenarioFolder)
     {
         Set<ServiceIdentifier<?>> services = new HashSet<>();
-        Path serviceConfigurationsPath = scenarioFolder.toPath().resolve("service-configurations.json");
+        Path serviceConfigurationsPath = scenarioFolder.toPath().resolve(Simulation.SERVICE_CONFIGURATIONS_FILENAME);
         
         ObjectMapper mapper = JsonUtils.getStandardMapObjectMapper();
         
@@ -729,5 +770,51 @@ public final class ChartGenerationUtils {
         }
         
         return null;
+    }
+    
+    /**
+     * Makes a copy of a weight Map with weights normalized to sum to 1.
+     * 
+     * @param <K>
+     *          type of key in the Map
+     * @param weightMap
+     *          the input weight Map
+     * @return the normalized Map
+     */
+    public static <K> Map<K, Double> normalizeWeights(Map<K, Double> weightMap)
+    {
+        Map<K, Double> normalizedMap = new HashMap<>();
+        Double sum = weightMap.entrySet().stream().mapToDouble(e -> e.getValue()).sum();
+        
+        weightMap.forEach((key, weight) ->
+        {
+            normalizedMap.put(key, weight / sum);
+        });
+        
+        return normalizedMap;
+    }
+    
+    /**
+     * Removes the ".map.dcomp" suffix from the container or node name.
+     * 
+     * @param nodeName
+     *      container or node name
+     * @return base of container or node name without ".map.dcomp"
+     */
+    public static String nodeBaseName(String nodeName)
+    {
+        return nodeName.replace(".map.dcomp", "");
+    }
+    
+    /**
+     * Removes the ".map.dcomp" suffix from the container or node identifier.
+     * 
+     * @param nodeId
+     *      container or node identifier
+     * @return base of container or node identifier without ".map.dcomp"
+     */
+    public static NodeIdentifier nodeBaseIdentifier(NodeIdentifier nodeId)
+    {
+        return new DnsNameIdentifier(nodeBaseName(nodeId.getName()));
     }
 }

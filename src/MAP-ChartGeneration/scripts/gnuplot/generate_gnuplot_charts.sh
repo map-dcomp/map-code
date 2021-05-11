@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -55,6 +55,7 @@ sim_output=""
 chart_output_dir=""
 output_dir=""
 load_unit=""
+window_suffix="SHORT"
 scenario_run_name="[scenario name]"
 while [ $# -gt 0 ]; do
     debug "Checking arg '${1}' with second '${2}'"
@@ -88,6 +89,13 @@ while [ $# -gt 0 ]; do
                 fatal "--load_unit is missing an argument"
             fi
             load_unit=${2}
+            shift
+            ;;
+        --window_suffix)
+            if [ -z "${2}" ]; then
+                fatal "--window_suffix is missing an argument"
+            fi
+            window_suffix=${2}
             shift
             ;;
         --run_title)
@@ -142,7 +150,7 @@ num2str(a)=sprintf("%f", a+0)
 
 
 # service, client, region, node
-service_name(long_name)=system("echo '" . long_name . "' | sed -E s/'(.*ncp_allocated_capacity-|.*ncp_demand-|.*ncp_load-|.*requests.*-|.*dns_req_count.*_|.*processing_latency-.*-|.*processing_latency-|.*binned_server_processing_latency_counts-|.*map|.*service_|-container_weights)'//g | sed -E s/'(-${load_unit})?.csv'//g")
+service_name(long_name)=system("echo '" . long_name . "' | sed -E s/'(.*ncp_allocated_capacity-|.*ncp_demand-|.*ncp_load-|.*requests.*-|.*dns_req_count.*_|.*processing_latency-.*-|.*processing_latency-|.*binned_server_processing_latency_counts-|.*map|.*service_|-container_weights)'//g | sed -E s/'${window_suffix}-'//g |  sed -E s/'(-${load_unit})?.csv'//g")
 client_name(long_name)=system("name='" . long_name . "' && name=\${name##*/} && echo \${name%-*.csv}")
 region_name(file)=system(" echo '".file."' | sed -E 's/.*processing_latency-|-.*.csv//g'")    #system(" echo '".file."' | sed -e \"s/.*processing_latency-\|-.*\.csv//g\"")
 
@@ -175,16 +183,16 @@ get_agent_config_value_as_num(property, default)=(get_agent_config_value_as_stri
 # macros for accessing particular types of data files
 n_demand_files_by_client=system("ls ${chart_output_dir}/client_demand/client_*-${load_unit}.csv 2> /dev/null | wc -l")
 n_demand_files_by_service=system("ls ${chart_output_dir}/client_demand/service_*-${load_unit}.csv 2> /dev/null | wc -l")
-n_demand_reported_files=system("ls ${chart_output_dir}/load/ncp_demand-*-${load_unit}.csv 2> /dev/null | wc -l")
-n_load_files=system("ls ${chart_output_dir}/load/ncp_load-*-${load_unit}.csv 2> /dev/null | wc -l")
+n_demand_reported_files=system("ls ${chart_output_dir}/load/ncp_demand-${window_suffix}-*-${load_unit}.csv 2> /dev/null | wc -l")
+n_load_files=system("ls ${chart_output_dir}/load/ncp_load-${window_suffix}-*-${load_unit}.csv 2> /dev/null | wc -l")
 n_allocated_capacity_files=system("ls ${chart_output_dir}/load/ncp_allocated_capacity-*-${load_unit}.csv 2> /dev/null | wc -l")
 n_requests_results_count_files=system("ls ${chart_output_dir}/requests_results/binned_request_count-*.csv 2> /dev/null | wc -l")
 n_requests_results_load_files=system("ls ${chart_output_dir}/requests_results/binned_request_load-*-${load_unit}.csv 2> /dev/null | wc -l")
 
 demand_file_by_client(f)=system("ls ${chart_output_dir}/client_demand/client_*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
 demand_file_by_service(f)=system("ls ${chart_output_dir}/client_demand/service_*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
-demand_reported_file(f)=system("ls ${chart_output_dir}/load/ncp_demand-*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
-load_file(f)=system("ls ${chart_output_dir}/load/ncp_load-*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
+demand_reported_file(f)=system("ls ${chart_output_dir}/load/ncp_demand-${window_suffix}-*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
+load_file(f)=system("ls ${chart_output_dir}/load/ncp_load-${window_suffix}-*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
 allocated_capacity_file(f)=system("ls ${chart_output_dir}/load/ncp_allocated_capacity-*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
 requests_results_count_file(f)=system("ls ${chart_output_dir}/requests_results/binned_request_count-*.csv 2> /dev/null | head -n " . f . " | tail -n 1")
 requests_results_load_file(f)=system("ls ${chart_output_dir}/requests_results/binned_request_load-*-${load_unit}.csv 2> /dev/null | head -n " . f . " | tail -n 1")
@@ -504,7 +512,7 @@ do for [service=1:services] {
 
 
 	# add Demand Reported stacked areas
-	print("   Demand Reported")
+	print("   Demand ${window_suffix} Reported")
 	service_demand_reported_plot_string=""
 	demand_reported_service_names=""
 
@@ -765,7 +773,7 @@ do for [service=1:services] {
 
 		set title demand_reported_service_names
 		set xlabel
-		set ylabel "Demand\n(${load_unit})"
+		set ylabel "Demand ${window_suffix}\n(${load_unit})"
 		set yrange [y_scale_min:y_scale_max_load*1.2+0.1]
 		eval "plot " . service_demand_reported_plot_string . (include_demand == 1 ? service_demand_plot_string : "") . service_load_thresholds_plot_string
 

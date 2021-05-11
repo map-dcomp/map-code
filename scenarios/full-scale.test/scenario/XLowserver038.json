@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "small",
+    "name": "XLowserver038",
+    "region": "XLow",
+    "router": false,
+    "underlay": false
+}

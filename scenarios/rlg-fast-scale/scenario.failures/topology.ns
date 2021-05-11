@@ -1,0 +1,167 @@
+# CP Paper
+
+set ns [new Simulator]
+source tb_compat.tcl
+
+tb-use-endnodeshaping   1
+
+
+# Clients
+set clientPoolX1 [$ns node]
+tb-set-node-os $clientPoolX1 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX1 no_containers
+
+set clientPoolX2 [$ns node]
+tb-set-node-os $clientPoolX2 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX2 no_containers
+
+set clientPoolX3 [$ns node]
+tb-set-node-os $clientPoolX3 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX3 no_containers
+
+set clientPoolX4 [$ns node]
+tb-set-node-os $clientPoolX4 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX4 no_containers
+
+set clientPoolX5 [$ns node]
+tb-set-node-os $clientPoolX5 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX5 no_containers
+
+set clientPoolX6 [$ns node]
+tb-set-node-os $clientPoolX6 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX6 no_containers
+
+set clientPoolX7 [$ns node]
+tb-set-node-os $clientPoolX7 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX7 no_containers
+
+set clientPoolX8 [$ns node]
+tb-set-node-os $clientPoolX8 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX8 no_containers
+
+set clientPoolX9 [$ns node]
+tb-set-node-os $clientPoolX9 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX9 no_containers
+
+set clientPoolX10 [$ns node]
+tb-set-node-os $clientPoolX10 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX10 no_containers
+
+set clientPoolX11 [$ns node]
+tb-set-node-os $clientPoolX11 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX11 no_containers
+
+set clientPoolX12 [$ns node]
+tb-set-node-os $clientPoolX12 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX12 no_containers
+
+set clientPoolX13 [$ns node]
+tb-set-node-os $clientPoolX13 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX13 no_containers
+
+set clientPoolX14 [$ns node]
+tb-set-node-os $clientPoolX14 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX14 no_containers
+
+set clientPoolX15 [$ns node]
+tb-set-node-os $clientPoolX15 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolX15 no_containers
+
+
+
+# NCPs
+set XrtrMain [$ns node]
+tb-set-node-os $XrtrMain UBUNTU16-64-MAP
+tb-set-hardware $XrtrMain no_containers
+
+
+set Xrtr [$ns node]
+tb-set-node-os $Xrtr UBUNTU16-64-MAP
+tb-set-hardware $Xrtr no_containers
+set Xdns [$ns node]
+tb-set-node-os $Xdns UBUNTU16-64-MAP
+tb-set-hardware $Xdns no_containers
+set Xdcop [$ns node]
+tb-set-node-os $Xdcop UBUNTU16-64-MAP
+tb-set-hardware $Xdcop no_containers
+set Xrlg [$ns node]
+tb-set-node-os $Xrlg UBUNTU16-64-MAP
+tb-set-hardware $Xrlg no_containers
+
+set Xrtr1 [$ns node]
+tb-set-node-os $Xrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Xrtr1 no_containers
+set Xserver01 [$ns node]
+tb-set-node-os $Xserver01 UBUNTU16-64-MAP
+tb-set-hardware $Xserver01 large
+set Xserver02 [$ns node]
+tb-set-node-os $Xserver02 UBUNTU16-64-MAP
+tb-set-hardware $Xserver02 large
+set Xserver03 [$ns node]
+tb-set-node-os $Xserver03 UBUNTU16-64-MAP
+tb-set-hardware $Xserver03 large
+set Xserver04 [$ns node]
+tb-set-node-os $Xserver04 UBUNTU16-64-MAP
+tb-set-hardware $Xserver04 large
+set Xserver05 [$ns node]
+tb-set-node-os $Xserver05 UBUNTU16-64-MAP
+tb-set-hardware $Xserver05 large
+
+set Xrtr2 [$ns node]
+tb-set-node-os $Xrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Xrtr2 no_containers
+set Xserver06 [$ns node]
+tb-set-node-os $Xserver06 UBUNTU16-64-MAP
+tb-set-hardware $Xserver06 large
+set Xserver07 [$ns node]
+tb-set-node-os $Xserver07 UBUNTU16-64-MAP
+tb-set-hardware $Xserver07 large
+set Xserver08 [$ns node]
+tb-set-node-os $Xserver08 UBUNTU16-64-MAP
+tb-set-hardware $Xserver08 large
+set Xserver09 [$ns node]
+tb-set-node-os $Xserver09 UBUNTU16-64-MAP
+tb-set-hardware $Xserver09 large
+set Xserver10 [$ns node]
+tb-set-node-os $Xserver10 UBUNTU16-64-MAP
+tb-set-hardware $Xserver10 large
+
+set Xrtr3 [$ns node]
+tb-set-node-os $Xrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Xrtr3 no_containers
+set Xserver11 [$ns node]
+tb-set-node-os $Xserver11 UBUNTU16-64-MAP
+tb-set-hardware $Xserver11 large
+set Xserver12 [$ns node]
+tb-set-node-os $Xserver12 UBUNTU16-64-MAP
+tb-set-hardware $Xserver12 large
+set Xserver13 [$ns node]
+tb-set-node-os $Xserver13 UBUNTU16-64-MAP
+tb-set-hardware $Xserver13 large
+set Xserver14 [$ns node]
+tb-set-node-os $Xserver14 UBUNTU16-64-MAP
+tb-set-hardware $Xserver14 large
+set Xserver15 [$ns node]
+tb-set-node-os $Xserver15 UBUNTU16-64-MAP
+tb-set-hardware $Xserver15 large
+
+
+
+
+
+# Switches
+set XrtrMainsw [$ns make-lan "$XrtrMain $Xrtr $Xrtr1 $Xrtr2 $Xrtr3" 100Mb 0.0ms]
+
+set Xrtrsw [$ns make-lan "$Xrtr $Xdns $Xdcop $Xrlg" 100Mb 0.0ms]
+
+set Xrtr1sw [$ns make-lan "$Xrtr1 $Xserver01 $Xserver02 $Xserver03 $Xserver04 $Xserver05" 100Mb 0.0ms]
+set Xrtr2sw [$ns make-lan "$Xrtr2 $Xserver06 $Xserver07 $Xserver08 $Xserver09 $Xserver10" 100Mb 0.0ms]
+set Xrtr3sw [$ns make-lan "$Xrtr3 $Xserver11 $Xserver12 $Xserver13 $Xserver14 $Xserver15" 100Mb 0.0ms]
+
+
+
+# Client Links
+set clientsw [$ns make-lan "$XrtrMain $clientPoolX1 $clientPoolX2 $clientPoolX3 $clientPoolX4 $clientPoolX5 $clientPoolX6 $clientPoolX7 $clientPoolX8 $clientPoolX9 $clientPoolX10 $clientPoolX11 $clientPoolX12 $clientPoolX13 $clientPoolX14 $clientPoolX15" 100Mb 0.0ms]
+
+$ns rtproto Manual
+$ns run

@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": true,
+    "client": false,
+    "dns": false,
+    "hardware": "leader",
+    "name": "Xmedrlg",
+    "region": "Xmed",
+    "router": false,
+    "underlay": false
+}

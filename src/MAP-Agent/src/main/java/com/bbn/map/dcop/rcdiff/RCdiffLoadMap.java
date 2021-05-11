@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.utils.ComparisonUtils;
+import com.bbn.map.dcop.AbstractDcopAlgorithm;
 import com.bbn.map.dcop.AugmentedRoot;
 import com.bbn.map.dcop.ServerClientService;
 
@@ -37,7 +39,15 @@ public class RCdiffLoadMap implements Serializable {
      * @param object is the object to be copied
      */
     public RCdiffLoadMap(RCdiffLoadMap object) {
-        this(object.getAugmentedRootID(), object.getHop(), object.getLoadMap(), object.getServerClientServiceMap());
+        this.augmentedRootID = object.getAugmentedRootID();
+        this.hop = object.getHop();
+        object.getLoadMap().forEach((key, map) -> {
+            this.loadMap.put(key, new HashMap<>(map));
+        });
+        object.getServerClientServiceMap().forEach((key, value) -> {
+            final ServerClientService keyCopy = new ServerClientService(key);
+            this.serverClientServiceMap.put(keyCopy, value);
+        });
     }
     
     
@@ -64,16 +74,17 @@ public class RCdiffLoadMap implements Serializable {
         } else {
             final RCdiffLoadMap other = (RCdiffLoadMap) obj;
             return Objects.equals(getAugmentedRootID(), other.getAugmentedRootID()) //
-                && Objects.equals(getHop(), other.getHop()) //
-                && Objects.equals(getLoadMap(), other.getLoadMap()) //
-                && Objects.equals(getServerClientServiceMap(), other.getServerClientServiceMap()) //
+                && getHop() == other.getHop() //
+                && ComparisonUtils.doubleMapEquals2(getLoadMap(), other.getLoadMap(), AbstractDcopAlgorithm.DOUBLE_TOLERANCE) //
+                && ComparisonUtils.doubleMapEquals(getServerClientServiceMap(), other.getServerClientServiceMap(), AbstractDcopAlgorithm.DOUBLE_TOLERANCE) //
             ;
         }
     }
     
     @Override
     public int hashCode() {
-        return Objects.hash(augmentedRootID, hop, loadMap, serverClientServiceMap);
+        // don't include anything that does a fuzzy comparison in equals
+        return Objects.hash(augmentedRootID, hop);
     }
 
     /**

@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "router",
+    "name": "Ertr2",
+    "region": "E",
+    "router": true,
+    "underlay": false
+}

@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -48,6 +48,7 @@ import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -86,7 +87,7 @@ public class LinkResourceManagerTest {
         final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX,
                 datarateCapacity, LinkAttribute.DATARATE_TX, datarateCapacity);
 
-        final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity);
+        final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity, 0);
 
         final ImmutableMap<LinkAttribute, Double> networkLoad = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxLoad,
                 LinkAttribute.DATARATE_TX, txLoad);
@@ -94,8 +95,9 @@ public class LinkResourceManagerTest {
         final NodeNetworkFlow flow = new NodeNetworkFlow(client, server1, NodeIdentifier.UNKNOWN);
 
         final ClientLoad req = new ClientLoad(0, Long.MAX_VALUE, Long.MAX_VALUE, 1, service, ImmutableMap.of(),
-                networkLoad);
-        manager.addLinkLoad(req.getStartTime(), req, flow, manager.getTransmitter());
+                networkLoad, ImmutableList.of());
+        manager.addLinkLoad(req.getStartTime(), req.getNetworkLoadAsAttribute(), req.getNetworkLoadAsAttributeFlipped(),
+                req.getService(), req.getNetworkDuration(), flow, manager.getTransmitter());
 
         final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
                 .computeCurrentLinkLoad(currentTime, manager.getReceiver());
@@ -131,7 +133,7 @@ public class LinkResourceManagerTest {
         final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX,
                 datarateCapacity, LinkAttribute.DATARATE_TX, datarateCapacity);
 
-        final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity);
+        final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity, 0);
 
         final NodeNetworkFlow flow = new NodeNetworkFlow(client, server1, NodeIdentifier.UNKNOWN);
 
@@ -139,8 +141,9 @@ public class LinkResourceManagerTest {
                 LinkAttribute.DATARATE_TX, txLoad);
 
         final ClientLoad req = new ClientLoad(0, Long.MAX_VALUE, Long.MAX_VALUE, 1, service, ImmutableMap.of(),
-                networkLoad);
-        manager.addLinkLoad(req.getStartTime(), req, flow, manager.getTransmitter());
+                networkLoad, ImmutableList.of());
+        manager.addLinkLoad(req.getStartTime(), req.getNetworkLoadAsAttribute(), req.getNetworkLoadAsAttributeFlipped(),
+                req.getService(), req.getNetworkDuration(), flow, manager.getTransmitter());
 
         final NodeNetworkFlow flowFlipped = new NodeNetworkFlow(flow.getDestination(), flow.getSource(),
                 flow.getServer());
@@ -173,6 +176,6 @@ public class LinkResourceManagerTest {
         final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxCapacity,
                 LinkAttribute.DATARATE_TX, txCapacity);
 
-        new LinkResourceManager(new DnsNameIdentifier("one"), new DnsNameIdentifier("two"), capacity);
+        new LinkResourceManager(new DnsNameIdentifier("one"), new DnsNameIdentifier("two"), capacity, 0);
     }
 }

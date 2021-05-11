@@ -65,7 +65,13 @@ public class ModularACdiffDcopMessage implements GeneralDcopMessage, Serializabl
      * @param object .
      */
     public ModularACdiffDcopMessage(ModularACdiffDcopMessage object) {
-        setMessageTypeMap(object.getMessageTypeMap());
+        object.getMessageTypeMap().forEach((msgType, set) -> {
+            final Set<ModularACdiffLoadMap> setCopy = new HashSet<>();
+            set.forEach(loadMap -> {
+                setCopy.add(new ModularACdiffLoadMap(loadMap));
+            });
+            this.messageTypeMap.put(msgType, setCopy);
+        });
     }
     
     /**

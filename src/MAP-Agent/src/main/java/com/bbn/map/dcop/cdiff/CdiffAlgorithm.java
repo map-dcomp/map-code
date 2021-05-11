@@ -17,14 +17,14 @@ import org.slf4j.LoggerFactory;
 import com.bbn.map.common.ApplicationManagerApi;
 import com.bbn.map.dcop.AbstractDcopAlgorithm;
 import com.bbn.map.dcop.DcopInfoProvider;
+import com.bbn.map.dcop.DcopReceiverMessage;
 import com.bbn.map.dcop.DcopSharedInformation;
 import com.bbn.map.dcop.GeneralDcopMessage;
-import com.bbn.map.dcop.DcopReceiverMessage;
 import com.bbn.map.dcop.cdiff.CdiffDcopMessage.CdiffMessageType;
+import com.bbn.map.utils.MapUtils;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.RegionPlan;
-import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
@@ -146,7 +146,7 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
 
         // Not running the first DCOP run due to incomplete neighbor information
         if (firstIteration == 0) {
-            return defaultPlan(summary);
+            return defaultPlan(summary, 0);
         }
                 
         final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = allocateComputeBasedOnNetwork(
@@ -185,9 +185,9 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
                 e.printStackTrace();
                 LOGGER.warn("InterruptedException when waiting for messages. Return the default DCOP plan: {} ",
                         e.getMessage(), e);
-                return defaultPlan(summary);
-            }
+                return defaultPlan(summary, iteration);
             
+            }
             LOGGER.info("Iteration {} Region {} has receivedCdiffMessageMap {}", iteration, getRegionID(), receivedCdiffMessageMap);
             
             for (Entry<RegionIdentifier, CdiffDcopMessage> entry : receivedCdiffMessageMap.entrySet()) {
@@ -215,7 +215,7 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
         LOGGER.info("AFTER DCOP FOR LOOP, Iteration {} Region {} has flowLoadMap {}", lastIteration, getRegionID(), getFlowLoadMap());
         LOGGER.info("AFTER DCOP FOR LOOP, Iteration {} Region {} has getClientLoadMap {}", lastIteration, getRegionID(), getClientKeepLoadMap());
         
-        return computeRegionDcopPlan(summary, lastIteration, false);
+        return computeRegionDcopPlan(summary, lastIteration, true);
         
     }
     
@@ -878,8 +878,7 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
 //            writeTheLastIteration();
 //        }
         
-        final DcopSharedInformation messageToSend = new DcopSharedInformation(inbox);
-        getDcopInfoProvider().setLocalDcopSharedInformation(messageToSend);
+        getDcopInfoProvider().setLocalDcopSharedInformation(inbox);
     }
     
     /**
@@ -893,8 +892,7 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
         abstractTreeMsg.addMessageToReceiver(getRegionID(), new CdiffDcopMessage());    
         inbox.putMessageAtIteration(TREE_ITERATION, abstractTreeMsg);
         
-        final DcopSharedInformation messageToSend = new DcopSharedInformation(inbox);
-        getDcopInfoProvider().setLocalDcopSharedInformation(messageToSend);
+        getDcopInfoProvider().setLocalDcopSharedInformation(inbox);
     }
 
     /**
@@ -911,7 +909,8 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
             ServiceIdentifier<?> service = serviceEntry.getKey();
             
             for (Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> regionEntry : serviceEntry.getValue().entrySet()) {
-                updateKeyKeyLoadMap(demandMap, service, regionEntry.getKey(), sumValues(regionEntry.getValue()), true);
+//                updateKeyKeyLoadMap(demandMap, service, regionEntry.getKey(), sumValues(regionEntry.getValue()), true);
+                updateKeyKeyLoadMap(demandMap, service, regionEntry.getKey(), regionEntry.getValue().get(MapUtils.COMPUTE_ATTRIBUTE), true);
             }
         }
         
@@ -932,10 +931,11 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
             }
         }
                 
-        summary = getDcopInfoProvider().getRegionSummary(ResourceReport.EstimationWindow.LONG);
+        summary = getDcopInfoProvider().getDcopResourceSummary();
                 
         retrieveAggregateCapacity(summary);
         retrieveNeighborSetFromNetworkLink(summary);
+        retrieveAllService(summary);
         
         LOGGER.info("Iteration {} Region {} has Region Capacity {}", firstIteration, getRegionID(), getAvailableCapacity());
     }

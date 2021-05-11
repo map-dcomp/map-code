@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -101,10 +101,10 @@ def main(argv=None):
             load_data.set_index('time')
             load_data['time_minutes'] = (load_data['time'] - load_data['time'].min()) / 1000 / 60
 
-            fig, ax = plt.subplots()
+            fig, ax = map_utils.subplots()
             ax.set_title('service: {0} attribute: {1}'.format(app, attr))
             ax.set_xlabel('time (minutes)')
-            ax.grid(alpha=0.5, axis='y')
+            ax.set_xlim(left=0, right=load_data['time_minutes'].max())
 
             for col in load_data.columns.values:
                 if 'time' != col and 'time_minutes' != col:

@@ -5,29 +5,16 @@ import json
 import sys
 import os
 from pathlib import Path
-
+import csv
 
 def main(argv=None):
         if argv is None:
                 argv = sys.argv[1:]
 
-        comment = """print("start")
-        topologyLocation = "topology.ns"
-        if(len(sys.argv) != 2):
-                try:
-                        fin = open(topologyLocation, "r")
-                except FileNotFoundError:
-                        print("First argument should be the path the topology.ns or topology.ns should be in the same directory as this script")
-                        exit()
-        else:
-                topologyLocation = sys.argv[1]
-                fin = open(topologyLocation, "r")"""
-
         with open("config.json", "r") as fin:
                 config = json.load(fin)
 
         topologyLocation = config["nsFilePath"]
-
 
         nodes = []
         links = []
@@ -35,38 +22,54 @@ def main(argv=None):
         with open(topologyLocation, "r") as fin:
 
                 print("Generating netconfig.json...")
-                for x in fin:
-                        temp = x.split(" ")
+                for line in fin:
+                        temp = line.split(" ")
 
                         #looks at the first word of the line and if it is set or tb-set parse the rest of the command 
                         if(temp[0] == "set"):
-                                if(temp[3] == "node]\n"):
+                                if("node]" in line):
                                         #addes a node
-                                        if("client" in temp[1].lower()):
-                                                nodes.append({"name":temp[1].lower(),"networks":[],"type":"client"})
+                                        firstSpace = line.find(" ")
+                                        endOfName = line.find("[")
+                                        name = line[firstSpace:endOfName].replace(" ","").lower()
+                                        if("client" in name):
+                                                nodes.append({"name":name,"networks":{},"type":"client"})
                                         else:
-                                                nodes.append({"name":temp[1].lower(),"networks":[],"type":"node"})
-                                elif(temp[3] == "make-lan"):
-                                        src = temp[1]
-                                        nodes.append({"name":src.lower(),"networks":[],"type":"lan"})
-                                        temp = (x.split("\"")[1]).split(" ") #temp is now a list of connections to the lan
+                                                nodes.append({"name":name,"networks":{},"type":"node"})
+                                elif("make-lan" in line):
+                                        firstSpace = line.find(" ")
+                                        endOfName = line.find("[")
+                                        src = line[firstSpace:endOfName].replace(" ","").lower()
+                                        nodes.append({"name":src,"networks":{},"type":"lan"})
+                                        firstQuote = line.find("\"")
+                                        lastQuote = line.rfind("\"")
+                                        temp = line[firstQuote:lastQuote].replace("\"","").split(" ")
                                         for i in temp:
-                                                #creates the link object to be read by the webiste
-                                                links.append({"source":src.lower(),"target":i[1:].lower(),"bandwidth":(x.split("\"")[2]).split(" ")[1], "delay":float((x.split("\"")[2]).split(" ")[2][:-4]), "flows":[]})
-                                elif(temp[3] == "duplex-link"):
-                                        links.append({"source":temp[4][1:].lower(),"target":temp[5][1:].lower(),"bandwidth":temp[6], "delay":float(temp[7][:-2]), "flows":[]})
+                                                links.append({"source":src,"target":i.replace("$","").lower(),"bandwidth":(line.split("\"")[2]).split(" ")[1], "delay":float((line.split("\"")[2]).split(" ")[2][:-4]), "flows":[]})
+                                elif("duplex-link" in line):
+                                        firstDollar = line.find("$")
+                                        srcStart = line.find("$",firstDollar+1)
+                                        srcEnd = line.find(" ",srcStart)
+                                        src = line[srcStart:srcEnd].replace(" ","").replace("$","").lower()
+                                        destStart = line.find("$",srcEnd)
+                                        destEnd = line.find(" ",destStart)
+                                        dest = line[destStart:destEnd].replace(" ","").replace("$","").lower()
+
+                                        temp = line[destEnd+1:].split(" ")
+                                        
+                                        links.append({"source":src,"target":dest,"bandwidth":temp[0], "delay":float(temp[1][:-2]), "flows":[]})
 
                         elif(temp[0] == "tb-set-ip-lan" or temp[0] == "tb-set-ip-link"):
-                                name = temp[1][1:].lower()
-                                network = temp[2][1:].lower()
+                                name = temp[1].replace("$","").lower()
+                                network = temp[2].replace("$","").lower()
                                 ip = temp[3][:-1]
                                 #assigns the ip with it's network to respective nodes
                                 for i in nodes:
                                         if(name == i["name"]):
-                                                i["networks"].append({"name":network,"ip":ip})
+                                                i["networks"][network] = ip
                                         if(network == i["name"]): #if node is a lan than assign the first 3 numbers of the ip
                                                 l = len(ip.split(".")[-1])
-                                                i["networks"].append({"name":network,"ip":ip[:-1*l-1]})
+                                                i["networks"][network] = ip[:-1*l-1]
 
 
         regionInfo = {}
@@ -86,17 +89,27 @@ def main(argv=None):
                                 regionInfo[nodeName] = region
 
                                 if 'client' in nodeJson:
+                                        
                                         clientNode = nodeJson['client']
                                         if clientNode and region not in clientRegions:
                                                 clientRegions.append(region)
 
-
-
+        failuresFile = config["flowDir"] + "/inputs/scenario/node-failures.json"
+        nodeFailures = []
+        try:
+                with open(failuresFile, "r") as fin:
+                        nodeFailures = json.load(fin)
+                for failure in nodeFailures:
+                        failure["node"] = failure["node"].lower()
+        except:
+                print("Run has no node failures.")
+                
         dic = {
                 "nodes" : nodes,
                 "links" : links,
                 "regionInfo" : regionInfo,
-                "clientRegions" : clientRegions
+                "clientRegions" : clientRegions,
+                "nodeFailures": nodeFailures
         }
 
         

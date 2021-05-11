@@ -6,9 +6,10 @@
       "version": "1"
     },
     "hostname": "image-recognition-high",
-    "defaultNode": "nodeA0",
+    "defaultNodes": {
+      "nodeA0": 2
+    },
     "defaultNodeRegion": "A",
-    "initialInstances": "1",
     "computeCapacity": {
       "TASK_CONTAINERS": "1"
     },

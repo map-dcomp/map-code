@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "XLowrtr4",
+    "region": "XLow",
+    "router": false,
+    "underlay": false
+}

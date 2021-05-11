@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -31,7 +31,8 @@
 #BBN_LICENSE_END
 #!/usr/bin/env python3
 
-"""Graph the difference in time between the name of the output folder and
+"""
+Graph the difference in time between the name of the output folder and
 the timestamp inside the resource report.  Ideally this value should
 be very close to zero. Large values suggest problems in the system
 with creating resource reports.
@@ -60,17 +61,19 @@ def get_logger():
     return logging.getLogger(__name__)
 
 def output_graph(output, data, min_time):
-    fig, ax = plt.subplots()
+    fig, ax = map_utils.subplots()
     ax.set_title("Resource report generation lag")
     ax.set_xlabel("Time (minutes)")
     ax.set_ylabel("Difference (seconds)")
-    ax.grid(alpha=0.5, axis='y')
 
+    max_minutes = 0
     for node_name, plot_data in data.items():
         (xs, ys) = plot_data
         minutes = [ map_utils.timestamp_to_minutes(x - min_time) for x in xs ]
+        max_minutes = max(max_minutes, max(minutes))
         ax.scatter(minutes, ys, label=node_name, s=1)
 
+    ax.set_xlim(left=0, right=max_minutes)
     handles, labels = ax.get_legend_handles_labels()
     lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
         
@@ -91,8 +94,8 @@ def main_method(args):
     # node_name -> (xs, ys)
     data = dict()
     min_time = None
-    max_diff = None
     for node_dir in sim_output.iterdir():
+        max_diff = None
         if not node_dir.is_dir():
             continue
         
@@ -113,8 +116,11 @@ def main_method(args):
             get_logger().debug("\t\tProcessing time %s", time_dir)
             resource_report_file = time_dir / 'resourceReport-SHORT.json'
             if resource_report_file.exists():
-                with open(resource_report_file, 'r') as f:
-                    resource_report = json.load(f)
+                try:
+                    with open(resource_report_file, 'r') as f:
+                        resource_report = json.load(f)
+                except json.decoder.JSONDecodeError:
+                    get_logger().warning("Problem reading %s, skipping", resource_report_file)
                     
                 report_time = int(resource_report['timestamp'])
                 if report_time < 1:

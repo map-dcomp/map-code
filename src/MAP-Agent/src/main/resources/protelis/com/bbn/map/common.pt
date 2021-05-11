@@ -26,17 +26,18 @@ public def countNodes() {
     countDevices(d)
 }
 
-public def findNeighborRegions(leader) {
-    let rgn = self.getDevice().getRegionIdentifier();
+public def findNeighborRegions(rgn, leader) {
     let localNbrRgns = foldUnion(nbr([rgn]));
     self.getDevice().apTraceMessage("findNeighborRegions local: " + rgn + " nbrs " + localNbrRgns);
-    multiRegion(rgn, { n -> rgn == n },
+    let ret = multiRegion(rgn, { n -> rgn == n },
         { 
             let collected = C(hopDistanceTo(leader), union, localNbrRgns, []);
             let sent = hopBroadcast(leader,collected);
-     //       self.getDevice().apTraceMessage("findNeighborRegions internal: " + rgn + " collected " + collected + " sent " + sent);
+            self.getDevice().apTraceMessage("findNeighborRegions internal: " + rgn + " collected " + collected + " sent " + sent);
             sent
-         }, [])
+         }, []);
+     self.getDevice().apTraceMessage("findNeighborRegions returns: " + ret); 
+     ret
 }
 
 def randomUid() =

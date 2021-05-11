@@ -1,0 +1,38 @@
+import org.gradle.internal.os.OperatingSystem
+
+// Plugins
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'java-library'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '4.0.1'
+}
+
+repositories {
+    // local repository first
+    mavenLocal()
+    
+    jcenter()
+}
+
+mainClassName = 'com.bbn.AnalyzeSetGetTimes'
+
+
+//description = """DNS Stress test"""
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+}
+
+configurations {
+    providedRuntime
+}
+
+dependencies {
+    api group: "org.apache.commons", name: "commons-lang3", version: "3.8.1"
+}
+
+

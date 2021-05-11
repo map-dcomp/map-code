@@ -1,0 +1,622 @@
+# CP Paper
+
+set ns [new Simulator]
+source tb_compat.tcl
+
+tb-use-endnodeshaping   1
+
+
+# Clients
+set clientPoolG1 [$ns node]
+tb-set-node-os $clientPoolG1 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolG1 no_containers_large
+set clientPoolG2 [$ns node]
+tb-set-node-os $clientPoolG2 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolG2 no_containers_large
+
+set clientPoolN1 [$ns node]
+tb-set-node-os $clientPoolN1 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolN1 no_containers_large
+set clientPoolN2 [$ns node]
+tb-set-node-os $clientPoolN2 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolN2 no_containers_large
+
+set clientPoolS1 [$ns node]
+tb-set-node-os $clientPoolS1 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolS1 no_containers_large
+set clientPoolS2 [$ns node]
+tb-set-node-os $clientPoolS2 UBUNTU16-64-MAP
+tb-set-hardware $clientPoolS2 no_containers_large
+
+# NCPs
+set nodeA [$ns node]
+tb-set-node-os $nodeA UBUNTU16-64-MAP
+tb-set-hardware $nodeA no_containers_medium
+set Adns [$ns node]
+tb-set-node-os $Adns UBUNTU16-64-MAP
+tb-set-hardware $Adns no_containers_medium
+set Adcop [$ns node]
+tb-set-node-os $Adcop UBUNTU16-64-MAP
+tb-set-hardware $Adcop no_containers_small
+set Arlg [$ns node]
+tb-set-node-os $Arlg UBUNTU16-64-MAP
+tb-set-hardware $Arlg no_containers_medium
+set Aserver01 [$ns node]
+tb-set-node-os $Aserver01 UBUNTU16-64-MAP
+tb-set-hardware $Aserver01 small
+set Aserver02 [$ns node]
+tb-set-node-os $Aserver02 UBUNTU16-64-MAP
+tb-set-hardware $Aserver02 small
+set Aserver03 [$ns node]
+tb-set-node-os $Aserver03 UBUNTU16-64-MAP
+tb-set-hardware $Aserver03 small
+
+set nodeB [$ns node]
+tb-set-node-os $nodeB UBUNTU16-64-MAP
+tb-set-hardware $nodeB no_containers_medium
+set Bdns [$ns node]
+tb-set-node-os $Bdns UBUNTU16-64-MAP
+tb-set-hardware $Bdns no_containers_medium
+set Bdcop [$ns node]
+tb-set-node-os $Bdcop UBUNTU16-64-MAP
+tb-set-hardware $Bdcop no_containers_small
+set Brlg [$ns node]
+tb-set-node-os $Brlg UBUNTU16-64-MAP
+tb-set-hardware $Brlg no_containers_medium
+set Bserver01 [$ns node]
+tb-set-node-os $Bserver01 UBUNTU16-64-MAP
+tb-set-hardware $Bserver01 small
+set Bserver02 [$ns node]
+tb-set-node-os $Bserver02 UBUNTU16-64-MAP
+tb-set-hardware $Bserver02 small
+set Bserver03 [$ns node]
+tb-set-node-os $Bserver03 UBUNTU16-64-MAP
+tb-set-hardware $Bserver03 small
+
+
+set nodeX [$ns node]
+tb-set-node-os $nodeX UBUNTU16-64-MAP
+tb-set-hardware $nodeX no_containers_medium
+set Xdns [$ns node]
+tb-set-node-os $Xdns UBUNTU16-64-MAP
+tb-set-hardware $Xdns no_containers_medium
+set Xdcop [$ns node]
+tb-set-node-os $Xdcop UBUNTU16-64-MAP
+tb-set-hardware $Xdcop no_containers_small
+set Xrlg [$ns node]
+tb-set-node-os $Xrlg UBUNTU16-64-MAP
+tb-set-hardware $Xrlg no_containers_medium
+
+set Xrtr1 [$ns node]
+tb-set-node-os $Xrtr1 UBUNTU16-64-MAP
+tb-set-hardware $Xrtr1 no_containers_medium
+set Xserver01 [$ns node]
+tb-set-node-os $Xserver01 UBUNTU16-64-MAP
+tb-set-hardware $Xserver01 small
+set Xserver02 [$ns node]
+tb-set-node-os $Xserver02 UBUNTU16-64-MAP
+tb-set-hardware $Xserver02 small
+set Xserver03 [$ns node]
+tb-set-node-os $Xserver03 UBUNTU16-64-MAP
+tb-set-hardware $Xserver03 small
+set Xserver04 [$ns node]
+tb-set-node-os $Xserver04 UBUNTU16-64-MAP
+tb-set-hardware $Xserver04 small
+set Xserver05 [$ns node]
+tb-set-node-os $Xserver05 UBUNTU16-64-MAP
+tb-set-hardware $Xserver05 small
+
+set Xrtr2 [$ns node]
+tb-set-node-os $Xrtr2 UBUNTU16-64-MAP
+tb-set-hardware $Xrtr2 no_containers_medium
+set Xserver06 [$ns node]
+tb-set-node-os $Xserver06 UBUNTU16-64-MAP
+tb-set-hardware $Xserver06 small
+set Xserver07 [$ns node]
+tb-set-node-os $Xserver07 UBUNTU16-64-MAP
+tb-set-hardware $Xserver07 small
+set Xserver08 [$ns node]
+tb-set-node-os $Xserver08 UBUNTU16-64-MAP
+tb-set-hardware $Xserver08 small
+set Xserver09 [$ns node]
+tb-set-node-os $Xserver09 UBUNTU16-64-MAP
+tb-set-hardware $Xserver09 small
+set Xserver10 [$ns node]
+tb-set-node-os $Xserver10 UBUNTU16-64-MAP
+tb-set-hardware $Xserver10 small
+
+set Xrtr3 [$ns node]
+tb-set-node-os $Xrtr3 UBUNTU16-64-MAP
+tb-set-hardware $Xrtr3 no_containers_medium
+set Xserver11 [$ns node]
+tb-set-node-os $Xserver11 UBUNTU16-64-MAP
+tb-set-hardware $Xserver11 small
+set Xserver12 [$ns node]
+tb-set-node-os $Xserver12 UBUNTU16-64-MAP
+tb-set-hardware $Xserver12 small
+set Xserver13 [$ns node]
+tb-set-node-os $Xserver13 UBUNTU16-64-MAP
+tb-set-hardware $Xserver13 small
+set Xserver14 [$ns node]
+tb-set-node-os $Xserver14 UBUNTU16-64-MAP
+tb-set-hardware $Xserver14 small
+set Xserver15 [$ns node]
+tb-set-node-os $Xserver15 UBUNTU16-64-MAP
+tb-set-hardware $Xserver15 small
+
+#set Xrtr4 [$ns node]
+#tb-set-node-os $Xrtr4 UBUNTU16-64-MAP
+#tb-set-hardware $Xrtr4 no_containers_medium
+#set Xserver16 [$ns node]
+#tb-set-node-os $Xserver16 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver16 small
+#set Xserver17 [$ns node]
+#tb-set-node-os $Xserver17 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver17 small
+#set Xserver18 [$ns node]
+#tb-set-node-os $Xserver18 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver18 small
+#set Xserver19 [$ns node]
+#tb-set-node-os $Xserver19 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver19 small
+#set Xserver20 [$ns node]
+#tb-set-node-os $Xserver20 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver20 small
+
+#set Xrtr5 [$ns node]
+#tb-set-node-os $Xrtr5 UBUNTU16-64-MAP
+#tb-set-hardware $Xrtr5 no_containers_medium
+#set Xserver21 [$ns node]
+#tb-set-node-os $Xserver21 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver21 small
+#set Xserver22 [$ns node]
+#tb-set-node-os $Xserver22 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver22 small
+#set Xserver23 [$ns node]
+#tb-set-node-os $Xserver23 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver23 small
+#set Xserver24 [$ns node]
+#tb-set-node-os $Xserver24 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver24 small
+#set Xserver25 [$ns node]
+#tb-set-node-os $Xserver25 UBUNTU16-64-MAP
+#tb-set-hardware $Xserver25 small
+
+
+set nodeD [$ns node]
+tb-set-node-os $nodeD UBUNTU16-64-MAP
+tb-set-hardware $nodeD no_containers_medium
+set Ddns [$ns node]
+tb-set-node-os $Ddns UBUNTU16-64-MAP
+tb-set-hardware $Ddns no_containers_medium
+set Ddcop [$ns node]
+tb-set-node-os $Ddcop UBUNTU16-64-MAP
+tb-set-hardware $Ddcop no_containers_small
+set Drlg [$ns node]
+tb-set-node-os $Drlg UBUNTU16-64-MAP
+tb-set-hardware $Drlg no_containers_medium
+set Dserver01 [$ns node]
+tb-set-node-os $Dserver01 UBUNTU16-64-MAP
+tb-set-hardware $Dserver01 small
+set Dserver02 [$ns node]
+tb-set-node-os $Dserver02 UBUNTU16-64-MAP
+tb-set-hardware $Dserver02 small
+set Dserver03 [$ns node]
+tb-set-node-os $Dserver03 UBUNTU16-64-MAP
+tb-set-hardware $Dserver03 small
+
+set nodeE [$ns node]
+tb-set-node-os $nodeE UBUNTU16-64-MAP
+tb-set-hardware $nodeE no_containers_medium
+set Edns [$ns node]
+tb-set-node-os $Edns UBUNTU16-64-MAP
+tb-set-hardware $Edns no_containers_medium
+set Edcop [$ns node]
+tb-set-node-os $Edcop UBUNTU16-64-MAP
+tb-set-hardware $Edcop no_containers_small
+set Erlg [$ns node]
+tb-set-node-os $Erlg UBUNTU16-64-MAP
+tb-set-hardware $Erlg no_containers_medium
+set Eserver01 [$ns node]
+tb-set-node-os $Eserver01 UBUNTU16-64-MAP
+tb-set-hardware $Eserver01 small
+set Eserver02 [$ns node]
+tb-set-node-os $Eserver02 UBUNTU16-64-MAP
+tb-set-hardware $Eserver02 small
+set Eserver03 [$ns node]
+tb-set-node-os $Eserver03 UBUNTU16-64-MAP
+tb-set-hardware $Eserver03 small
+
+set nodeF [$ns node]
+tb-set-node-os $nodeF UBUNTU16-64-MAP
+tb-set-hardware $nodeF no_containers_medium
+set Fdns [$ns node]
+tb-set-node-os $Fdns UBUNTU16-64-MAP
+tb-set-hardware $Fdns no_containers_medium
+set Fdcop [$ns node]
+tb-set-node-os $Fdcop UBUNTU16-64-MAP
+tb-set-hardware $Fdcop no_containers_small
+set Frlg [$ns node]
+tb-set-node-os $Frlg UBUNTU16-64-MAP
+tb-set-hardware $Frlg no_containers_medium
+set Fserver01 [$ns node]
+tb-set-node-os $Fserver01 UBUNTU16-64-MAP
+tb-set-hardware $Fserver01 small
+set Fserver02 [$ns node]
+tb-set-node-os $Fserver02 UBUNTU16-64-MAP
+tb-set-hardware $Fserver02 small
+set Fserver03 [$ns node]
+tb-set-node-os $Fserver03 UBUNTU16-64-MAP
+tb-set-hardware $Fserver03 small
+
+set nodeG [$ns node]
+tb-set-node-os $nodeG UBUNTU16-64-MAP
+tb-set-hardware $nodeG no_containers_medium
+set Gdns [$ns node]
+tb-set-node-os $Gdns UBUNTU16-64-MAP
+tb-set-hardware $Gdns no_containers_medium
+set Gdcop [$ns node]
+tb-set-node-os $Gdcop UBUNTU16-64-MAP
+tb-set-hardware $Gdcop no_containers_small
+set Grlg [$ns node]
+tb-set-node-os $Grlg UBUNTU16-64-MAP
+tb-set-hardware $Grlg no_containers_medium
+set Gserver01 [$ns node]
+tb-set-node-os $Gserver01 UBUNTU16-64-MAP
+tb-set-hardware $Gserver01 small
+set Gserver02 [$ns node]
+tb-set-node-os $Gserver02 UBUNTU16-64-MAP
+tb-set-hardware $Gserver02 small
+set Gserver03 [$ns node]
+tb-set-node-os $Gserver03 UBUNTU16-64-MAP
+tb-set-hardware $Gserver03 small
+
+set nodeH [$ns node]
+tb-set-node-os $nodeH UBUNTU16-64-MAP
+tb-set-hardware $nodeH no_containers_medium
+set Hdns [$ns node]
+tb-set-node-os $Hdns UBUNTU16-64-MAP
+tb-set-hardware $Hdns no_containers_medium
+set Hdcop [$ns node]
+tb-set-node-os $Hdcop UBUNTU16-64-MAP
+tb-set-hardware $Hdcop no_containers_small
+set Hrlg [$ns node]
+tb-set-node-os $Hrlg UBUNTU16-64-MAP
+tb-set-hardware $Hrlg no_containers_medium
+set Hserver01 [$ns node]
+tb-set-node-os $Hserver01 UBUNTU16-64-MAP
+tb-set-hardware $Hserver01 small
+set Hserver02 [$ns node]
+tb-set-node-os $Hserver02 UBUNTU16-64-MAP
+tb-set-hardware $Hserver02 small
+set Hserver03 [$ns node]
+tb-set-node-os $Hserver03 UBUNTU16-64-MAP
+tb-set-hardware $Hserver03 small
+
+set nodeI [$ns node]
+tb-set-node-os $nodeI UBUNTU16-64-MAP
+tb-set-hardware $nodeI no_containers_medium
+set Idns [$ns node]
+tb-set-node-os $Idns UBUNTU16-64-MAP
+tb-set-hardware $Idns no_containers_medium
+set Idcop [$ns node]
+tb-set-node-os $Idcop UBUNTU16-64-MAP
+tb-set-hardware $Idcop no_containers_small
+set Irlg [$ns node]
+tb-set-node-os $Irlg UBUNTU16-64-MAP
+tb-set-hardware $Irlg no_containers_medium
+set Iserver01 [$ns node]
+tb-set-node-os $Iserver01 UBUNTU16-64-MAP
+tb-set-hardware $Iserver01 small
+set Iserver02 [$ns node]
+tb-set-node-os $Iserver02 UBUNTU16-64-MAP
+tb-set-hardware $Iserver02 small
+set Iserver03 [$ns node]
+tb-set-node-os $Iserver03 UBUNTU16-64-MAP
+tb-set-hardware $Iserver03 small
+
+set nodeJ [$ns node]
+tb-set-node-os $nodeJ UBUNTU16-64-MAP
+tb-set-hardware $nodeJ no_containers_medium
+set Jdns [$ns node]
+tb-set-node-os $Jdns UBUNTU16-64-MAP
+tb-set-hardware $Jdns no_containers_medium
+set Jdcop [$ns node]
+tb-set-node-os $Jdcop UBUNTU16-64-MAP
+tb-set-hardware $Jdcop no_containers_small
+set Jrlg [$ns node]
+tb-set-node-os $Jrlg UBUNTU16-64-MAP
+tb-set-hardware $Jrlg no_containers_medium
+set Jserver01 [$ns node]
+tb-set-node-os $Jserver01 UBUNTU16-64-MAP
+tb-set-hardware $Jserver01 small
+set Jserver02 [$ns node]
+tb-set-node-os $Jserver02 UBUNTU16-64-MAP
+tb-set-hardware $Jserver02 small
+set Jserver03 [$ns node]
+tb-set-node-os $Jserver03 UBUNTU16-64-MAP
+tb-set-hardware $Jserver03 small
+
+set nodeK [$ns node]
+tb-set-node-os $nodeK UBUNTU16-64-MAP
+tb-set-hardware $nodeK no_containers_medium
+set Kdns [$ns node]
+tb-set-node-os $Kdns UBUNTU16-64-MAP
+tb-set-hardware $Kdns no_containers_medium
+set Kdcop [$ns node]
+tb-set-node-os $Kdcop UBUNTU16-64-MAP
+tb-set-hardware $Kdcop no_containers_small
+set Krlg [$ns node]
+tb-set-node-os $Krlg UBUNTU16-64-MAP
+tb-set-hardware $Krlg no_containers_medium
+set Kserver01 [$ns node]
+tb-set-node-os $Kserver01 UBUNTU16-64-MAP
+tb-set-hardware $Kserver01 small
+set Kserver02 [$ns node]
+tb-set-node-os $Kserver02 UBUNTU16-64-MAP
+tb-set-hardware $Kserver02 small
+set Kserver03 [$ns node]
+tb-set-node-os $Kserver03 UBUNTU16-64-MAP
+tb-set-hardware $Kserver03 small
+
+set nodeL [$ns node]
+tb-set-node-os $nodeL UBUNTU16-64-MAP
+tb-set-hardware $nodeL no_containers_medium
+set Ldns [$ns node]
+tb-set-node-os $Ldns UBUNTU16-64-MAP
+tb-set-hardware $Ldns no_containers_medium
+set Ldcop [$ns node]
+tb-set-node-os $Ldcop UBUNTU16-64-MAP
+tb-set-hardware $Ldcop no_containers_small
+set Lrlg [$ns node]
+tb-set-node-os $Lrlg UBUNTU16-64-MAP
+tb-set-hardware $Lrlg no_containers_medium
+set Lserver01 [$ns node]
+tb-set-node-os $Lserver01 UBUNTU16-64-MAP
+tb-set-hardware $Lserver01 small
+set Lserver02 [$ns node]
+tb-set-node-os $Lserver02 UBUNTU16-64-MAP
+tb-set-hardware $Lserver02 small
+set Lserver03 [$ns node]
+tb-set-node-os $Lserver03 UBUNTU16-64-MAP
+tb-set-hardware $Lserver03 small
+
+set nodeM [$ns node]
+tb-set-node-os $nodeM UBUNTU16-64-MAP
+tb-set-hardware $nodeM no_containers_medium
+set Mdns [$ns node]
+tb-set-node-os $Mdns UBUNTU16-64-MAP
+tb-set-hardware $Mdns no_containers_medium
+set Mdcop [$ns node]
+tb-set-node-os $Mdcop UBUNTU16-64-MAP
+tb-set-hardware $Mdcop no_containers_small
+set Mrlg [$ns node]
+tb-set-node-os $Mrlg UBUNTU16-64-MAP
+tb-set-hardware $Mrlg no_containers_medium
+set Mserver01 [$ns node]
+tb-set-node-os $Mserver01 UBUNTU16-64-MAP
+tb-set-hardware $Mserver01 small
+set Mserver02 [$ns node]
+tb-set-node-os $Mserver02 UBUNTU16-64-MAP
+tb-set-hardware $Mserver02 small
+set Mserver03 [$ns node]
+tb-set-node-os $Mserver03 UBUNTU16-64-MAP
+tb-set-hardware $Mserver03 small
+
+set nodeN [$ns node]
+tb-set-node-os $nodeN UBUNTU16-64-MAP
+tb-set-hardware $nodeN no_containers_medium
+set Ndns [$ns node]
+tb-set-node-os $Ndns UBUNTU16-64-MAP
+tb-set-hardware $Ndns no_containers_medium
+set Ndcop [$ns node]
+tb-set-node-os $Ndcop UBUNTU16-64-MAP
+tb-set-hardware $Ndcop no_containers_small
+set Nrlg [$ns node]
+tb-set-node-os $Nrlg UBUNTU16-64-MAP
+tb-set-hardware $Nrlg no_containers_medium
+set Nserver01 [$ns node]
+tb-set-node-os $Nserver01 UBUNTU16-64-MAP
+tb-set-hardware $Nserver01 small
+set Nserver02 [$ns node]
+tb-set-node-os $Nserver02 UBUNTU16-64-MAP
+tb-set-hardware $Nserver02 small
+set Nserver03 [$ns node]
+tb-set-node-os $Nserver03 UBUNTU16-64-MAP
+tb-set-hardware $Nserver03 small
+
+set nodeO [$ns node]
+tb-set-node-os $nodeO UBUNTU16-64-MAP
+tb-set-hardware $nodeO no_containers_medium
+set Odns [$ns node]
+tb-set-node-os $Odns UBUNTU16-64-MAP
+tb-set-hardware $Odns no_containers_medium
+set Odcop [$ns node]
+tb-set-node-os $Odcop UBUNTU16-64-MAP
+tb-set-hardware $Odcop no_containers_small
+set Orlg [$ns node]
+tb-set-node-os $Orlg UBUNTU16-64-MAP
+tb-set-hardware $Orlg no_containers_medium
+set Oserver01 [$ns node]
+tb-set-node-os $Oserver01 UBUNTU16-64-MAP
+tb-set-hardware $Oserver01 small
+set Oserver02 [$ns node]
+tb-set-node-os $Oserver02 UBUNTU16-64-MAP
+tb-set-hardware $Oserver02 small
+set Oserver03 [$ns node]
+tb-set-node-os $Oserver03 UBUNTU16-64-MAP
+tb-set-hardware $Oserver03 small
+
+set nodeP [$ns node]
+tb-set-node-os $nodeP UBUNTU16-64-MAP
+tb-set-hardware $nodeP no_containers_medium
+set Pdns [$ns node]
+tb-set-node-os $Pdns UBUNTU16-64-MAP
+tb-set-hardware $Pdns no_containers_medium
+set Pdcop [$ns node]
+tb-set-node-os $Pdcop UBUNTU16-64-MAP
+tb-set-hardware $Pdcop no_containers_small
+set Prlg [$ns node]
+tb-set-node-os $Prlg UBUNTU16-64-MAP
+tb-set-hardware $Prlg no_containers_medium
+set Pserver01 [$ns node]
+tb-set-node-os $Pserver01 UBUNTU16-64-MAP
+tb-set-hardware $Pserver01 small
+set Pserver02 [$ns node]
+tb-set-node-os $Pserver02 UBUNTU16-64-MAP
+tb-set-hardware $Pserver02 small
+set Pserver03 [$ns node]
+tb-set-node-os $Pserver03 UBUNTU16-64-MAP
+tb-set-hardware $Pserver03 small
+
+set nodeQ [$ns node]
+tb-set-node-os $nodeQ UBUNTU16-64-MAP
+tb-set-hardware $nodeQ no_containers_medium
+set Qdns [$ns node]
+tb-set-node-os $Qdns UBUNTU16-64-MAP
+tb-set-hardware $Qdns no_containers_medium
+set Qdcop [$ns node]
+tb-set-node-os $Qdcop UBUNTU16-64-MAP
+tb-set-hardware $Qdcop no_containers_small
+set Qrlg [$ns node]
+tb-set-node-os $Qrlg UBUNTU16-64-MAP
+tb-set-hardware $Qrlg no_containers_medium
+set Qserver01 [$ns node]
+tb-set-node-os $Qserver01 UBUNTU16-64-MAP
+tb-set-hardware $Qserver01 small
+set Qserver02 [$ns node]
+tb-set-node-os $Qserver02 UBUNTU16-64-MAP
+tb-set-hardware $Qserver02 small
+set Qserver03 [$ns node]
+tb-set-node-os $Qserver03 UBUNTU16-64-MAP
+tb-set-hardware $Qserver03 small
+
+set nodeR [$ns node]
+tb-set-node-os $nodeR UBUNTU16-64-MAP
+tb-set-hardware $nodeR no_containers_medium
+set Rdns [$ns node]
+tb-set-node-os $Rdns UBUNTU16-64-MAP
+tb-set-hardware $Rdns no_containers_medium
+set Rdcop [$ns node]
+tb-set-node-os $Rdcop UBUNTU16-64-MAP
+tb-set-hardware $Rdcop no_containers_small
+set Rrlg [$ns node]
+tb-set-node-os $Rrlg UBUNTU16-64-MAP
+tb-set-hardware $Rrlg no_containers_medium
+set Rserver01 [$ns node]
+tb-set-node-os $Rserver01 UBUNTU16-64-MAP
+tb-set-hardware $Rserver01 small
+set Rserver02 [$ns node]
+tb-set-node-os $Rserver02 UBUNTU16-64-MAP
+tb-set-hardware $Rserver02 small
+set Rserver03 [$ns node]
+tb-set-node-os $Rserver03 UBUNTU16-64-MAP
+tb-set-hardware $Rserver03 small
+
+set nodeS [$ns node]
+tb-set-node-os $nodeS UBUNTU16-64-MAP
+tb-set-hardware $nodeS no_containers_medium
+set Sdns [$ns node]
+tb-set-node-os $Sdns UBUNTU16-64-MAP
+tb-set-hardware $Sdns no_containers_medium
+set Sdcop [$ns node]
+tb-set-node-os $Sdcop UBUNTU16-64-MAP
+tb-set-hardware $Sdcop no_containers_small
+set Srlg [$ns node]
+tb-set-node-os $Srlg UBUNTU16-64-MAP
+tb-set-hardware $Srlg no_containers_medium
+set Sserver01 [$ns node]
+tb-set-node-os $Sserver01 UBUNTU16-64-MAP
+tb-set-hardware $Sserver01 small
+set Sserver02 [$ns node]
+tb-set-node-os $Sserver02 UBUNTU16-64-MAP
+tb-set-hardware $Sserver02 small
+set Sserver03 [$ns node]
+tb-set-node-os $Sserver03 UBUNTU16-64-MAP
+tb-set-hardware $Sserver03 small
+
+set nodeT [$ns node]
+tb-set-node-os $nodeT UBUNTU16-64-MAP
+tb-set-hardware $nodeT no_containers_medium
+set Tdns [$ns node]
+tb-set-node-os $Tdns UBUNTU16-64-MAP
+tb-set-hardware $Tdns no_containers_medium
+set Tdcop [$ns node]
+tb-set-node-os $Tdcop UBUNTU16-64-MAP
+tb-set-hardware $Tdcop no_containers_small
+set Trlg [$ns node]
+tb-set-node-os $Trlg UBUNTU16-64-MAP
+tb-set-hardware $Trlg no_containers_medium
+set Tserver01 [$ns node]
+tb-set-node-os $Tserver01 UBUNTU16-64-MAP
+tb-set-hardware $Tserver01 small
+set Tserver02 [$ns node]
+tb-set-node-os $Tserver02 UBUNTU16-64-MAP
+tb-set-hardware $Tserver02 small
+set Tserver03 [$ns node]
+tb-set-node-os $Tserver03 UBUNTU16-64-MAP
+tb-set-hardware $Tserver03 small
+
+
+
+
+
+
+#Intra-Region Switches
+set Asw [$ns make-lan "$nodeA $Adns $Adcop $Arlg $Aserver01 $Aserver02 $Aserver03" 100Mb 0.0ms]
+set Bsw [$ns make-lan "$nodeB $Bdns $Bdcop $Brlg $Bserver01 $Bserver02 $Bserver03" 100Mb 0.0ms]
+set Xsw [$ns make-lan "$nodeX $Xdns $Xdcop $Xrlg $Xrtr1 $Xrtr2 $Xrtr3" 100Mb 0.0ms]
+#set Xsw [$ns make-lan "$nodeX $Xdns $Xdcop $Xrlg $Xrtr1 $Xrtr2 $Xrtr3 $Xrtr4 $Xrtr5" 100Mb 0.0ms]
+set Xrtr1sw [$ns make-lan "$Xrtr1 $Xserver01 $Xserver02 $Xserver03 $Xserver04 $Xserver05" 100Mb 0.0ms]
+set Xrtr2sw [$ns make-lan "$Xrtr2 $Xserver06 $Xserver07 $Xserver08 $Xserver09 $Xserver10" 100Mb 0.0ms]
+set Xrtr3sw [$ns make-lan "$Xrtr3 $Xserver11 $Xserver12 $Xserver13 $Xserver14 $Xserver15" 100Mb 0.0ms]
+#set Xrtr4sw [$ns make-lan "$Xrtr4 $Xserver16 $Xserver17 $Xserver18 $Xserver19 $Xserver20" 100Mb 0.0ms]
+#set Xrtr5sw [$ns make-lan "$Xrtr5 $Xserver21 $Xserver22 $Xserver23 $Xserver24 $Xserver25" 100Mb 0.0ms]
+set Dsw [$ns make-lan "$nodeD $Ddns $Ddcop $Drlg $Dserver01 $Dserver02 $Dserver03" 100Mb 0.0ms]
+set Esw [$ns make-lan "$nodeE $Edns $Edcop $Erlg $Eserver01 $Eserver02 $Eserver03" 100Mb 0.0ms]
+set Fsw [$ns make-lan "$nodeF $Fdns $Fdcop $Frlg $Fserver01 $Fserver02 $Fserver03" 100Mb 0.0ms]
+set Gsw [$ns make-lan "$nodeG $Gdns $Gdcop $Grlg $Gserver01 $Gserver02 $Gserver03" 100Mb 0.0ms]
+set Hsw [$ns make-lan "$nodeH $Hdns $Hdcop $Hrlg $Hserver01 $Hserver02 $Hserver03" 100Mb 0.0ms]
+set Isw [$ns make-lan "$nodeI $Idns $Idcop $Irlg $Iserver01 $Iserver02 $Iserver03" 100Mb 0.0ms]
+set Jsw [$ns make-lan "$nodeJ $Jdns $Jdcop $Jrlg $Jserver01 $Jserver02 $Jserver03" 100Mb 0.0ms]
+set Ksw [$ns make-lan "$nodeK $Kdns $Kdcop $Krlg $Kserver01 $Kserver02 $Kserver03" 100Mb 0.0ms]
+set Lsw [$ns make-lan "$nodeL $Ldns $Ldcop $Lrlg $Lserver01 $Lserver02 $Lserver03" 100Mb 0.0ms]
+set Msw [$ns make-lan "$nodeM $Mdns $Mdcop $Mrlg $Mserver01 $Mserver02 $Mserver03" 100Mb 0.0ms]
+set Nsw [$ns make-lan "$nodeN $Ndns $Ndcop $Nrlg $Nserver01 $Nserver02 $Nserver03" 100Mb 0.0ms]
+set Osw [$ns make-lan "$nodeO $Odns $Odcop $Orlg $Oserver01 $Oserver02 $Oserver03" 100Mb 0.0ms]
+set Psw [$ns make-lan "$nodeP $Pdns $Pdcop $Prlg $Pserver01 $Pserver02 $Pserver03" 100Mb 0.0ms]
+set Qsw [$ns make-lan "$nodeQ $Qdns $Qdcop $Qrlg $Qserver01 $Qserver02 $Qserver03" 100Mb 0.0ms]
+set Rsw [$ns make-lan "$nodeR $Rdns $Rdcop $Rrlg $Rserver01 $Rserver02 $Rserver03" 100Mb 0.0ms]
+set Ssw [$ns make-lan "$nodeS $Sdns $Sdcop $Srlg $Sserver01 $Sserver02 $Sserver03" 100Mb 0.0ms]
+set Tsw [$ns make-lan "$nodeT $Tdns $Tdcop $Trlg $Tserver01 $Tserver02 $Tserver03" 100Mb 0.0ms]
+
+
+# Inter-Region Links
+set linkEX [$ns duplex-link $nodeE $nodeX 200Mb 0.0ms DropTail]
+set linkGE [$ns duplex-link $nodeG $nodeE 200Mb 0.0ms DropTail]
+set linkHX [$ns duplex-link $nodeH $nodeX 200Mb 0.0ms DropTail]
+set linkIA [$ns duplex-link $nodeI $nodeA 200Mb 0.0ms DropTail]
+set linkIE [$ns duplex-link $nodeI $nodeE 200Mb 0.0ms DropTail]
+set linkIF [$ns duplex-link $nodeI $nodeF 200Mb 0.0ms DropTail]
+set linkJA [$ns duplex-link $nodeJ $nodeA 200Mb 0.0ms DropTail]
+set linkKB [$ns duplex-link $nodeK $nodeB 200Mb 0.0ms DropTail]
+set linkKF [$ns duplex-link $nodeK $nodeF 200Mb 0.0ms DropTail]
+set linkLD [$ns duplex-link $nodeL $nodeD 200Mb 0.0ms DropTail]
+set linkLI [$ns duplex-link $nodeL $nodeI 200Mb 0.0ms DropTail]
+set linkML [$ns duplex-link $nodeM $nodeL 200Mb 0.0ms DropTail]
+set linkNX [$ns duplex-link $nodeN $nodeX 200Mb 0.0ms DropTail]
+set linkOG [$ns duplex-link $nodeO $nodeG 200Mb 0.0ms DropTail]
+set linkPX [$ns duplex-link $nodeP $nodeX 200Mb 0.0ms DropTail]
+set linkQF [$ns duplex-link $nodeQ $nodeF 200Mb 0.0ms DropTail]
+set linkRD [$ns duplex-link $nodeR $nodeD 200Mb 0.0ms DropTail]
+set linkSQ [$ns duplex-link $nodeS $nodeQ 200Mb 0.0ms DropTail]
+set linkTD [$ns duplex-link $nodeT $nodeD 200Mb 0.0ms DropTail]
+
+
+# Client Links
+set swClientN [$ns make-lan "$clientPoolN1 $clientPoolN2 $nodeN" 100Mb 0.0ms]
+set swClientG [$ns make-lan "$clientPoolG1 $clientPoolG2 $nodeG" 100Mb 0.0ms]
+set swClientS [$ns make-lan "$clientPoolS1 $clientPoolS2 $nodeS" 100Mb 0.0ms]
+
+$ns rtproto Manual
+$ns run

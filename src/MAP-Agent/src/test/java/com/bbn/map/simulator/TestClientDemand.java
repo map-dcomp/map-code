@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -62,9 +62,9 @@ import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
+import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
 import com.bbn.protelis.networkresourcemanagement.ResourceSummary;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
@@ -105,7 +105,6 @@ public class TestClientDemand {
         final ApplicationCoordinates service = new ApplicationCoordinates("test", "test-service", "1");
         final double expectedCpuLoad = 0.5;
         final double loadTolerance = 8E-4;
-        final double expectedLinkLoad = 50;
         final String expectedSourceRegionName = "A";
         final RegionIdentifier expectedSourceRegion = new StringRegionIdentifier(expectedSourceRegionName);
 
@@ -179,22 +178,6 @@ public class TestClientDemand {
                         final ResourceReport report = resourceManager.getCurrentResourceReport(estimationWindow);
                         Assert.assertNotNull("Resource report", report);
 
-                        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = report
-                                .getContainerNetworkLoad();
-                        networkLoad.forEach((ifce, neighborLoad) -> {
-                            neighborLoad.forEach((flow, sourceLoad) -> {
-                                sourceLoad.forEach((svc, svcLoad) -> {
-                                    final Double value = svcLoad.get(LinkAttribute.DATARATE_TX);
-                                    Assert.assertThat(svc + " is missing datarate on network load", value,
-                                            is(notNullValue()));
-
-                                    Assert.assertThat("network load datarate", value,
-                                            closeTo(expectedLinkLoad, loadTolerance));
-
-                                });
-                            });
-                        });
-
                     } // foreach controller
 
                     LOGGER.info("Finished checking {}", estimationWindow);
@@ -231,58 +214,64 @@ public class TestClientDemand {
             sim.startSimulation();
             sim.startClients();
             SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+
+            LOGGER.info("Stopping the clock");
             clock.stopClock();
 
-            // check all estimation windows
-            for (final ResourceReport.EstimationWindow estimationWindow : ResourceReport.EstimationWindow.values()) {
-                try (CloseableThreadContext.Instance context = CloseableThreadContext
-                        .push(estimationWindow.toString())) {
-                    LOGGER.info("Checking estimation window: " + estimationWindow);
+            // only check LONG as SHORT is not computed by AP
+            final ResourceReport.EstimationWindow estimationWindow = ResourceReport.EstimationWindow.LONG;
 
-                    // region is unknown because the compute stats don't know
-                    // the source
-                    final double regionTaskContainerLoad = sumTaskContainerLoad(sim, estimationWindow);
+            try (CloseableThreadContext.Instance context = CloseableThreadContext.push(estimationWindow.toString())) {
+                LOGGER.info("Checking estimation window: " + estimationWindow);
 
-                    boolean foundDcop = false;
-                    for (final Controller server : sim.getAllControllers()) {
-                        if (server.isRunDCOP()) {
-                            LOGGER.info("DCOP is running on node: " + server.getName());
-                            foundDcop = true;
+                // region is unknown because the compute stats don't know
+                // the source
+                final double regionTaskContainerLoad = sumTaskContainerLoad(sim, estimationWindow);
 
-                            // only the DCOP node will have the complete region
-                            // summary
+                boolean foundDcop = false;
+                for (final Controller server : sim.getAllControllers()) {
+                    if ((server.isRunDCOP() && EstimationWindow.LONG.equals(estimationWindow))
+                            || (server.isRunRLG() && EstimationWindow.SHORT.equals(estimationWindow))) {
+                        LOGGER.info("Checking node: {} rlg? {} dcop? {} window: {}", server.getName(),
+                                server.isRunDCOP(), server.isRunRLG(), estimationWindow);
+                        foundDcop = true;
 
-                            final ResourceSummary summary = server.getNetworkState().getRegionSummary(estimationWindow);
-                            final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> summaryServerLoad = summary
-                                    .getServerLoad();
+                        // only the DCOP node will have the complete region
+                        // summary
 
-                            LOGGER.info("summary serverLoad: {} on {}", summaryServerLoad, server.getName());
+                        final ResourceSummary summary;
+                        if (server.isRunDCOP() && EstimationWindow.LONG.equals(estimationWindow)) {
+                            summary = server.getDcopResourceSummary();
+                        } else {
+                            summary = server.getRlgResourceSummary();
+                        }
+                        final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> summaryServerLoad = summary
+                                .getServerLoad();
 
-                            double summaryFromReports = 0;
-                            for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> serverLoadEntry : summaryServerLoad
-                                    .entrySet()) {
-                                for (final Map.Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> regionEntry : serverLoadEntry
-                                        .getValue().entrySet()) {
-                                    final Double v = regionEntry.getValue().get(NodeAttribute.TASK_CONTAINERS);
-                                    if (null != v) {
-                                        summaryFromReports += v.doubleValue();
-                                    }
-                                }
+                        LOGGER.info("summary serverLoad: {} on {}", summaryServerLoad, server.getName());
+
+                        double summaryFromReports = 0;
+                        for (final Map.Entry<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> serverLoadEntry : summaryServerLoad
+                                .entrySet()) {
+                            for (final Map.Entry<RegionIdentifier, ImmutableMap<NodeAttribute, Double>> regionEntry : serverLoadEntry
+                                    .getValue().entrySet()) {
+                                final double v = regionEntry.getValue().getOrDefault(NodeAttribute.TASK_CONTAINERS, 0D);
+                                summaryFromReports += v;
                             }
-
-                            // check that the server load is the summary of all
-                            // resource
-                            // reports in the region
-                            Assert.assertEquals("Checking estimation window: " + estimationWindow, summaryFromReports,
-                                    regionTaskContainerLoad, demandTolerance);
                         }
 
-                    } // foreach server
+                        // check that the server load is the summary of all
+                        // resource
+                        // reports in the region
+                        Assert.assertEquals("Checking estimation window: " + estimationWindow, summaryFromReports,
+                                regionTaskContainerLoad, demandTolerance);
+                    }
 
-                    Assert.assertTrue("Didn't find DCOP", foundDcop);
-                    LOGGER.info("Finished checking {}", estimationWindow);
-                } // logging context
-            } // foreach estimation window
+                } // foreach server
+
+                Assert.assertTrue("Didn't find DCOP", foundDcop);
+                LOGGER.info("Finished checking {}", estimationWindow);
+            } // logging context
         } // use simulation
     }
 
@@ -399,29 +388,27 @@ public class TestClientDemand {
                     }
                     Assert.assertNotNull("Other region not found", otherRegion);
 
-                    for (final ResourceReport.EstimationWindow estimationWindow : ResourceReport.EstimationWindow
-                            .values()) {
-                        try (CloseableThreadContext.Instance context = CloseableThreadContext
-                                .push(estimationWindow.toString())) {
-                            LOGGER.info("Checking estimation window: " + estimationWindow);
+                    final ResourceReport.EstimationWindow estimationWindow = ResourceReport.EstimationWindow.LONG;
+                    try (CloseableThreadContext.Instance context = CloseableThreadContext
+                            .push(estimationWindow.toString())) {
+                        LOGGER.info("Checking estimation window: " + estimationWindow);
 
-                            final ResourceSummary summary = server.getNetworkState().getRegionSummary(estimationWindow);
-                            final ImmutableMap<RegionIdentifier, ImmutableMap<LinkAttribute, Double>> networkCapacity = summary
-                                    .getNetworkCapacity();
-                            final ImmutableMap<LinkAttribute, Double> networkCapacityToOther = networkCapacity
-                                    .get(otherRegion);
-                            Assert.assertNotNull("No network capacity to " + otherRegion + " from " + thisRegion,
-                                    networkCapacityToOther);
+                        final ResourceSummary summary = server.getDcopResourceSummary();
+                        final ImmutableMap<RegionIdentifier, ImmutableMap<LinkAttribute, Double>> networkCapacity = summary
+                                .getNetworkCapacity();
+                        final ImmutableMap<LinkAttribute, Double> networkCapacityToOther = networkCapacity
+                                .get(otherRegion);
+                        Assert.assertNotNull("No network capacity to " + otherRegion + " from " + thisRegion,
+                                networkCapacityToOther);
 
-                            final Double capacityValue = networkCapacityToOther.get(datarateAttribute);
-                            Assert.assertNotNull("No datarate", capacityValue);
+                        final Double capacityValue = networkCapacityToOther.get(datarateAttribute);
+                        Assert.assertNotNull("No datarate", capacityValue);
 
-                            Assert.assertEquals("Incorrect network capacity", expectedNetworkCapacity, capacityValue,
-                                    capacityTolerance);
+                        Assert.assertEquals("Incorrect network capacity", expectedNetworkCapacity, capacityValue,
+                                capacityTolerance);
 
-                            LOGGER.info("Finished checking {}", estimationWindow);
-                        } // logging context
-                    } // foreach estimation window
+                        LOGGER.info("Finished checking {}", estimationWindow);
+                    } // logging context
 
                 } // DCOP node
 

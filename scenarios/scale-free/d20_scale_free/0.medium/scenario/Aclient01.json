@@ -1,0 +1,10 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": true,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Aclient01",
+    "region": "A",
+    "underlay": false
+}

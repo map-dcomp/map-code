@@ -1,5 +1,5 @@
 #BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-# Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+# Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 # To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 # the exception of the dcop implementation identified below (see notes).
 # 
@@ -32,12 +32,12 @@
 #!/usr/bin/env python3
 
 """
-Plot load or SHORT demand for each service on the same graph along with capacity.
+Plot load, LONG and SHORT demand for each service on the same graph along with capacity.
 
 creates graphs:
-  - {load, demand, capacity}-{attr}.png
-  - {load, demand, capacity}-{attr}-{app}.png
-  - {load, demand, capacity}-{attr}-{region}.png
+  - {load, demand-{long,short}, capacity}-{attr}.png
+  - {load, demand-{long,short}, capacity}-{attr}-{app}.png
+  - {load, demand-{long,short}, capacity}-{attr}-{region}.png
 """
 
 import warnings
@@ -62,6 +62,7 @@ with warnings.catch_warnings():
     import pandas as pd
     import map_utils
     import multiprocessing
+    import datetime
 
 
 script_dir=os.path.abspath(os.path.dirname(__file__))
@@ -73,10 +74,8 @@ def get_logger():
 def process_load_or_demand(time, node_name, data, compute_data):
     # data: attr -> app -> ncp -> timestamp -> value
     for appStr, app_compute_data in compute_data.items():
-        match = re.match(r'^AppCoordinates {\S+,\s*(\S+),\s*\S+}$', appStr)
-        if match:
-            app = match.group(1)
-
+        app = map_utils.get_service_artifact(appStr)
+        if app:
             for source, source_compute_data in app_compute_data.items():
                 for attr, value in source_compute_data.items():
                     attr_compute_data = data.get(attr, dict())
@@ -123,17 +122,19 @@ def process_container_report(data_capacity, time, container_name_short, containe
 
             
 def process_resource_report(name, data_load, data_demand, data_capacity, node_containers, time, resource_report):
-    
-    compute_load = resource_report['computeLoad']
-    process_load_or_demand(time, name, data_load, compute_load)
+
+    if data_load is not None:
+        compute_load = resource_report['computeLoad']
+        process_load_or_demand(time, name, data_load, compute_load)
 
     compute_demand = resource_report['computeDemand']
     process_load_or_demand(time, name, data_demand, compute_demand)
 
-    for container_name, container_report in resource_report['containerReports'].items():
-        container_name_short = container_name.split('.')[0]
-        node_containers.add(container_name_short)
-        process_container_report(data_capacity, time, container_name_short, container_report)
+    if data_capacity is not None:
+        for container_name, container_report in resource_report['containerReports'].items():
+            container_name_short = container_name.split('.')[0]
+            node_containers.add(container_name_short)
+            process_container_report(data_capacity, time, container_name_short, container_report)
 
 
 def sum_values(data):
@@ -264,50 +265,72 @@ def sum_values_by_region(data, node_region):
     return result
 
 
-def output_graphs(output, capacity, data, label):
+def output_graphs(first_timestamp, output, capacity, data, label):
     """
     Create a graph per node attribute.
     Creates files with names <label>-<attribute>.png
     
     Args:
+        first_timestamp(datetime.datetime): when the simulation started 
         output (Path): output directory
         data (dict): attr -> app -> timestamp -> value
         label (str): used to label the graph and generate the filenames
         capacity: attr -> app -> timestamp -> value
     """
 
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+    
     try:
         for attr, attr_data in data.items():
             frames = list()
 
-            fig, ax = plt.subplots()
-            map_utils.set_figure_size(fig)
+            fig, ax = map_utils.subplots()
             ax.set_title(f"{attr} {label}")
             ax.set_xlabel("Time (minutes)")
-            ax.grid(alpha=0.5, axis='y')
 
+            max_minutes = 0
+            stack_xs = None
+            stack_ys = list()
+            stack_labels = list()
+            total_capacity = None
             if attr in capacity and 'QueueLength' != attr:
                 for app, app_data in sorted(capacity[attr].items()):
                     if len(app_data) > 0:
                         pairs = sorted(app_data.items())
                         timestamps, values = zip(*pairs)
-                        first_timestamp = timestamps[0]
-                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                        max_minutes = max(max_minutes, max(times))
 
                         series_label=f"{app} capacity"
                         frames.append(pd.DataFrame(list(values), index=times, columns=[series_label]))
                         ax.plot(times, values, label=series_label)
 
+                        if total_capacity is None:
+                            total_capacity = app_data.copy()
+                        else:
+                            total_capacity = {k: total_capacity.get(k, 0) + app_data.get(k, 0) for k in set(total_capacity) | set(app_data)}
+
+            app_timestamps = None
             for app, app_data in sorted(attr_data.items()):
                 if len(app_data) > 0:
                     pairs = sorted(app_data.items())
                     timestamps, values = zip(*pairs)
-                    first_timestamp = timestamps[0]
-                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                    max_minutes = max(max_minutes, max(times))
+
+                    if app_timestamps is None:
+                        app_timestamps = timestamps
 
                     frames.append(pd.DataFrame(list(values), index=times, columns=[app]))
                     ax.plot(times, values, label=app)
 
+                    if stack_xs is None:
+                        stack_xs = times
+                    stack_ys.append(values)
+                    stack_labels.append(app)
+
+            ax.set_xlim(left=0, right=max_minutes)
+                    
             handles, labels = ax.get_legend_handles_labels()
             lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
 
@@ -318,56 +341,99 @@ def output_graphs(output, capacity, data, label):
             # write out CSV of the plot data
             df = pd.concat(frames, axis=1)
             df.to_csv(output / f"{label}-{attr}.csv", index_label="relative minutes")
+
+            if app_timestamps is not None and total_capacity is not None:
+                # create stacked plot
+                fig, ax = map_utils.subplots()
+                ax.set_title(f"{attr} {label}")
+                ax.set_xlabel("Time (minutes)")
+                ax.set_xlim(left=0, right=max_minutes)
+                ax.stackplot(stack_xs, stack_ys, labels=stack_labels)
+
+                total_capacity = map_utils.fill_missing_times(app_timestamps, total_capacity)
+                ax.plot(stack_xs, total_capacity, label="Total allocated capacity")
+
+                handles, labels = ax.get_legend_handles_labels()
+                lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+
+                output_name = output / f"{label}-{attr}_stacked.png"
+                fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+                plt.close(fig)
+            elif 'QueueLength' != attr:
+                get_logger().warning("Missing data to draw stackplot for %s %s", label, attr)
+            
+
     except:
         get_logger().exception("Unexpected error")
         
         
-def output_graphs_per_region(output, capacity, data, label):
+def output_graphs_per_region(first_timestamp, output, capacity, data, label):
     """
     Create a graph per node attribute.
     Creates files with names <label>-<attribute>-<region>.png
     
     Args:
+        first_timestamp(datetime.datetime): when the simulation started 
         output (Path): output directory
         data (dict): region -> attr -> app -> timestamp -> value
         label (str): used to label the graph and generate the filenames
         capacity: region -> attr -> app -> timestamp -> value
     """
 
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+
+    max_minutes = 0
     try:
         for region, region_data in data.items():
             capacity_region = capacity[region]
             
             for attr, attr_data in region_data.items():
                 frames = list()
-                fig, ax = plt.subplots()
-                map_utils.set_figure_size(fig)
+                fig, ax = map_utils.subplots()
                 ax.set_title(f"{attr} {label} in {region}")
                 ax.set_xlabel("Time (minutes)")
-                ax.grid(alpha=0.5, axis='y')
-
+                
+                stack_xs = None
+                stack_ys = list()
+                stack_labels = list()
+                total_capacity = None
                 if attr in capacity_region and 'QueueLength' != attr:
                     for app, app_data in sorted(capacity_region[attr].items()):
                         if len(app_data) > 0:
                             pairs = sorted(app_data.items())
                             timestamps, values = zip(*pairs)
-                            first_timestamp = timestamps[0]
-                            times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                            times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                            max_minutes = max(max_minutes, max(times))
 
                             series_label=f"{app} capacity"
                             frames.append(pd.DataFrame(list(values), index=list(times), columns=[series_label]))
                             ax.plot(times, values, label=series_label)
 
+                            if total_capacity is None:
+                                total_capacity = app_data.copy()
+                            else:
+                                total_capacity = {k: total_capacity.get(k, 0) + app_data.get(k, 0) for k in set(total_capacity) | set(app_data)}
+
+                app_timestamps = None
                 for app, app_data in sorted(attr_data.items()):
                     if len(app_data) > 0:
                         pairs = sorted(app_data.items())
                         timestamps, values = zip(*pairs)
-                        first_timestamp = timestamps[0]
-                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                        max_minutes = max(max_minutes, max(times))
 
+                        if app_timestamps is None:
+                            app_timestamps = timestamps
+                        
                         frames.append(pd.DataFrame(list(values), index=list(times), columns=[app]))
                         ax.plot(times, values, label=app)
 
+                        if stack_xs is None:
+                            stack_xs = times
+                        stack_ys.append(values)
+                        stack_labels.append(app)
+
+                ax.set_xlim(left=0, right=max_minutes)                        
                 handles, labels = ax.get_legend_handles_labels()
                 lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
 
@@ -378,16 +444,38 @@ def output_graphs_per_region(output, capacity, data, label):
                 # write out CSV of the plot data
                 df = pd.concat(frames, axis=1)
                 df.to_csv(output / f"{label}-{attr}-{region}.csv", index_label="relative minutes")
+
+                if app_timestamps is not None and total_capacity is not None:
+                    # create stacked plot
+                    fig, ax = map_utils.subplots()
+                    ax.set_title(f"{attr} {label} in {region}")
+                    ax.set_xlabel("Time (minutes)")
+                    ax.set_xlim(left=0, right=max_minutes)                        
+                    ax.stackplot(stack_xs, stack_ys, labels=stack_labels)
+
+                    total_capacity = map_utils.fill_missing_times(app_timestamps, total_capacity)
+                    ax.plot(stack_xs, total_capacity, label="Total allocated capacity")
+
+                    handles, labels = ax.get_legend_handles_labels()
+                    lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+
+                    output_name = output / f"{label}-{attr}-{region}_stacked.png"
+                    fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+                    plt.close(fig)
+                elif 'QueueLength' != attr:
+                    get_logger().warning("Missing data to draw stackplot for %s %s in %s", label, attr, region)
+                
     except:
         get_logger().exception("Unexpected error")
 
 
-def output_region_graphs_for_app(output, capacity, data, label, app):
+def output_region_graphs_for_app(first_timestamp, output, capacity, data, label, app):
     """
     Create a graph per node attribute for the specified app with a series for each region.
     Creates files with names <label>-<attribute>-<app>.png
     
     Args:
+        first_timestamp(datetime.datetime): when the simulation started 
         output (Path): output directory
         data (dict): region -> attr -> app -> timestamp -> value
         label (str): used to label the graph and generate the filenames
@@ -395,6 +483,9 @@ def output_region_graphs_for_app(output, capacity, data, label, app):
         app (str): service to generate the graph for
     """
 
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+
+    max_minutes = 0
     try:
         all_regions = set(capacity.keys())
         all_attrs = set()
@@ -402,12 +493,14 @@ def output_region_graphs_for_app(output, capacity, data, label, app):
             all_attrs.update(region_data.keys())
 
         for attr in all_attrs:
+            stack_xs = None
+            stack_ys = list()
+            stack_labels = list()
+            
             frames = list()
-            fig, ax = plt.subplots()
-            map_utils.set_figure_size(fig)
+            fig, ax = map_utils.subplots()
             ax.set_title(f"{attr} {label} for {app}")
             ax.set_xlabel("Time (minutes)")
-            ax.grid(alpha=0.5, axis='y')
 
             for region in sorted(all_regions):
                 region_data = data.get(region, dict())
@@ -419,8 +512,8 @@ def output_region_graphs_for_app(output, capacity, data, label, app):
                     if len(app_data) > 0:
                         pairs = sorted(app_data.items())
                         timestamps, values = zip(*pairs)
-                        first_timestamp = timestamps[0]
-                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                        max_minutes = max(max_minutes, max(times))
 
                         series_label=f"{region} capacity"
                         frames.append(pd.DataFrame(list(values), index=list(times), columns=[series_label]))
@@ -430,12 +523,19 @@ def output_region_graphs_for_app(output, capacity, data, label, app):
                 if len(app_data) > 0:
                     pairs = sorted(app_data.items())
                     timestamps, values = zip(*pairs)
-                    first_timestamp = timestamps[0]
-                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                    max_minutes = max(max_minutes, max(times))
 
                     frames.append(pd.DataFrame(list(values), index=list(times), columns=[region]))
                     ax.plot(times, values, label=region)
+                    
+                    if stack_xs is None:
+                        stack_xs = times
+                    stack_ys.append(values)
+                    stack_labels.append(region)
 
+
+            ax.set_xlim(left=0, right=max_minutes)
             handles, labels = ax.get_legend_handles_labels()
             lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
 
@@ -446,48 +546,74 @@ def output_region_graphs_for_app(output, capacity, data, label, app):
             # write out CSV of the plot data
             df = pd.concat(frames, axis=1)
             df.to_csv(output / f"{label}-{attr}-{app}.csv", index_label="relative minutes")
+
+            # create stacked plot
+            fig, ax = map_utils.subplots()
+            ax.set_title(f"{attr} {label} for {app}")
+            ax.set_xlabel("Time (minutes)")
+            ax.set_xlim(left=0, right=max_minutes)
+            ax.stackplot(stack_xs, stack_ys, labels=stack_labels)
+
+            handles, labels = ax.get_legend_handles_labels()
+            lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+
+            output_name = output / f"{label}-{attr}-{app}_stacked.png"
+            fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+            plt.close(fig)
+            
     except:
         get_logger().exception("Unexpected error")
         
 
-def output_capacity_graph(output, capacity):
+def output_capacity_graph(first_timestamp, output, capacity):
     """
     Create a capacity graph per node attribute.
     Creates files with names capacity-<attribute>.png
     
     Args:
+        first_timestamp(datetime.datetime): when the simulation started 
         output (Path): output directory
         capacity (boolean): if true output a graph of capacity only
     """
 
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+    max_minutes = 0
     try:
         label='capacity'
         for attr, attr_data in capacity.items():
             frames = list()
-            fig, ax = plt.subplots()
-            map_utils.set_figure_size(fig)
+            fig, ax = map_utils.subplots()
             ax.set_title(f"{attr} {label}")
             ax.set_xlabel("Time (minutes)")
-            ax.grid(alpha=0.5, axis='y')
 
+            stack_xs = None
+            stack_ys = list()
+            stack_labels = list()
+            
             if 'QueueLength' == attr:
                 # graphing queue length capacity doesn't work well because we've hardcoded it to be a big number
-                continuen
+                continue
 
             for app, app_data in sorted(attr_data.items()):
                 if len(app_data) > 0:
                     pairs = sorted(app_data.items())
                     timestamps, values = zip(*pairs)
-                    first_timestamp = timestamps[0]
-                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                    max_minutes = max(max_minutes, max(times))
 
                     series_label=f"{app} capacity"
                     frames.append(pd.DataFrame(list(values), index=list(times), columns=[series_label]))
                     ax.plot(times, values, label=series_label)
 
+                    if stack_xs is None:
+                        stack_xs = times
+                    stack_ys.append(values)
+                    stack_labels.append(series_label)
+                    
             handles, labels = ax.get_legend_handles_labels()
             lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
 
+            ax.set_xlim(left=0, right=max_minutes)
             output_name = output / f"{label}-{attr}.png"
             fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
             plt.close(fig)
@@ -495,32 +621,51 @@ def output_capacity_graph(output, capacity):
             # write out CSV of the plot data
             df = pd.concat(frames, axis=1)
             df.to_csv(output / f"{label}-{attr}.csv", index_label="relative minutes")
+
+            # create stacked plot
+            fig, ax = map_utils.subplots()
+            ax.set_title(f"{attr} {label}")
+            ax.set_xlabel("Time (minutes)")
+            ax.set_xlim(left=0, right=max_minutes)
+            ax.stackplot(stack_xs, stack_ys, labels=stack_labels)
+
+            handles, labels = ax.get_legend_handles_labels()
+            lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+
+            output_name = output / f"{label}-{attr}_stacked.png"
+            fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+            plt.close(fig)
             
     except:
         get_logger().exception("Unexpected error")
 
 
-def output_capacity_graph_per_region(output, capacity):
+def output_capacity_graph_per_region(first_timestamp, output, capacity):
     """
     Create a capacity graph per node attribute per region.
     Creates files with names capacity-<attribute>-<region>.png
 
     Args:
+        first_timestamp(datetime.datetime): when the simulation started 
         output (Path): output directory
         capacity (boolean): if true output a graph of capacity only
     """
 
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+    max_minutes = 0
     try:
         label='capacity'
         for region, region_data in capacity.items():
             for attr, attr_data in region_data.items():
                 frames = list()
-                fig, ax = plt.subplots()
-                map_utils.set_figure_size(fig)
+                fig, ax = map_utils.subplots()
                 ax.set_title(f"{attr} {label} in {region}")
                 ax.set_xlabel("Time (minutes)")
-                ax.grid(alpha=0.5, axis='y')
 
+                stack_xs = None
+                stack_ys = list()
+                stack_labels = list()
+                
                 if 'QueueLength' == attr:
                     # graphing queue length capacity doesn't work well because we've hardcoded it to be a big number
                     continue
@@ -529,13 +674,19 @@ def output_capacity_graph_per_region(output, capacity):
                     if len(app_data) > 0:
                         pairs = sorted(app_data.items())
                         timestamps, values = zip(*pairs)
-                        first_timestamp = timestamps[0]
-                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                        times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                        max_minutes = max(max_minutes, max(times))
 
                         series_label=f"{app} capacity"
                         frames.append(pd.DataFrame(list(values), index=list(times), columns=[series_label]))
                         ax.plot(times, values, label=series_label)
 
+                        if stack_xs is None:
+                            stack_xs = times
+                        stack_ys.append(values)
+                        stack_labels.append(series_label)
+                        
+                ax.set_xlim(left=0, right=max_minutes)
                 handles, labels = ax.get_legend_handles_labels()
                 lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
 
@@ -546,21 +697,39 @@ def output_capacity_graph_per_region(output, capacity):
                 # write out CSV of the plot data
                 df = pd.concat(frames, axis=1)
                 df.to_csv(output / f"{label}-{attr}-{region}.csv", index_label="relative minutes")
+
+                # create stacked plot
+                fig, ax = map_utils.subplots()
+                ax.set_title(f"{attr} {label} in {region}")
+                ax.set_xlabel("Time (minutes)")
+                ax.set_xlim(left=0, right=max_minutes)
+                ax.stackplot(stack_xs, stack_ys, labels=stack_labels)
+
+                handles, labels = ax.get_legend_handles_labels()
+                lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+
+                output_name = output / f"{label}-{attr}-{region}_stacked.png"
+                fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+                plt.close(fig)
+                
     except:
         get_logger().exception("Unexpected error")
 
 
-def output_region_capacity_graph_for_app(output, capacity, app):
+def output_region_capacity_graph_for_app(first_timestamp, output, capacity, app):
     """
     Create a graph per node attribute for the specified service with a series for each region.
     Creates files with names capacity-<attribute>-<app>.png
     
     Args:
+        first_timestamp(datetime.datetime): when the simulation started 
         output (Path): output directory
         capacity (boolean): if true output a graph of capacity only
         app (str): name of the service to generate the graph for
     """
 
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
+    max_minutes = 0
     try:
         label='capacity'
 
@@ -575,11 +744,13 @@ def output_region_capacity_graph_for_app(output, capacity, app):
                 continue
 
             frames = list()
-            fig, ax = plt.subplots()
-            map_utils.set_figure_size(fig)
+            fig, ax = map_utils.subplots()
             ax.set_title(f"{attr} {label} for {app}")
             ax.set_xlabel("Time (minutes)")
-            ax.grid(alpha=0.5, axis='y')
+            
+            stack_xs = None
+            stack_ys = list()
+            stack_labels = list()
 
             for region in sorted(all_regions):
                 region_data = capacity.get(region, dict())
@@ -589,13 +760,19 @@ def output_region_capacity_graph_for_app(output, capacity, app):
                 if len(app_data) > 0:
                     pairs = sorted(app_data.items())
                     timestamps, values = zip(*pairs)
-                    first_timestamp = timestamps[0]
-                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp) for t in timestamps]
+                    times = [map_utils.timestamp_to_minutes(float(t) - first_timestamp_ms) for t in timestamps]
+                    max_minutes = max(max_minutes, max(times))
 
                     series_label=f"{region} capacity"
                     frames.append(pd.DataFrame(list(values), index=list(times), columns=[series_label]))
                     ax.plot(times, values, label=series_label)
 
+                    if stack_xs is None:
+                        stack_xs = times
+                    stack_ys.append(values)
+                    stack_labels.append(series_label)
+                    
+            ax.set_xlim(left=0, right=max_minutes)
             handles, labels = ax.get_legend_handles_labels()
             lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
 
@@ -606,6 +783,21 @@ def output_region_capacity_graph_for_app(output, capacity, app):
             # write out CSV of the plot data
             df = pd.concat(frames, axis=1)
             df.to_csv(output / f"{label}-{attr}-{app}.csv", index_label="relative minutes")
+
+            # create stacked plot
+            fig, ax = map_utils.subplots()
+            ax.set_title(f"{attr} {label} for {app}")
+            ax.set_xlabel("Time (minutes)")
+            ax.set_xlim(left=0, right=max_minutes)
+            ax.stackplot(stack_xs, stack_ys, labels=stack_labels)
+
+            handles, labels = ax.get_legend_handles_labels()
+            lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+
+            output_name = output / f"{label}-{attr}-{app}_stacked.png"
+            fig.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
+            plt.close(fig)
+            
     except:
         get_logger().exception("Unexpected error")
             
@@ -666,7 +858,12 @@ def fill_in_missing_apps(all_apps, data, ncp, node_all_times):
             data[attr] = attr_compute_data
 
                 
-def process_node(all_apps, data_load, data_demand, data_capacity, node_dir, container_node):
+def process_node(first_timestamp, all_apps, data_load, data_demand_short, data_demand_long, data_capacity, node_dir, container_node):
+    """
+    Args:
+        first_timestamp(datetime.datetime): when the simulation started
+    """
+    
     node_all_times = set()
     node_containers = set()
     node_name_dir = map_utils.find_ncp_folder(node_dir)
@@ -675,6 +872,8 @@ def process_node(all_apps, data_load, data_demand, data_capacity, node_dir, cont
         return
 
     ncp = map_utils.node_name_from_dir(node_name_dir)
+
+    first_timestamp_ms = first_timestamp.timestamp() * 1000
     
     get_logger().debug("Processing ncp folder %s from %s. NCP name: %s", node_name_dir, node_dir, ncp)
     for time_dir in node_name_dir.iterdir():
@@ -682,6 +881,10 @@ def process_node(all_apps, data_load, data_demand, data_capacity, node_dir, cont
             continue
 
         time = int(time_dir.stem)
+        if time < first_timestamp_ms:
+            # ignore data before the start of the simulation
+            continue
+        
         node_all_times.add(time)
 
         resource_report_file = time_dir / 'resourceReport-SHORT.json'
@@ -689,12 +892,22 @@ def process_node(all_apps, data_load, data_demand, data_capacity, node_dir, cont
             try:
                 with open(resource_report_file, 'r') as f:
                     resource_report = json.load(f)
-                process_resource_report(ncp, data_load, data_demand, data_capacity, node_containers, time, resource_report)
+                process_resource_report(ncp, data_load, data_demand_short, data_capacity, node_containers, time, resource_report)
             except json.decoder.JSONDecodeError:
                 get_logger().warning("Problem reading %s, skipping", resource_report_file)
 
+        resource_report_file = time_dir / 'resourceReport-LONG.json'
+        if resource_report_file.exists():
+            try:
+                with open(resource_report_file, 'r') as f:
+                    resource_report = json.load(f)
+                process_resource_report(ncp, None, data_demand_long, None, node_containers, time, resource_report)
+            except json.decoder.JSONDecodeError:
+                get_logger().warning("Problem reading %s, skipping", resource_report_file)
+                
     fill_in_missing_apps(all_apps, data_load, ncp, node_all_times)
-    fill_in_missing_apps(all_apps, data_demand, ncp, node_all_times)
+    fill_in_missing_apps(all_apps, data_demand_short, ncp, node_all_times)
+    fill_in_missing_apps(all_apps, data_demand_long, ncp, node_all_times)
             
     fill_in_missing_containers(all_apps, data_capacity, node_all_times, node_containers)
 
@@ -702,131 +915,99 @@ def process_node(all_apps, data_load, data_demand, data_capacity, node_dir, cont
         container_node[container] = ncp
 
 
-def gather_region_info(sim_output):
-    """
-    Arguments:
-        sim_output (Path): the simulation output directory
-    Returns:
-        dict: node name (str) to region name (str)
-    """
-    node_regions = dict()
-    scenario = sim_output / 'inputs/scenario'
-    if not scenario.exists():
-        return node_regions
-    
-    for node_info in scenario.glob('*.json'):
-        if not node_info.is_file():
-            continue
-
-        try:
-            with open(node_info, 'r') as f:
-                node_data = json.load(f)
-        except json.decoder.JSONDecodeError:
-            get_logger().warning("Problem reading node information %s, skipping", node_info)
-        if 'region' in node_data:
-            node_name = node_info.stem
-            node_regions[node_name] = node_data['region']
-        
-    return node_regions
-
-
-def gather_all_apps(sim_output):
-    new_location = sim_output / 'inputs/scenario/service-configurations.json'
-    old_location = sim_output / 'inputs/service-configurations.json'
-    if new_location.exists():
-        location = new_location
-    elif old_location.exists():
-        location = old_location
-    else:
-        raise RuntimeError("Cannot find path to service-configurations.json")
-    
-    with open(location) as f:
-        services = json.load(f)
-
-    all_apps = set()
-    for service_config in services:
-        service = service_config['service']
-        app = service['artifact']
-        all_apps.add(app)
-    return all_apps
-
-
 def main_method(args):
+    with open(args.first_timestamp_file) as f:
+        ts_str = f.readline().strip()
+        first_timestamp = map_utils.log_timestamp_to_datetime(ts_str)
+    get_logger().info("Simulation started at %s", first_timestamp)
+    
     sim_output = Path(args.sim_output)
     if not sim_output.exists():
         get_logger().error("%s does not exist", sim_output)
         return 1
 
+    scenario_dir = Path(args.scenario)
+    if not scenario_dir.exists():
+        get_logger().error("%s does not exist", scenario_dir)
+        return 1
+    
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
 
-    all_apps = gather_all_apps(sim_output)
+    all_apps = map_utils.gather_all_services(scenario_dir)
 
     # container_name -> ncp_name
     container_node = dict()
     
     # node_attr -> app -> ncp_name -> timestamp -> value
     data_load = dict() 
-    data_demand = dict()
+    data_demand_short = dict()
+    data_demand_long = dict()
     # node_attr -> app -> container_name -> timestamp -> value
     data_capacity = dict()
     for node_dir in sim_output.iterdir():
         if not node_dir.is_dir():
             continue
-        process_node(all_apps, data_load, data_demand, data_capacity, node_dir, container_node)
+        process_node(first_timestamp, all_apps, data_load, data_demand_short, data_demand_long, data_capacity, node_dir, container_node)
 
-    with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-        results = list()
+    results = list()
 
-        ### region graphs
-        
-        # ncp_name -> region_name
-        node_region = gather_region_info(sim_output)
-        get_logger().debug("node_region: %s", node_region)
+    ## process raw data
+    get_logger().info("Processing raw data")
 
-        data_load_per_region_result = pool.apply_async(func=sum_values_by_region, args=[data_load, node_region])
-        data_demand_per_region_result = pool.apply_async(func=sum_values_by_region, args=[data_demand, node_region])
-        capacity_per_region_result = pool.apply_async(func=sum_capacity_values_by_region, args=[data_capacity, node_region, container_node])
+    # ncp_name -> region_name
+    node_region = map_utils.gather_region_info(scenario_dir)
+    get_logger().debug("node_region: %s", node_region)
 
-        data_load_per_region = data_load_per_region_result.get()
-        data_demand_per_region = data_demand_per_region_result.get()
-        capacity_per_region = capacity_per_region_result.get()
+    get_logger().info("Summing values by region")
+    data_load_per_region = sum_values_by_region(data_load, node_region)
+    data_demand_short_per_region = sum_values_by_region(data_demand_short, node_region)
 
-        results.append(pool.apply_async(func=output_graphs_per_region, args=[output, capacity_per_region, data_load_per_region, 'load']))
-        results.append(pool.apply_async(func=output_graphs_per_region, args=[output, capacity_per_region, data_demand_per_region, 'demand']))
-        results.append(pool.apply_async(func=output_capacity_graph_per_region, args=[output, capacity_per_region]))
+    data_demand_long_per_region = sum_values_by_region(data_demand_long, node_region)
+    capacity_per_region = sum_capacity_values_by_region(data_capacity, node_region, container_node)
+    del container_node
+    del node_region
 
-        for app in all_apps:
-            results.append(pool.apply_async(func=output_region_graphs_for_app, args=[output, capacity_per_region, data_load_per_region, 'load', app]))
-            results.append(pool.apply_async(func=output_region_graphs_for_app, args=[output, capacity_per_region, data_demand_per_region, 'demand', app]))
-            results.append(pool.apply_async(func=output_region_capacity_graph_for_app, args=[output, capacity_per_region, app]))
+    get_logger().info("Summing load")
+    #get_logger().debug("Data load: %s", data_load)
+    # node_attr -> app -> timestamp -> value
+    data_load_summed = sum_values(data_load)
+    #get_logger().debug("Data load summed: %s", data_load_summed)
+    del data_load
 
-            
-        ### total graphs
-        
-        #get_logger().debug("Data load: %s", data_load)
-        # node_attr -> app -> timestamp -> value
-        data_load_summed_result = pool.apply_async(func=sum_values, args=[data_load])
-        #get_logger().debug("Data load summed: %s", data_load_summed)
-        
-        # node_attr -> app -> timestamp -> value
-        data_demand_summed_result = pool.apply_async(func=sum_values, args=[data_demand])
-        
-        #get_logger().debug("Data capacity: %s", data_capacity)
-        # node_attr -> app -> timestamp -> value
-        data_capacity_summed_result = pool.apply_async(func=sum_values, args=[data_capacity])
-        #get_logger().debug("Data capacity summed: %s", data_capacity_summed)
-        
-        data_load_summed = data_load_summed_result.get()
-        data_demand_summed = data_demand_summed_result.get()
-        data_capacity_summed = data_capacity_summed_result.get()
-        
-        results.append(pool.apply_async(func=output_graphs, args=[output, data_capacity_summed, data_load_summed, "load"]))
-        results.append(pool.apply_async(func=output_graphs, args=[output, data_capacity_summed, data_demand_summed, "demand"]))
-        results.append(pool.apply_async(func=output_capacity_graph, args=[output, data_capacity_summed]))
+    get_logger().info("Summing demand")
+    # node_attr -> app -> timestamp -> value
+    data_demand_short_summed = sum_values(data_demand_short)
+    data_demand_long_summed = sum_values(data_demand_long)
+    del data_demand_short
+    del data_demand_long
 
-        for result in results:
-            result.wait()
+    #get_logger().debug("Data capacity: %s", data_capacity)
+    # node_attr -> app -> timestamp -> value
+    data_capacity_summed = sum_values(data_capacity)
+    #get_logger().debug("Data capacity summed: %s", data_capacity_summed)
+    del data_capacity
+
+    get_logger().info("Starting graph creation")
+
+    output_graphs_per_region(first_timestamp, output, capacity_per_region, data_load_per_region, 'load')
+    output_graphs_per_region(first_timestamp, output, capacity_per_region, data_demand_short_per_region, 'demand-short')
+    output_graphs_per_region(first_timestamp, output, capacity_per_region, data_demand_long_per_region, 'demand-long')
+    output_capacity_graph_per_region(first_timestamp, output, capacity_per_region)
+
+    for app in all_apps:
+        output_region_graphs_for_app(first_timestamp, output, capacity_per_region, data_load_per_region, 'load', app)
+        output_region_graphs_for_app(first_timestamp, output, capacity_per_region, data_demand_short_per_region, 'demand-short', app)
+        output_region_graphs_for_app(first_timestamp, output, capacity_per_region, data_demand_long_per_region, 'demand-long', app)
+        output_region_capacity_graph_for_app(first_timestamp, output, capacity_per_region, app)
+
+
+    output_graphs(first_timestamp, output, data_capacity_summed, data_load_summed, "load")
+    output_graphs(first_timestamp, output, data_capacity_summed, data_demand_short_summed, "demand-short")
+    output_graphs(first_timestamp, output, data_capacity_summed, data_demand_long_summed, "demand-long")
+    output_capacity_graph(first_timestamp, output, data_capacity_summed)
+
+    get_logger().info("Finished")
         
     
 def main(argv=None):
@@ -850,11 +1031,16 @@ def main(argv=None):
     parser.add_argument("-l", "--logconfig", dest="logconfig", help="logging configuration (default: logging.json)", default='logging.json')
     parser.add_argument("--debug", dest="debug", help="Enable interactive debugger on error", action='store_true')
     parser.add_argument("-s", "--sim-output", dest="sim_output", help="Sim output directory (Required)", required=True)
+    parser.add_argument("--scenario", dest="scenario", help="Scenario directory (Required)", required=True)
     parser.add_argument("-o", "--output", dest="output", help="Output directory (Required)", required=True)
+    parser.add_argument("--first-timestamp-file", dest="first_timestamp_file", help="Path to file containing the log timestamp that the simulation started", required=True)
 
     args = parser.parse_args(argv)
 
     map_utils.setup_logging(default_path=args.logconfig)
+    if 'multiprocessing' in sys.modules:
+        import multiprocessing_logging
+        multiprocessing_logging.install_mp_handler()
 
     if args.debug:
         import pdb, traceback

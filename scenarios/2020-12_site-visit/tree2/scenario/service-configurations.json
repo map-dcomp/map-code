@@ -1,0 +1,50 @@
+[
+    {
+        "computeCapacity": {
+            "CPU": 1,
+            "TASK_CONTAINERS": 1
+        },
+        "defaultNodeRegion": "X",
+        "defaultNodes": {
+            "Xserver01": 1
+        },
+        "hostname": "appP1N1",
+        "imageName": "/v2/fake_load_server",
+        "initialInstances": 1,
+        "networkCapacity": {
+            "DATARATE_RX": 100,
+            "DATARATE_TX": 100
+        },
+        "priority": 1,
+        "serverPort": 7000,
+        "service": {
+            "artifact": "appP1N1",
+            "group": "com.bbn",
+            "version": 1
+        }
+    },
+    {
+        "computeCapacity": {
+            "CPU": 1,
+            "TASK_CONTAINERS": 1
+        },
+        "defaultNodeRegion": "X",
+        "defaultNodes": {
+            "Xserver02": 1
+        },
+        "hostname": "appP2N1",
+        "imageName": "/v2/fake_load_server",
+        "initialInstances": 1,
+        "networkCapacity": {
+            "DATARATE_RX": 100,
+            "DATARATE_TX": 100
+        },
+        "priority": 2,
+        "serverPort": 7000,
+        "service": {
+            "artifact": "appP2N1",
+            "group": "com.bbn",
+            "version": 1
+        }
+    }
+]

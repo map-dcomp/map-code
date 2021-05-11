@@ -1,0 +1,11 @@
+{
+    "DCOP": true,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "leader",
+    "name": "Qdcop",
+    "region": "Q",
+    "router": false,
+    "underlay": false
+}

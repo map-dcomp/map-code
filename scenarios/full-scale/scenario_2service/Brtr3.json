@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers_large",
+    "name": "Brtr3",
+    "region": "B",
+    "router": true,
+    "underlay": false
+}

@@ -1,0 +1,11 @@
+{
+    "DCOP": false,
+    "RLG": false,
+    "client": false,
+    "dns": true,
+    "hardware": "leader",
+    "name": "Sdns",
+    "region": "S",
+    "router": false,
+    "underlay": false
+}

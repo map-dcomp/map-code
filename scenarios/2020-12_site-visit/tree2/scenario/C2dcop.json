@@ -1,0 +1,10 @@
+{
+    "DCOP": true,
+    "RLG": false,
+    "client": false,
+    "dns": false,
+    "hardware": "no_containers",
+    "name": "C2dcop",
+    "region": "C2",
+    "underlay": false
+}

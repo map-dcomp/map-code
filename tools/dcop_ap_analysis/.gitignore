@@ -1,0 +1,7 @@
+target/
+*.log
+.classpath
+bin/
+build/
+/.apt_generated/
+.gradle

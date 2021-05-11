@@ -1,5 +1,5 @@
 /*BBN_LICENSE_START -- DO NOT MODIFY BETWEEN LICENSE_{START,END} Lines
-Copyright (c) <2017,2018,2019,2020>, <Raytheon BBN Technologies>
+Copyright (c) <2017,2018,2019,2020,2021>, <Raytheon BBN Technologies>
 To be applied to the DCOMP/MAP Public Source Code Release dated 2018-04-19, with
 the exception of the dcop implementation identified below (see notes).
 
@@ -42,7 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -54,7 +53,6 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.protelis.lang.datatype.DeviceUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +61,6 @@ import com.bbn.map.Controller;
 import com.bbn.map.appmgr.util.AppMgrUtils;
 import com.bbn.map.utils.LogExceptionHandler;
 import com.bbn.map.utils.MapLoggingConfigurationFactory;
-import com.bbn.protelis.common.testbed.termination.TerminationCondition;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.utils.SimpleClock;
@@ -461,6 +458,47 @@ public class SimulationRunner {
     }
 
     /**
+     * Time to wait before starting the agent algorithms.
+     */
+    public static final Duration ALGORITHM_START_WAIT = Duration.ofSeconds(30);
+    /**
+     * Time to wait after starting the agent algorithms before starting the
+     * clients.
+     */
+    public static final Duration CLIENT_START_WAIT = Duration.ofSeconds(1);
+
+    /**
+     * Start the agents and the clients after waiting for the agents to connect
+     * to AP and giving the algorithms time to start up. This simulates the wait
+     * time in hi-fi before everything starts.
+     * 
+     * @param sim
+     *            the simulator
+     */
+    public static void startAgentsAndClients(final Simulation sim) {
+
+        sim.startSimulation();
+
+        LOGGER.info("Waiting for all nodes to connect to their neighbors for AP");
+        sim.waitForAllNodesToConnectToNeighbors();
+        LOGGER.info("All nodes are connected for AP");
+
+        final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
+        LOGGER.info("Waiting {} AP rounds to ensure that it is stable", numApRoundsToStabilize);
+        SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
+
+        LOGGER.info("Starting the algorithms in {} seconds", ALGORITHM_START_WAIT.getSeconds());
+        final long algorithmStart = sim.getClock().getCurrentTime() + ALGORITHM_START_WAIT.toMillis();
+        sim.getAllControllers().forEach(c -> c.startAlgorithmsAt(algorithmStart));
+
+        final long clientStart = algorithmStart + CLIENT_START_WAIT.toMillis();
+        sim.getClock().waitUntilTime(clientStart);
+
+        LOGGER.info("Starting clients");
+        sim.startClients();
+    }
+
+    /**
      * Run the simulation.
      * 
      * @throws NullPointerException
@@ -510,26 +548,13 @@ public class SimulationRunner {
 
             final Thread dumperThread = new Thread(() -> dumperWorker(clock, sim), "Dumper");
 
-            sim.getScenario().setTerminationCondition(termination);
-
-            stopScenario = false;
-
             if (null != getOutputDirectory()) {
                 dumperThread.start();
             }
 
             sim.startSimulation();
 
-            LOGGER.info("Waiting for all nodes to connect to their neighbors for AP");
-            sim.waitForAllNodesToConnectToNeighbors();
-            LOGGER.info("All nodes are connected for AP");
-
-            final int numApRoundsToStabilize = SimUtils.computeRoundsToStabilize(sim);
-            LOGGER.info("Waiting {} AP rounds to ensure that it is stable", numApRoundsToStabilize);
-            SimUtils.waitForApRounds(sim, numApRoundsToStabilize);
-
-            LOGGER.info("Starting clients");
-            sim.startClients();
+            startAgentsAndClients(sim);
 
             if (null == getRuntime()) {
                 LOGGER.info("Waiting for all client simulators to exit");
@@ -543,7 +568,6 @@ public class SimulationRunner {
             }
 
             LOGGER.info("Stopping the simulation");
-            stopScenario = true;
             sim.stopSimulation();
         } catch (final IOException e) {
             LOGGER.error("Error reading one of the input files", e);
@@ -652,15 +676,6 @@ public class SimulationRunner {
             LOGGER.trace("Dumper thread exiting");
         }
     }
-
-    private boolean stopScenario;
-
-    private final transient TerminationCondition<Map<DeviceUID, Controller>> termination = new TerminationCondition<Map<DeviceUID, Controller>>() {
-        @Override
-        public boolean shouldTerminate(final Map<DeviceUID, Controller> ignored) {
-            return stopScenario;
-        }
-    };
 
     private String globalLeaderName = null;
 

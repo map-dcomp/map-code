@@ -1,25 +1,26 @@
 #!/usr/bin/env python3.6
 
-import json
-import os
-import datetime
-import subprocess
-import sys
-import shutil
-import multiprocessing
-import queue
+import warnings
+with warnings.catch_warnings():
+        import json
+        import os
+        import os.path
+        import datetime
+        import subprocess
+        import sys
+        import shutil
+        import multiprocessing
+        import queue
+        import math
+        import logging
+        import logging.config
+        import argparse
+        
 
-#does a selection sort based on start time
-#is already close to sorted so it's much closer to best case then worse case
+#sorts the flows by start time
 def sortJson(json):
-        for i in range(1,len(json)):
-                j = i
-                while(json[j]["t_first"] <= json[j-1]["t_first"] and j > 0):
-                        temp = json[j]
-                        json[j] = json[j-1]
-                        json[j-1] = temp
-                        j = j - 1
-        return json
+        sort_orders = sorted(json, key = lambda i: i["t_first"])
+        return sort_orders
 
 #checks if 2 flows are the same flow    
 def looseEqual(first,second, packetLoss, timeDifference, netconfig, routingTable):
@@ -37,32 +38,38 @@ def looseEqual(first,second, packetLoss, timeDifference, netconfig, routingTable
         if "dst_port" in first and "dst_port" in second:
                 if first["dst_port"] != second["dst_port"]:
                         return False
-
         #allows for minor packet loss
         upper = first["in_packets"] + packetLoss
         lower = first["in_packets"] - packetLoss
         if(second["in_packets"] < lower or second["in_packets"] > upper):
                 return False
         
-
         #finds the path between the two collection points to be able to calculate the expected delay
-        namepath = [];
+        namepath = []
         destName = second["collector"]
         currName = first["collector"]
         namepath.append(currName)
         travelTime = 0
+
         if(destName != currName):
                 while(routingTable[currName][destName] != destName):
                         currName = routingTable[currName][destName]
                         namepath.append(currName)
+                        
+                        if(len(namepath) >= 25):
+                                get_logger().info("Flow Path Exceeded 25 Which means we are stuck")
+                                get_logger().error("Flow Path Exceeded 25 Which means we are stuck")
+                                sys.exit(-1)
+                        
+
                 namepath.append(destName)
+                
                 i = 0
                 while(i < len(namepath)-1):
                         for link in netconfig["links"]:
                                 if((link["source"] == namepath[i] and link["target"] == namepath[i+1]) or (link["target"] == namepath[i] and link["source"] == namepath[i+1])):
                                         travelTime += float(link["delay"])
                         i = i+1
-
         #checks the start and stop time
         date1 = datetime.datetime.strptime(first["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
         date2 = datetime.datetime.strptime(second["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
@@ -103,7 +110,7 @@ def removePort(port, data):
                                 i = i+1
                 else:
                         i = i+1 
-        print("Removed: " + str(num) + " due to port")
+        get_logger().info("Removed: " + str(num) + " due to port")
         return data
 
 #removes a host from dataset
@@ -116,7 +123,7 @@ def removeHost(host, data):
                         data.remove(data[i])
                 else:
                         i=i+1   
-        print("Removed: " + str(num) + " due to being localhost")
+        get_logger().info("Removed: " + str(num) + " due to being localhost")
         return data
 
 #Filters out and range of IPs
@@ -137,7 +144,7 @@ def filterIP(data):
                         data.remove(data[i])
                 else:
                         i=i+1
-        print("Removed: " + str(num) + " due to ip")
+        get_logger().info("Removed: " + str(num) + " due to ip")
         return data
 
 #Narrows down data to flows that have a start and end point that was in the topology.ns, other ip's will mess things up
@@ -167,65 +174,75 @@ def onlyKnown(data, known):
 
 #merges new into master
 def merge(master, new, packetLoss, timeDifference, netconfig, routingTable):
-        """
-        Merge master and new. master is modified by this operation.
+        try:
+                """
+                Merge master and new. master is modified by this operation.
 
-        The new master is returned.
-        """
-        
-        #if master is empty add all from new 
-        if len(master) == 0:
-                return new
-        elif len(new) == 0:
-                return master
-        else:
-                toMerge = []
-                for i, newFlow in enumerate(new):
-                        for j, masterFlow in enumerate(master):
-                                if looseEqual(masterFlow,newFlow, packetLoss, timeDifference, netconfig, routingTable):
-                                        # found duplicate flow
-                                        break
-                        else:
-                                # not found
+                The new master is returned.
+                """
+                #if master is empty add all from new 
+                if len(master) == 0:
+                        return new
+                elif len(new) == 0:
+                        return master
+                else:
+                        toMerge = []
+                        for i, newFlow in enumerate(new):
+                                if(i%100000 == 0):
+                                        get_logger().info("Merged " + str(i) +" of " + str(len(new)))
+                                newTime = datetime.datetime.strptime(newFlow["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
+                                endTime = newTime + datetime.timedelta(microseconds=20000) #create bounds on both sides so only certain flows from master are checked against
+                                newTime = newTime - datetime.timedelta(microseconds=20000)
+                                
+                                r = len(master)-1
+                                l = 0
+                                mid = 0
+                                checkTime = datetime.datetime.strptime(master[mid]["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
+
+                                #finds the closest start time in master compaired to the flow from new
+                                while(l<=r):
+                                        mid = int(l + (r - l) / 2)
+                                        checkTime = datetime.datetime.strptime(master[mid]["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
+                                        if(checkTime<newTime):
+                                                l=mid+1
+                                        elif(checkTime>newTime):
+                                                r=mid-1
+                                        else:
+                                                break 
+                                startIndex = mid
+                                
+                                #puts the index at the begining of the check range
+                                while(checkTime>=newTime and startIndex>=0):
+                                        startIndex = startIndex-1
+                                        checkTime = datetime.datetime.strptime(master[startIndex]["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
+
+                                #loop through range of flows that could match and check to see if they do match
+                                repeat = False
+                                while(checkTime<endTime and startIndex<len(master)-1):
+                                        if looseEqual(master[startIndex],newFlow, packetLoss, timeDifference, netconfig, routingTable):
+                                                repeat = True
+                                                break
+                                        startIndex = startIndex+1
+                                        checkTime = datetime.datetime.strptime(master[startIndex]["t_first"], "%Y-%m-%dT%H:%M:%S.%f")
+                                if(not repeat):
+                                        toMerge.append(newFlow)
+
+                        
+                
+                        for i, newFlow in enumerate(toMerge):
                                 master.append(newFlow)
-
-                comment = """
-                i = 0
-                j = 0
-                #both are sorted so preform merge in a way that mantains sorted order 
-                while(i < len(master) and j < len(new)):
-                        if(looseEqual(master[i],new[j])):
-                                j = j+1
-                        else:
-                                #need back test for equals too
-                                if(master[i]["t_first"] > new[j]["t_first"]):
-                                        master.insert(i,new[j])
-                                        j = j+1
-                                i = i+1
-
-                i = len(master)-1
-                while(j < len(new)):
-                        repeat = False
-                        while(i > 0):
-                                if(looseEqual(master[i],new[j])):
-                                        repeat = True
-                                        break
-                                else:
-                                        i = i-1
-                        i = len(master)-1
-                        if(not repeat):
-                                master.append(new[j])
-                                i = i+1
-                        j = j+1"""
-
-                return master
+                        return master
+        except:
+                get_logger().error("Problem in merge, will need to be rerun:", sys.exc_info()[0])
 
 
 def do_merge(data_one, data_two, packetLoss, timeDifference, netconfig, routingTable):
-        print("Merging {} and {}".format(len(data_one), len(data_two)))
+        get_logger().info("Merging {} and {}".format(len(data_one), len(data_two)))
         merged = merge(data_one, data_two, packetLoss, timeDifference, netconfig, routingTable)
+        get_logger().info("Sorting new merge")
+        merged.sort(key=flow_sort_key)
         result_queue.put(merged)
-        print("Finished merge of {} and {} -> {}".format(len(data_one), len(data_two), len(merged)))
+        get_logger().info("Finished merge of {} and {} -> {}".format(len(data_one), len(data_two), len(merged)))
 
         
 def enqueue_work(data_to_merge, pool, num_pending, packetLoss, timeDifference, netconfig, routingTable):
@@ -233,11 +250,11 @@ def enqueue_work(data_to_merge, pool, num_pending, packetLoss, timeDifference, n
                 (data_one, data_two) = data_to_merge[:2]
                 data_to_merge = data_to_merge[2:]
                 
-                print("Enqueueing {} and {}. pending {}".format(len(data_one), len(data_two), num_pending))
+                get_logger().info("Enqueueing {} and {}. pending {}".format(len(data_one), len(data_two), num_pending))
                 pool.apply_async(func=do_merge, args=[data_one, data_two, packetLoss, timeDifference, netconfig, routingTable])
                 num_pending = num_pending + 1
-                print("Finished enqueue {} and {}. pending {}".format(len(data_one), len(data_two), num_pending))
-
+                get_logger().info("Finished enqueue {} and {}. pending {}".format(len(data_one), len(data_two), num_pending))
+        using("After enqueing")
         return data_to_merge, num_pending
                 
         
@@ -256,16 +273,18 @@ def get_results():
                 
 
 def load_file(known, filename, path):
-        print("Loading {}".format(filename))
+        get_logger().info("Loading {}".format(filename))
         with open(path, "r") as fin:
                 data = json.load(fin)
-
+    
         data = sortJson(data)
+        #get_logger().info("Finished Sorting {}".format(filename))
         data = onlyKnown(data, known)
+        
         #fout = open(filename + ".json", "w")
         #json.dump(data,fout)
         #fout.close()
-        print("Flows from " + str(filename) +": " + str(len(data)))
+        get_logger().info("Flows from " + str(filename) +": " + str(len(data)))
         #gives every flow where it was collected
         fname, _ = os.path.splitext(filename)
         tag = fname.lower()
@@ -305,16 +324,13 @@ def flow_sort_key(flow):
 # needs to be global to allow the other processes to access it
 result_queue = multiprocessing.Queue()
 
-def main(argv=None):
-        if argv is None:
-                argv = sys.argv[1:]
-
-        print("cleaning up mergeFiles from the last run")
+def main_method(args):
+        get_logger().info("cleaning up mergeFiles from the last run")
         if os.path.exists("mergeFiles"):
                 shutil.rmtree("mergeFiles")
 
 
-        print("Merging netflow files...")
+        get_logger().info("Merging netflow files...")
         master = []
 
         with open("config.json", "r") as fin:
@@ -329,7 +345,7 @@ def main(argv=None):
         known = []
         for node in netconfig["nodes"]:
                 for ip in node["networks"]:
-                        known.append(ip["ip"])
+                        known.append(node["networks"][ip])
 
         with open("routingTable.json", "r") as fin:
                 routingTable = json.load(fin)
@@ -354,11 +370,13 @@ def main(argv=None):
                         #runs a shell script that runs a command because subprocess had trouble with writing output to a file
                         #runs nfdump -o json -R start:end > foldername.txt, this groups all the flows of a node into one file to be merged later
                         script = os.path.dirname(os.path.abspath(__file__)) + "/gatherNFCAPDFiles.sh " + hostDirStr + "/" + foldername + "/agent/flows " + start + " " + end + " " + os.path.dirname(os.path.abspath(__file__)) + "/mergeFiles/" + foldername.capitalize() + ".json"
+                        get_logger().info(os.path.dirname(os.path.abspath(__file__)) + "/mergeFiles/" + foldername.capitalize() + ".json")
+                        
                         process = subprocess.run(script.split())
-
-
+                        
+                        
                 except:
-                        print("Node: " + foldername + " isn't recording flows")
+                        get_logger().warn("Node: " + foldername + " isn't recording flows")
                         continue
 
         mergeFilesDir = os.fsencode("mergeFiles")
@@ -367,7 +385,7 @@ def main(argv=None):
         
         with multiprocessing.Pool() as pool:
                 data_to_merge = load_all_data(pool, mergeFilesDir, known)
-
+   
                 # merge all of the data in parallel
                 num_pending = 0
                 done = False
@@ -383,11 +401,11 @@ def main(argv=None):
                         else:
                                 # wait for at least one result, this should be
                                 # better than doing a sleep
-                                print("Waiting for a result")
+                                get_logger().info("Waiting for a result")
                                 result = result_queue.get()
                                 num_pending = num_pending - 1
-                                print("Got a result {}".format(len(result)))
-                                
+                                get_logger().info("Got a result {}".format(len(result)))
+                                using("After a Result with len "+ str(len(result)))
                                 data_to_merge.append(result)
 
                 # all done, shutdown the pool
@@ -396,16 +414,113 @@ def main(argv=None):
         
         
         final_result = data_to_merge[0]        
-        print("Number of total flows: " + str(len(final_result)))
+        get_logger().info("Number of total flows: " + str(len(final_result)))
 
         # do sort at the end
         final_result.sort(key=flow_sort_key)
         
         with open("flowData.json", "w") as fout:
                 json.dump(final_result, fout, indent=4)
-        print("Done")
+        get_logger().info("Done")
 
 
+def get_logger():
+    return logging.getLogger(__name__)
 
+        
+def setup_logging(
+    default_path='logging.json',
+    default_level=logging.INFO,
+    env_key='LOG_CFG'
+):
+    """
+    Setup logging configuration
+    """
+    path = default_path
+    value = os.getenv(env_key, None)
+    if value:
+        path = value
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            config = json.load(f)
+        logging.config.dictConfig(config)
+    else:
+        logging.basicConfig(level=default_level)
+
+        
+def multiprocess_logging_handler(logging_queue, logconfig, running):
+    import time
+    setup_logging(default_path=logconfig)
+
+    def process_queue():
+        while not logging_queue.empty():
+            try:
+                record = logging_queue.get(timeout=1)
+                logger = logging.getLogger(record.name)
+                logger.handle(record)
+            except (multiprocessing.Queue.Empty, multiprocessing.TimeoutError) as e:
+                # timeout was hit, just return
+                pass
+        
+    while running.value > 0:
+        process_queue()
+
+    # process any last log messages
+    process_queue()
+
+    
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+
+    class ArgumentParserWithDefaults(argparse.ArgumentParser):
+        '''
+        From https://stackoverflow.com/questions/12151306/argparse-way-to-include-default-values-in-help
+        '''
+        def add_argument(self, *args, help=None, default=None, **kwargs):
+            if help is not None:
+                kwargs['help'] = help
+            if default is not None and args[0] != '-h':
+                kwargs['default'] = default
+                if help is not None:
+                    kwargs['help'] += ' (default: {})'.format(default)
+            super().add_argument(*args, **kwargs)
+        
+    parser = ArgumentParserWithDefaults(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("-l", "--logconfig", dest="logconfig", help="logging configuration (default: logging.json)", default='logging.json')
+    parser.add_argument("--debug", dest="debug", help="Enable interactive debugger on error", action='store_true')
+
+    args = parser.parse_args(argv)
+
+    if 'multiprocessing' in sys.modules:
+        running = multiprocessing.Value('b', 1)
+        logging_queue = multiprocessing.Queue()
+        logging_listener = multiprocessing.Process(target=multiprocess_logging_handler, args=(logging_queue, args.logconfig,running,))
+        logging_listener.start()
+
+        h = logging.handlers.QueueHandler(logging_queue)
+        root = logging.getLogger()
+        root.addHandler(h)
+        root.setLevel(logging.DEBUG)
+    else:
+        logging_listener = None
+        setup_logging(default_path=args.logconfig)
+
+    try:
+        if args.debug:
+            import pdb, traceback
+            try:
+                return main_method(args)
+            except:
+                extype, value, tb = sys.exc_info()
+                traceback.print_exc()
+                pdb.post_mortem(tb)    
+        else:
+            return main_method(args)
+    finally:
+        if logging_listener:
+            running.value = 0
+
+            
 if __name__ == "__main__":
     sys.exit(main())

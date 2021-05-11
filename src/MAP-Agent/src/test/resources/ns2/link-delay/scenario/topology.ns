@@ -1,0 +1,32 @@
+# A0 - A1 - B0
+#      |    |
+#      B1 --       
+
+set ns [new Simulator]
+source tb_compat.tcl
+
+set A0 [$ns node]
+tb-set-node-os $A0 XEN46-64-STD
+tb-set-hardware $A0 simple
+
+set A1 [$ns node]
+tb-set-node-os $A1 XEN46-64-STD
+tb-set-hardware $A1 simple
+
+set B0 [$ns node]
+tb-set-node-os $B0 XEN46-64-STD
+tb-set-hardware $B0 simple
+
+set B1 [$ns node]
+tb-set-node-os $B1 XEN46-64-STD
+tb-set-hardware $B1 simple
+
+
+# Links
+set linkA0A1 [$ns duplex-link $A0 $A1 1000000.0kb 0.0ms DropTail]
+set linkA1B0 [$ns duplex-link $A1 $B0 1000000.0kb 10.0ms DropTail]
+set linkA1B1 [$ns duplex-link $A1 $B1 1000000.0kb 20.0ms DropTail]
+set linkB0B1 [$ns duplex-link $B0 $B1 1000000.0kb 0.0ms DropTail]
+
+$ns rtproto Static
+$ns run
