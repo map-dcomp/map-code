@@ -75,7 +75,7 @@ public class DefaultAlgorithm extends AbstractDcopAlgorithm {
         
         LOGGER.info("AFTER DCOP FOR LOOP, Dcop run {} Region {} has getClientLoadMap {}", currentDcopRun, getRegionID(), getClientKeepLoadMap());
         
-        return defaultPlan(summary, 0);
+        return defaultPlan(summary);
     }
     
     /**

@@ -1,7 +1,6 @@
 package com.bbn.map.dcop.final_rcdiff;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -26,12 +25,6 @@ public final class FinalRCDiffTree implements FinalRCDiffMessageContent, Seriali
     private final Map<ServerClientService, RegionIdentifier> pathToClient = new HashMap<>();
     
     private final Set<ServiceIdentifier<?>> selfRegionServices = new HashSet<>();
-    
-    private static int counter = 0;
-    
-    private final int objectCounter;
-    
-    private final LocalDateTime timeStamp;
     
     
     /**
@@ -77,19 +70,14 @@ public final class FinalRCDiffTree implements FinalRCDiffMessageContent, Seriali
                 && Objects.equals(selfRegionServices, other.selfRegionServices);
     }
 
-    
-
     @Override
     public String toString() {
-        return "FinalRCDiffTree [pathToClient=" + pathToClient + ", selfRegionServices=" + selfRegionServices
-                + ", objectCounter=" + objectCounter + ", timeStamp=" + timeStamp + "]";
+        return "FinalRCDiffTree [pathToClient=" + pathToClient + ", selfRegionServices=" + selfRegionServices + "]";
     }
 
     private FinalRCDiffTree(Map<ServerClientService, RegionIdentifier> pathToClient, Set<ServiceIdentifier<?>> selfRegionServices) {
         this.pathToClient.putAll(pathToClient);
         this.selfRegionServices.addAll(selfRegionServices);
-        this.timeStamp = LocalDateTime.now();
-        this.objectCounter = counter++;
     }
     
     /**
@@ -144,12 +132,5 @@ public final class FinalRCDiffTree implements FinalRCDiffMessageContent, Seriali
      */
     public void addServices(Set<ServiceIdentifier<?>> services) {
         selfRegionServices.addAll(services);
-    }
-
-    /**
-     * @return timeStamp
-     */
-    public LocalDateTime getTimeStamp() {
-        return timeStamp;
     }
 }

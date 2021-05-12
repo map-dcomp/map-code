@@ -36,7 +36,7 @@ import java.util.Map;
 
 import com.bbn.protelis.networkresourcemanagement.ContainerResourceReport;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.ImmutableUtils;
 import com.google.common.collect.ImmutableMap;
@@ -62,16 +62,16 @@ import com.google.common.collect.ImmutableMap;
         return currentTotalLoadImmutable;
     }
 
-    private final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> currentLoad = new HashMap<>();
-    private transient ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> currentLoadImmutable = null;
+    private final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> currentLoad = new HashMap<>();
+    private transient ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> currentLoadImmutable = null;
 
-    private final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> currentLoadFlipped = new HashMap<>();
-    private transient ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> currentLoadFlippedImmutable = null;
+    private final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> currentLoadFlipped = new HashMap<>();
+    private transient ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> currentLoadFlippedImmutable = null;
 
     /**
      * @return current load for use in {@link ContainerResourceReport}
      */
-    public ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> getCurrentLoad() {
+    public ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> getCurrentLoad() {
         if (null == currentLoadImmutable) {
             currentLoadImmutable = ImmutableUtils.makeImmutableMap3(currentLoad);
         }
@@ -83,7 +83,7 @@ import com.google.common.collect.ImmutableMap;
      * 
      * @return current load for use in {@link ContainerResourceReport}
      */
-    public ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> getCurrentLoadFlipped() {
+    public ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> getCurrentLoadFlipped() {
         if (null == currentLoadFlippedImmutable) {
             currentLoadFlippedImmutable = ImmutableUtils.makeImmutableMap3(currentLoadFlipped);
         }
@@ -108,7 +108,7 @@ import com.google.common.collect.ImmutableMap;
                     .computeIfAbsent(entry.getService(), k -> new HashMap<>())
                     .merge(attr, multiplier * value, Double::sum);
 
-            final NodeNetworkFlow flowFlipped = new NodeNetworkFlow(entry.getFlow().getDestination(),
+            final RegionNetworkFlow flowFlipped = new RegionNetworkFlow(entry.getFlow().getDestination(),
                     entry.getFlow().getSource(), entry.getFlow().getServer());
             final LinkAttribute flippedAttr;
             if (LinkAttribute.DATARATE_RX.equals(attr)) {

@@ -38,7 +38,7 @@ import javax.annotation.Nonnull;
 
 import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.ImmutableUtils;
 import com.google.common.collect.ImmutableMap;
@@ -54,7 +54,7 @@ import com.google.common.collect.ImmutableMap;
 
     private final double alpha;
 
-    private final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> demand = new HashMap<>();
+    private final Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> demand = new HashMap<>();
 
     /**
      * 
@@ -67,10 +67,10 @@ import com.google.common.collect.ImmutableMap;
 
     @Override
     public void updateDemandValues(final long timestamp,
-            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
+            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
 
         networkLoad.forEach((ifce, ifceData) -> {
-            final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> ifceDemand = demand
+            final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> ifceDemand = demand
                     .computeIfAbsent(ifce, k -> new HashMap<>());
 
             ifceData.forEach((flow, flowData) -> {
@@ -139,8 +139,8 @@ import com.google.common.collect.ImmutableMap;
     }
 
     @Override
-    public ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand() {
-        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportDemand = ImmutableUtils
+    public ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand() {
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportDemand = ImmutableUtils
                 .makeImmutableMap4(this.demand);
         return reportDemand;
     }

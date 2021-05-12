@@ -1,7 +1,6 @@
 package com.bbn.map.dcop.final_rcdiff;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -33,12 +32,6 @@ public final class FinalRCDiffPlan implements FinalRCDiffMessageContent, Seriali
     private final ServiceIdentifier<?> service;
     
     private final PlanType type;
-    
-    private static int counter = 0;
-    
-    private final int objectCounter;
-    
-    private final LocalDateTime timeStamp;
     
     /**
      * @author khoihd
@@ -94,8 +87,6 @@ public final class FinalRCDiffPlan implements FinalRCDiffMessageContent, Seriali
         this.receiver = receiver;
         this.service = service;
         this.type = type;
-        this.timeStamp = LocalDateTime.now();
-        this.objectCounter = counter++;
         // don't include anything that does a fuzzy comparison in equals
         this.hashCode = Objects.hash(root, sink, sender, receiver, service, type);
     }
@@ -182,14 +173,6 @@ public final class FinalRCDiffPlan implements FinalRCDiffMessageContent, Seriali
     @Override
     public String toString() {
         return "FinalRCDiffPlan [root=" + root + ", load=" + load + ", sink=" + sink + ", sender=" + sender
-                + ", receiver=" + receiver + ", service=" + service + ", type=" + type + ", objectCounter="
-                + objectCounter + ", timeStamp=" + timeStamp + "]";
-    }
-
-    /**
-     * @return timeStamp
-     */
-    public LocalDateTime getTimeStamp() {
-        return timeStamp;
+                + ", receiver=" + receiver + ", service=" + service + ", type=" + type + "]";
     }
 }

@@ -46,8 +46,10 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.protelis.networkresourcemanagement.DnsNameIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
+import com.bbn.protelis.networkresourcemanagement.StringRegionIdentifier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -79,9 +81,10 @@ public class LinkResourceManagerTest {
         final double txLoad = 5;
         final ApplicationCoordinates service = new ApplicationCoordinates("test", "service1", "1");
         final long currentTime = 10;
-        final NodeIdentifier client = new DnsNameIdentifier("client");
+        final RegionIdentifier client = new StringRegionIdentifier("client");
         final double tolerance = 1E-5;
         final NodeIdentifier server1 = new DnsNameIdentifier("one");
+        final RegionIdentifier server1Region = new StringRegionIdentifier("A");
         final NodeIdentifier server2 = new DnsNameIdentifier("two");
 
         final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX,
@@ -92,14 +95,14 @@ public class LinkResourceManagerTest {
         final ImmutableMap<LinkAttribute, Double> networkLoad = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxLoad,
                 LinkAttribute.DATARATE_TX, txLoad);
 
-        final NodeNetworkFlow flow = new NodeNetworkFlow(client, server1, NodeIdentifier.UNKNOWN);
+        final RegionNetworkFlow flow = new RegionNetworkFlow(client, server1Region, RegionIdentifier.UNKNOWN);
 
         final ClientLoad req = new ClientLoad(0, Long.MAX_VALUE, Long.MAX_VALUE, 1, service, ImmutableMap.of(),
                 networkLoad, ImmutableList.of());
         manager.addLinkLoad(req.getStartTime(), req.getNetworkLoadAsAttribute(), req.getNetworkLoadAsAttributeFlipped(),
                 req.getService(), req.getNetworkDuration(), flow, manager.getTransmitter());
 
-        final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
+        final ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
                 .computeCurrentLinkLoad(currentTime, manager.getReceiver());
         assertThat("Computed load size should be 1", computedLoad.size(), is(1));
 
@@ -125,9 +128,10 @@ public class LinkResourceManagerTest {
         final double txLoad = 5;
         final ApplicationCoordinates service = new ApplicationCoordinates("test", "service1", "1");
         final long currentTime = 10;
-        final NodeIdentifier client = new DnsNameIdentifier("client");
+        final RegionIdentifier clientRegion = new StringRegionIdentifier("A");
         final double tolerance = 1E-5;
         final NodeIdentifier server1 = new DnsNameIdentifier("one");
+        final RegionIdentifier server1Region = new StringRegionIdentifier("A");
         final NodeIdentifier server2 = new DnsNameIdentifier("two");
 
         final ImmutableMap<LinkAttribute, Double> capacity = ImmutableMap.of(LinkAttribute.DATARATE_RX,
@@ -135,7 +139,7 @@ public class LinkResourceManagerTest {
 
         final LinkResourceManager manager = new LinkResourceManager(server1, server2, capacity, 0);
 
-        final NodeNetworkFlow flow = new NodeNetworkFlow(client, server1, NodeIdentifier.UNKNOWN);
+        final RegionNetworkFlow flow = new RegionNetworkFlow(clientRegion, server1Region, RegionIdentifier.UNKNOWN);
 
         final ImmutableMap<LinkAttribute, Double> networkLoad = ImmutableMap.of(LinkAttribute.DATARATE_RX, rxLoad,
                 LinkAttribute.DATARATE_TX, txLoad);
@@ -145,10 +149,10 @@ public class LinkResourceManagerTest {
         manager.addLinkLoad(req.getStartTime(), req.getNetworkLoadAsAttribute(), req.getNetworkLoadAsAttributeFlipped(),
                 req.getService(), req.getNetworkDuration(), flow, manager.getTransmitter());
 
-        final NodeNetworkFlow flowFlipped = new NodeNetworkFlow(flow.getDestination(), flow.getSource(),
+        final RegionNetworkFlow flowFlipped = new RegionNetworkFlow(flow.getDestination(), flow.getSource(),
                 flow.getServer());
 
-        final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
+        final ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computedLoad = manager
                 .computeCurrentLinkLoad(currentTime, manager.getTransmitter());
         assertThat("Computed load size should be 1", computedLoad, aMapWithSize(1));
         assertThat("Can't find load for expected network flow", computedLoad, hasKey(flowFlipped));

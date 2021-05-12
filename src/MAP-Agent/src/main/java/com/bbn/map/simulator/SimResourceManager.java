@@ -55,8 +55,8 @@ import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ResourceManager;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
@@ -174,7 +174,8 @@ public class SimResourceManager implements ResourceManager<Controller> {
             hardwareConfig.getCapacity().forEach((k, v) -> builder.put(k, v));
 
             // make lo-fi behave like hi-fi where CPU is measured and copied to
-            // TASK_CONTAINERS. If CPU is missing from the request then TASK_CONTAINERS is copied to CPU.
+            // TASK_CONTAINERS. If CPU is missing from the request then
+            // TASK_CONTAINERS is copied to CPU.
             if (!hardwareConfig.getCapacity().containsKey(NodeAttribute.TASK_CONTAINERS)
                     && hardwareConfig.getCapacity().containsKey(NodeAttribute.CPU)) {
                 builder.put(NodeAttribute.TASK_CONTAINERS, hardwareConfig.getCapacity().get(NodeAttribute.CPU));
@@ -269,7 +270,7 @@ public class SimResourceManager implements ResourceManager<Controller> {
                         .builder();
 
                 // interface -> flow -> service -> values
-                final ImmutableMap.Builder<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = ImmutableMap
+                final ImmutableMap.Builder<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = ImmutableMap
                         .builder();
                 node.getNeighbors().forEach(neighborId -> {
                     final LinkResourceManager lmgr = getLinkResourceManager(neighborId);
@@ -280,7 +281,7 @@ public class SimResourceManager implements ResourceManager<Controller> {
 
                     // the neighbor is the "receiving" side to get the network
                     // direction to match the hi-fi environment
-                    final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborLoad = lmgr
+                    final ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborLoad = lmgr
                             .computeCurrentLinkLoad(now, neighborId);
                     networkLoad.put(BasicResourceManager.createInterfaceIdentifierForNeighbor(neighborId),
                             neighborLoad);
@@ -289,16 +290,16 @@ public class SimResourceManager implements ResourceManager<Controller> {
                 // create immutable data structures to put into the report
                 final ImmutableMap<InterfaceIdentifier, ImmutableMap<LinkAttribute, Double>> reportNetworkCapacity = networkCapacity
                         .build();
-                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportNetworkLoad = networkLoad
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportNetworkLoad = networkLoad
                         .build();
                 logger.trace("Computed network load to be {}", reportNetworkLoad);
 
                 networkDemandTracker.updateDemandValues(now, reportNetworkLoad);
 
-                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportShortNetworkDemand = networkDemandTracker
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportShortNetworkDemand = networkDemandTracker
                         .computeNetworkDemand(ResourceReport.EstimationWindow.SHORT);
 
-                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportLongNetworkDemand = networkDemandTracker
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportLongNetworkDemand = networkDemandTracker
                         .computeNetworkDemand(ResourceReport.EstimationWindow.LONG);
 
                 final boolean skipNetworkData = AgentConfiguration.getInstance().getSkipNetworkData();
@@ -541,8 +542,8 @@ public class SimResourceManager implements ResourceManager<Controller> {
 
             container.addFailedRequest(clientId, serverEndTime, serverLoad, networkEndTime, networkLoad);
 
-            networkDemandTracker.addFailedRequest(ifce, clientId, containerId, container.getService(), networkEndTime,
-                    networkLoad);
+            networkDemandTracker.addFailedRequest(ifce, client.getRegionIdentifier(), client.getRegionIdentifier(),
+                    container.getService(), networkEndTime, networkLoad);
         }
     }
 }

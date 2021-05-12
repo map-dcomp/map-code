@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
 
@@ -57,12 +57,12 @@ import com.google.common.collect.ImmutableMap;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MovingAverageNetworkDemandAlgorithm.class);
 
-    private final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory = new HashMap<>();
+    private final Map<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> networkLoadHistory = new HashMap<>();
 
     private final long duration;
 
-    private final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> sums = new HashMap<>();
-    private final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Integer>>>> counts = new HashMap<>();
+    private final Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> sums = new HashMap<>();
+    private final Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Integer>>>> counts = new HashMap<>();
 
     /**
      * 
@@ -75,7 +75,7 @@ import com.google.common.collect.ImmutableMap;
 
     @Override
     public void updateDemandValues(final long timestamp,
-            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
+            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
 
         // add new entry
         networkLoadHistory.put(timestamp, networkLoad);
@@ -84,10 +84,10 @@ import com.google.common.collect.ImmutableMap;
         // clean out expired entries
         final long historyCutoff = timestamp - duration;
 
-        final Iterator<Map.Entry<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>>> networkIter = networkLoadHistory
+        final Iterator<Map.Entry<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>>> networkIter = networkLoadHistory
                 .entrySet().iterator();
         while (networkIter.hasNext()) {
-            final Map.Entry<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> entry = networkIter
+            final Map.Entry<Long, ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>>> entry = networkIter
                     .next();
             if (entry.getKey() < historyCutoff) {
 
@@ -103,12 +103,12 @@ import com.google.common.collect.ImmutableMap;
     }
 
     private void removeFromCountAndSum(
-            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> value) {
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> value) {
         updateHistoryMapCountSum(-1, value, sums, counts);
     }
 
     private void addToCountAndSum(
-            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> value) {
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> value) {
         updateHistoryMapCountSum(1, value, sums, counts);
     }
 
@@ -143,8 +143,8 @@ import com.google.common.collect.ImmutableMap;
     }
 
     @Override
-    public ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand() {
-        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportDemand = NetworkDemandTracker
+    public ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand() {
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportDemand = NetworkDemandTracker
                 .historyMapAverage(sums, counts);
         return reportDemand;
     }

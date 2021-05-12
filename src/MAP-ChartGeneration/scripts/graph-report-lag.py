@@ -31,8 +31,7 @@
 #BBN_LICENSE_END
 #!/usr/bin/env python3
 
-"""
-Graph the difference in time between the name of the output folder and
+"""Graph the difference in time between the name of the output folder and
 the timestamp inside the resource report.  Ideally this value should
 be very close to zero. Large values suggest problems in the system
 with creating resource reports.

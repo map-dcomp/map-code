@@ -176,7 +176,7 @@ public class RCdiffAlgorithm extends AbstractDcopAlgorithm {
         //TODO: check this line before committing the code
 //        if (currentDcopRun != 1) {
         if (currentDcopRun == 0) {
-            return defaultPlan(summary, 0);
+            return defaultPlan(summary);
         }
         
         final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = allocateComputeBasedOnNetwork(

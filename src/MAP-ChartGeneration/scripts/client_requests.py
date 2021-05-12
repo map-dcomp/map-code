@@ -84,28 +84,19 @@ def write_csv_data(csv_server, csv_network, demand_dir):
 
                 for request in requests:
                     if 'service' not in request:
-                        get_logger().debug("%s doesn't have 'service' property, must not be a client demand file, skipping", demand_file)
+                        get_logger().debug("%s doesn't have 'service' propery, must not be a client demand file, skipping", demand_file)
                         continue
 
-                    service = request['service']
-                    if not service:
-                        get_logger().debug("%s doesn't has null 'service' property, must not be a client demand file, skipping", demand_file)
-                        continue
-                    
-                    if 'artifact' not in service:
-                        get_logger().debug("%s doesn't have 'service.artifact' property, must not be a client demand file, skipping", demand_file)
-                        continue
-
-                    artifact = service['artifact']
+                    service = request['service']['artifact']
                     start = int(request['startTime'])
                     end_server = start + int(request['serverDuration'])
                     end_network = start + int(request['networkDuration'])
                     num_clients = int(request['numClients'])
 
                     for attr, value in request['nodeLoad'].items():
-                        writer_server.writerow([client, artifact, attr, value, start, end_server, num_clients])
+                        writer_server.writerow([client, service, attr, value, start, end_server, num_clients])
                     for attr, value in request['networkLoad'].items():
-                        writer_network.writerow([client, artifact, attr, value, start, end_network, num_clients])
+                        writer_network.writerow([client, service, attr, value, start, end_network, num_clients])
 
                         
 def graph_num_clients(step_size, output_name, title, data):

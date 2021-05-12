@@ -31,14 +31,13 @@
 #BBN_LICENSE_END
 #!/usr/bin/env python3
 
-"""
-Graph the difference in time between the name of the output folder
+"""Graph the difference in time between the name of the output folder
 and the timestamp inside the resource reports found in
 regionResourceReports-SHORT.json.  Ideally this value should be very
 close to zero. Large values suggest problems in transmitting resource
 reports to the RLG.
 
-Creates rlg-node-resource-report-time-lag_{ncp}.png
+Creates rlg-resource-report-time-lag_{ncp}.png
 
 """
 
@@ -86,7 +85,7 @@ def output_graph(output, ncp, xs, ys, first_timestamp_ms):
     handles, labels = ax.get_legend_handles_labels()
     lgd = ax.legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
         
-    output_name = output / f'rlg-node-resource-report-time-lag_{ncp}.png'
+    output_name = output / f'resource-report-time-lag_{ncp}.png'
     plt.savefig(output_name.as_posix(), format='png', bbox_extra_artists=(lgd,), bbox_inches='tight')
     plt.close(fig)
     

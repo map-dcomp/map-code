@@ -183,6 +183,16 @@ try "${mydir}"/run-chartgen.sh \
     --output "${chart_output}" \
     > "${chart_output}"/chartgen.log 2>&1
 
+log "Generating gnuplot charts see ${gnuplot_graph_output}/gnuplot_graphs.log for output"
+"${mydir}"/gnuplot/generate_gnuplot_charts.sh \
+    --sim "${sim_output}" \
+    --chart_output "${chart_output}" \
+    --load_unit "CPU" \
+    --window_suffix "SHORT" \
+    --run_title "$(basename $(dirname ${sim_output}))" \
+    --output "${gnuplot_graph_output}" \
+    > "${gnuplot_graph_output}"/gnuplot_graphs.log 2>&1 &
+
 log "Running overflow-plan-analysis see ${graph_output}/overflow-plan-analysis.log for output"
 "${mydir}"/overflow-plan-analysis.py \
     --first-timestamp-file "${chart_output}"/start_simulation.timestamp \

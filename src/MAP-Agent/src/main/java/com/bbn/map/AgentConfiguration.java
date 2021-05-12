@@ -559,12 +559,11 @@ public final class AgentConfiguration {
         dcopSynchronousMessageTimeout = v;
     }
 
-    private static final Duration DEFAULT_RCDIFF_TIMER_THRESHOLD = Duration.ofSeconds(10);
+    private static final Duration DEFAULT_RCDIFF_TIMER_THRESHOLD = Duration.ofSeconds(5);
 
     private Duration rcdiffTimerThreshold = DEFAULT_RCDIFF_TIMER_THRESHOLD;
 
     /**
-     * This should be 2 times the communication delay between two neighboring regions.
      * 
      * @return how long RC-DIFF will wait for messages from neighboring regions
      */

@@ -34,7 +34,7 @@ package com.bbn.map.simulator;
 import javax.annotation.Nonnull;
 
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.google.common.collect.ImmutableMap;
 
@@ -53,7 +53,7 @@ import com.google.common.collect.ImmutableMap;
      *            see {@Link #getClient()}
      */
     /* package */ LinkLoadEntry(@Nonnull final LinkResourceManager parent,
-            @Nonnull final NodeNetworkFlow flow,
+            @Nonnull final RegionNetworkFlow flow,
             final long startTime,
             final long duration,
             @Nonnull final ServiceIdentifier<?> service,
@@ -77,13 +77,13 @@ import com.google.common.collect.ImmutableMap;
         return parent;
     }
 
-    private final NodeNetworkFlow flow;
+    private final RegionNetworkFlow flow;
 
     /**
      * 
      * @return the flow that is creating the load
      */
-    public NodeNetworkFlow getFlow() {
+    public RegionNetworkFlow getFlow() {
         return flow;
     }
 

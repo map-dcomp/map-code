@@ -46,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 
 import edu.uci.ics.jung.algorithms.shortestpath.DijkstraShortestPath;
-import edu.uci.ics.jung.algorithms.shortestpath.DistanceStatistics;
 import edu.uci.ics.jung.graph.Graph;
 
 /**
@@ -77,12 +76,7 @@ public class RegionalTopology {
      * @return all regions in the graph
      */
     public Collection<RegionIdentifier> getAllRegions() {
-        if (null == graph) {
-            LOGGER.warn("getAllRegions: No regional network graph available");
-            return Collections.emptySet();
-        } else {
-            return graph.getVertices();
-        }
+        return graph.getVertices();
     }
 
     /**
@@ -94,7 +88,7 @@ public class RegionalTopology {
      */
     public @Nonnull Set<RegionIdentifier> getNeighboringRegions(final @Nonnull RegionIdentifier region) {
         if (null == graph) {
-            LOGGER.warn("getNeighboringRegions: No regional network graph available");
+            LOGGER.warn("No regional network graph available");
             return Collections.emptySet();
         } else {
             if (!graph.containsVertex(region)) {
@@ -122,7 +116,7 @@ public class RegionalTopology {
     @Nonnull
     public List<RegionalLink> getPath(@Nonnull final RegionIdentifier source, @Nonnull final RegionIdentifier dest) {
         if (null == graph) {
-            LOGGER.warn("getPath: No regional network graph available");
+            LOGGER.warn("No regional network graph available");
             return Collections.emptyList();
         }
 
@@ -142,17 +136,4 @@ public class RegionalTopology {
         }
     }
 
-    /**
-     * 
-     * @return the diameter of the network, zero if the graph is empty
-     * @see DistanceStatistics#diameter(edu.uci.ics.jung.graph.Hypergraph)
-     */
-    public int getNetworkDiameter() {
-        if (null == graph) {
-            LOGGER.warn("getNetworkDiameter: No regional network graph available");
-            return 0;
-        } else {
-            return (int) Math.ceil(DistanceStatistics.diameter(graph));
-        }
-    }
 }

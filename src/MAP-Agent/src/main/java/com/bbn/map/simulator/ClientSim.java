@@ -412,7 +412,8 @@ public class ClientSim extends AbstractClientSimulator {
             final long now,
             final ClientLoad req,
             final LongAccumulator latestEndOfRequest) {
-
+        throw new RuntimeException("HACK for testing");
+/*        
         final NodeNetworkFlow flow = createNetworkFlow(clientId, destinationIdentifier);
 
         final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute = req.getNetworkLoadAsAttribute();
@@ -552,6 +553,7 @@ public class ClientSim extends AbstractClientSimulator {
 
             return true;
         }
+        */
     }
 
     /**

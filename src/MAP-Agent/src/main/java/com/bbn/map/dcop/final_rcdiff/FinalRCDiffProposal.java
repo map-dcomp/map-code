@@ -1,7 +1,6 @@
 package com.bbn.map.dcop.final_rcdiff;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -30,12 +29,6 @@ public final class FinalRCDiffProposal implements FinalRCDiffMessageContent, Ser
     private final FinalRCDiffTuple tuple;
     
     private final double proposalCapacity;
-    
-    private static int counter = 0;
-    
-    private final int objectCounter;
-    
-    private final LocalDateTime timeStamp;
     
     /**
      * @param sender .
@@ -97,9 +90,6 @@ public final class FinalRCDiffProposal implements FinalRCDiffMessageContent, Ser
         this.sink = sink;
         this.tuple = tuple;
         this.proposalCapacity = proposalCapacity;
-        this.timeStamp = LocalDateTime.now();
-        
-        this.objectCounter = counter++;
         // don't include anything that does a fuzzy match in equals
         this.hashCode = Objects.hash(tuple, sender, root, sink);
     }
@@ -168,8 +158,7 @@ public final class FinalRCDiffProposal implements FinalRCDiffMessageContent, Ser
     @Override
     public String toString() {
         return "FinalRCDiffProposal [sender=" + sender + ", root=" + root + ", sink=" + sink + ", tuple=" + tuple
-                + ", proposalCapacity=" + proposalCapacity + ", objectCounter=" + objectCounter + ", timeStamp="
-                + timeStamp + "]";
+                + ", proposalCapacity=" + proposalCapacity + "]";
     }
 
     /**
@@ -177,12 +166,5 @@ public final class FinalRCDiffProposal implements FinalRCDiffMessageContent, Ser
      */
     public FinalRCDiffTuple getTuple() {
         return tuple;
-    }
-
-    /**
-     * @return timeStamp
-     */
-    public LocalDateTime getTimeStamp() {
-        return timeStamp;
     }
 }

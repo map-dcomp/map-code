@@ -40,8 +40,8 @@ import javax.annotation.Nonnull;
 import com.bbn.map.AgentConfiguration;
 import com.bbn.protelis.networkresourcemanagement.InterfaceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
-import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.ImmutableUtils;
@@ -81,9 +81,9 @@ public class NetworkDemandTracker {
         }
     }
 
-    private static Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> mergeIfceData(
-            final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> oldIfceData,
-            final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> newIfceData) {
+    private static Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> mergeIfceData(
+            final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> oldIfceData,
+            final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> newIfceData) {
 
         // merge newIfceData into oldIfceData
         newIfceData.forEach((flow, flowData) -> {
@@ -113,18 +113,18 @@ public class NetworkDemandTracker {
      *            the value measured
      */
     public void updateDemandValues(final long timestamp,
-            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
+            @Nonnull final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad) {
 
-        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> newNetworkLoad;
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> newNetworkLoad;
         synchronized (failedRequests) {
             // modify the compute load based on the failed requests
             if (!failedRequests.isEmpty()) {
 
-                final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> newLoad = new HashMap<>();
+                final Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> newLoad = new HashMap<>();
                 // put all of networkLoad into newLoad as mutable Maps so that
                 // the merge below works
                 networkLoad.forEach((ifce, ifceData) -> {
-                    final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> newIfceData = new HashMap<>();
+                    final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> newIfceData = new HashMap<>();
 
                     ifceData.forEach((flow, flowData) -> {
                         final Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>> newFlowData = new HashMap<>();
@@ -137,15 +137,15 @@ public class NetworkDemandTracker {
                     newLoad.put(ifce, newIfceData);
                 });
 
-                final Iterator<Map.Entry<Long, Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>>> iter = failedRequests
+                final Iterator<Map.Entry<Long, Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>>> iter = failedRequests
                         .entrySet().iterator();
                 while (iter.hasNext()) {
-                    final Map.Entry<Long, Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>> entry = iter
+                    final Map.Entry<Long, Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>> entry = iter
                             .next();
                     final long endTime = entry.getKey();
                     if (endTime > timestamp) {
                         // make atTime a deep copy of entry.getValue() from failedRequests to prevent any objects in failedRequests from getting into newLoad and being affected by the merge
-                        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> atTime = new HashMap<>();
+                        final Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> atTime = new HashMap<>();
                         entry.getValue().forEach((ifce, ifceData) -> {
                             ifceData.forEach((flow, flowData) -> {
                                 flowData.forEach((service, serviceData) -> {
@@ -191,7 +191,7 @@ public class NetworkDemandTracker {
      *         {@link #updateDemandValues(long, ImmutableMap)}
      */
     @Nonnull
-    public ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand(
+    public ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> computeNetworkDemand(
             @Nonnull final ResourceReport.EstimationWindow estimationWindow) {
         synchronized (helperLock) {
             switch (estimationWindow) {
@@ -243,7 +243,7 @@ public class NetworkDemandTracker {
         return result.build();
     }
 
-    private final Map<Long, Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>> failedRequests = new HashMap<>();
+    private final Map<Long, Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>>> failedRequests = new HashMap<>();
 
     /**
      * Note that a request has failed.
@@ -262,8 +262,8 @@ public class NetworkDemandTracker {
      *            the requested service
      */
     public void addFailedRequest(final InterfaceIdentifier ifce,
-            final NodeIdentifier client,
-            final NodeIdentifier server,
+            final RegionIdentifier client,
+            final RegionIdentifier server,
             final ServiceIdentifier<?> service,
             final long networkEndTime,
             final Map<LinkAttribute, Double> rawLoad) {
@@ -272,11 +272,11 @@ public class NetworkDemandTracker {
         final Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>> serviceLoad = new HashMap<>();
         serviceLoad.put(service, rawLoad2);
 
-        final NodeNetworkFlow flow = new NodeNetworkFlow(client, server, server);
-        final Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> flowLoad = new HashMap<>();
+        final RegionNetworkFlow flow = new RegionNetworkFlow(client, server, server);
+        final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> flowLoad = new HashMap<>();
         flowLoad.put(flow, serviceLoad);
 
-        final Map<InterfaceIdentifier, Map<NodeNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> networkLoad = new HashMap<>();
+        final Map<InterfaceIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> networkLoad = new HashMap<>();
         networkLoad.put(ifce, flowLoad);
 
         synchronized (failedRequests) {

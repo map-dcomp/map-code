@@ -123,7 +123,7 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
         // Not running the first DCOP run due to incomplete neighbor information
         if (newIteration == 0) {
 //            return defaultPlan(summary);
-            RegionPlan defaultRegionPlan = defaultPlan(summary, 0);
+            RegionPlan defaultRegionPlan = defaultPlan(summary);
             LOGGER.info("DCOP Run {} Region Plan Region {}: {}", newIteration, getRegionID(), defaultRegionPlan);
             return defaultRegionPlan;
         }
@@ -167,7 +167,7 @@ public class RdiffAlgorithm extends AbstractDcopAlgorithm {
                 e.printStackTrace();
                 LOGGER.warn("InterruptedException when waiting for messages. Return the default DCOP plan: {} ",
                         e.getMessage(), e);
-                return defaultPlan(summary, iteration);
+                return defaultPlan(summary);
             }
             
             for (Entry<RegionIdentifier, RdiffDcopMessage> entry : receivedRdiffMessageMap.entrySet()) {

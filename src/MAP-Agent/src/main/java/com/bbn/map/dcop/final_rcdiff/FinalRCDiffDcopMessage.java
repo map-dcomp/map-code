@@ -70,24 +70,6 @@ public final class FinalRCDiffDcopMessage implements GeneralDcopMessage, Seriali
         return new FinalRCDiffDcopMessage(object.getMessageMap());
     }
     
-    /**
-     * @param  object is the object to be copied
-     * @return a deep copy with time stamp is set to current of the FinalRCDiffDcopMessage object
-     */
-    public static FinalRCDiffDcopMessage deepCopyWithUpdateTimestamp(FinalRCDiffDcopMessage object) {
-        Map<FinalRCDiffMessageType, Set<FinalRCDiffMessageContent>> copiedMsgMap = new HashMap<>();
-        
-        for (Entry<FinalRCDiffMessageType, Set<FinalRCDiffMessageContent>> orgEntry : object.getMessageMap().entrySet()) {
-            for (FinalRCDiffMessageContent orgMsgContent : orgEntry.getValue()) {
-                copiedMsgMap.computeIfAbsent(orgEntry.getKey(), k -> new HashSet<>()).add(FinalRCDiffMessageContent.deepCopy(orgMsgContent));
-            }
-        }
-        
-        
-//        return new FinalRCDiffDcopMessage(object.getMessageMap());
-        return new FinalRCDiffDcopMessage(copiedMsgMap);
-    }
-    
     private FinalRCDiffDcopMessage(Map<FinalRCDiffMessageType, Set<FinalRCDiffMessageContent>> messageMap) {
         for (Entry<FinalRCDiffMessageType, Set<FinalRCDiffMessageContent>> entry : messageMap.entrySet()) {
             this.messageMap.computeIfAbsent(entry.getKey(), k -> new HashSet<>()).addAll(entry.getValue());

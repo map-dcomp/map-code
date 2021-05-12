@@ -55,8 +55,8 @@ import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkServer;
 import com.bbn.protelis.networkresourcemanagement.NodeAttribute;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ServiceStatus;
@@ -389,7 +389,7 @@ public class ContainerSim {
      * 
      * @param startTime
      *            passed to
-     *            {@link LinkResourceManager#addLinkLoad(long, ImmutableMap, ImmutableMap, ApplicationCoordinates, long, NodeNetworkFlow, NodeIdentifier)}
+     *            {@link LinkResourceManager#addLinkLoad(long, ImmutableMap, ImmutableMap, ApplicationCoordinates, long, RegionNetworkFlow, NodeIdentifier)}
      * @param client
      *            the client causing the load
      * 
@@ -413,11 +413,12 @@ public class ContainerSim {
             @Nonnull final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped,
             @Nonnull final ApplicationCoordinates service,
             final long duration,
-            @Nonnull final NodeIdentifier client) {
+            @Nonnull final RegionIdentifier client) {
         synchronized (lock) {
             // "source" is the container since the client load request is from
             // the perspective of the server
-            final NodeNetworkFlow flow = new NodeNetworkFlow(getIdentifier(), client, getIdentifier());
+            final RegionNetworkFlow flow = new RegionNetworkFlow(getParentNode().getRegionIdentifier(), client,
+                    getParentNode().getRegionIdentifier());
 
             // all traffic to containers only sees the host as the neighbor
             final NodeIdentifier host = parent.getNode().getNodeIdentifier();
@@ -487,9 +488,9 @@ public class ContainerSim {
 
                 // the neighbor is the "receiving" side to get the network
                 // direction to match the hi-fi environment
-                final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkNetworkLoad = networkLoadTracker
+                final ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkNetworkLoad = networkLoadTracker
                         .computeCurrentLinkLoad(now, parent.getNode().getNodeIdentifier());
-                final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportNetworkLoad = ImmutableMap
+                final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> reportNetworkLoad = ImmutableMap
                         .of(BasicResourceManager.createInterfaceIdentifierForNeighbor(
                                 parent.getNode().getNodeIdentifier()), linkNetworkLoad);
                 logger.trace("network load: {}", reportNetworkLoad);

@@ -222,54 +222,56 @@ public class BackgroundTrafficSim extends AbstractClientSimulator {
             final BackgroundNetworkLoad request,
             final long latestEndOfRequest) {
 
-        final NodeNetworkFlow flow = createNetworkFlow(clientNode.getNodeIdentifier(), serverNode.getNodeIdentifier());
-        final List<NetworkLink> networkPath = getSimulation().getPath(clientNode, serverNode);
-        if (networkPath.isEmpty()) {
-            LOGGER.warn("No path to {} from {}", clientNode, serverNode);
-            getSimulationState().incrementRequestsFailedForDownNode();
-
-            dumpClientRequestRecord(new ClientRequestRecord(serverNode.getNodeIdentifier(),
-                    serverNode.getNodeIdentifier(), now, request, 0, null, null, RequestResult.FAIL, true), mapper);
-
-            return Pair.of(false, latestEndOfRequest);
-        }
-
-        final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute = request.getNetworkLoadAsAttribute();
-        final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped = request
-                .getNetworkLoadAsAttributeFlipped();
-        final ApplicationCoordinates service = request.getService();
-        final long networkDuration = request.getNetworkDuration();
-
-        final NetworkDemandApplicationResult networkResult = applyNetworkDemand(getSimulation(),
-                clientNode.getNodeIdentifier(), clientNode.getNodeIdentifier(), now, networkLoadAsAttribute,
-                networkLoadAsAttributeFlipped, service, networkDuration, null, flow, networkPath);
-
-        // record the results of the request
-        final List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoads = new ArrayList<>();
-        for (ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkResult : networkResult.linkLoads) {
-            ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkLoad = linkResult;
-            linkLoads.add(linkLoad);
-        }
-
-        dumpClientRequestRecord(new ClientRequestRecord(serverNode.getNodeIdentifier(), serverNode.getNodeIdentifier(),
-                now, request, linkLoads.size(), linkLoads, networkResult.result, null, false), mapper);
-
-        if (RequestResult.FAIL.equals(networkResult.result)) {
-            getSimulationState().incrementRequestsFailedForNetworkLoad();
-            LOGGER.info("Request failed for network load");
-            return Pair.of(false, latestEndOfRequest);
-        } else {
-            if (RequestResult.SLOW.equals(networkResult.result)) {
-                getSimulationState().incrementRequestsSlowForNetworkLoad();
-            }
-
-            final RegionIdentifier destinationRegion = serverNode.getRegionIdentifier();
-            getSimulationState().incrementRequestsServicedByRegion(destinationRegion);
-
-            final long endOfThisRequest = request.getStartTime() + request.getNetworkDuration();
-            final long newLatestEndOfRequest = Math.max(latestEndOfRequest, endOfThisRequest);
-
-            return Pair.of(true, newLatestEndOfRequest);
-        }
+        throw new RuntimeException("HACK for testing");
+//        
+//        final NodeNetworkFlow flow = createNetworkFlow(clientNode.getNodeIdentifier(), serverNode.getNodeIdentifier());
+//        final List<NetworkLink> networkPath = getSimulation().getPath(clientNode, serverNode);
+//        if (networkPath.isEmpty()) {
+//            LOGGER.warn("No path to {} from {}", clientNode, serverNode);
+//            getSimulationState().incrementRequestsFailedForDownNode();
+//
+//            dumpClientRequestRecord(new ClientRequestRecord(serverNode.getNodeIdentifier(),
+//                    serverNode.getNodeIdentifier(), now, request, 0, null, null, RequestResult.FAIL, true), mapper);
+//
+//            return Pair.of(false, latestEndOfRequest);
+//        }
+//
+//        final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute = request.getNetworkLoadAsAttribute();
+//        final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped = request
+//                .getNetworkLoadAsAttributeFlipped();
+//        final ApplicationCoordinates service = request.getService();
+//        final long networkDuration = request.getNetworkDuration();
+//
+//        final NetworkDemandApplicationResult networkResult = applyNetworkDemand(getSimulation(),
+//                clientNode.getNodeIdentifier(), clientNode.getNodeIdentifier(), now, networkLoadAsAttribute,
+//                networkLoadAsAttributeFlipped, service, networkDuration, null, flow, networkPath);
+//
+//        // record the results of the request
+//        final List<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoads = new ArrayList<>();
+//        for (ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkResult : networkResult.linkLoads) {
+//            ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkLoad = linkResult;
+//            linkLoads.add(linkLoad);
+//        }
+//
+//        dumpClientRequestRecord(new ClientRequestRecord(serverNode.getNodeIdentifier(), serverNode.getNodeIdentifier(),
+//                now, request, linkLoads.size(), linkLoads, networkResult.result, null, false), mapper);
+//
+//        if (RequestResult.FAIL.equals(networkResult.result)) {
+//            getSimulationState().incrementRequestsFailedForNetworkLoad();
+//            LOGGER.info("Request failed for network load");
+//            return Pair.of(false, latestEndOfRequest);
+//        } else {
+//            if (RequestResult.SLOW.equals(networkResult.result)) {
+//                getSimulationState().incrementRequestsSlowForNetworkLoad();
+//            }
+//
+//            final RegionIdentifier destinationRegion = serverNode.getRegionIdentifier();
+//            getSimulationState().incrementRequestsServicedByRegion(destinationRegion);
+//
+//            final long endOfThisRequest = request.getStartTime() + request.getNetworkDuration();
+//            final long newLatestEndOfRequest = Math.max(latestEndOfRequest, endOfThisRequest);
+//
+//            return Pair.of(true, newLatestEndOfRequest);
+//        }
     }
 }

@@ -44,7 +44,7 @@ import com.bbn.map.common.value.ApplicationCoordinates;
 import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.bbn.protelis.utils.VirtualClock;
 import com.google.common.collect.ImmutableMap;
@@ -230,16 +230,18 @@ import com.google.common.collect.ImmutableMap;
      * @see #removeLinkLoad(BaseNetworkLoad, NodeIdentifier)
      * @see LoadTracker#addLoad(LoadEntry)
      */
-    public ImmutableTriple<RequestResult, LinkLoadEntry, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> addLinkLoad(
+    public ImmutableTriple<RequestResult, LinkLoadEntry, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> addLinkLoad(
             final long startTime,
             @Nonnull final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute,
             @Nonnull final ImmutableMap<LinkAttribute, Double> networkLoadAsAttributeFlipped,
             @Nonnull final ApplicationCoordinates service,
             final long duration,
-            @Nonnull final NodeNetworkFlow clientReqFlow,
+            @Nonnull final RegionNetworkFlow clientReqFlow,
             @Nonnull final NodeIdentifier transmittingNode) {
         synchronized (lock) {
 
+            // FIXME need to know if to include the load in the final result. The load needs to be added to the link for bandwidth checks, but not added to the resource report. 
+            
             final boolean flipDatarateDirection;
             if (getTransmitter().equals(transmittingNode)) {
                 flipDatarateDirection = false;
@@ -253,10 +255,10 @@ import com.google.common.collect.ImmutableMap;
             // when flipping the network direction, the flow needs to be flipped
             // as well
             final ImmutableMap<LinkAttribute, Double> networkLoad;
-            final NodeNetworkFlow flow;
+            final RegionNetworkFlow flow;
             if (flipDatarateDirection) {
                 networkLoad = networkLoadAsAttributeFlipped;
-                flow = new NodeNetworkFlow(clientReqFlow.getDestination(), clientReqFlow.getSource(),
+                flow = new RegionNetworkFlow(clientReqFlow.getDestination(), clientReqFlow.getSource(),
                         clientReqFlow.getServer());
             } else {
                 networkLoad = networkLoadAsAttribute;
@@ -272,7 +274,7 @@ import com.google.common.collect.ImmutableMap;
             final LinkLoadEntry entry = new LinkLoadEntry(this, flow, startTime, duration, service, networkLoad);
             loadTracker.addLoad(entry);
 
-            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> load = loadTracker
+            final ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> load = loadTracker
                     .getCurrentLoad();
             if (LOGGER.isTraceEnabled()) {
                 // if statement to ensure that getCurrentLoad doesn't do work
@@ -316,7 +318,7 @@ import com.google.common.collect.ImmutableMap;
      *            flipped.
      * @return flow -> service -> attribute -> value
      */
-    public ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computeCurrentLinkLoad(
+    public ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> computeCurrentLinkLoad(
             final long now,
             @Nonnull final NodeIdentifier receivingNode) {
 

@@ -64,7 +64,7 @@ import com.bbn.protelis.networkresourcemanagement.LinkAttribute;
 import com.bbn.protelis.networkresourcemanagement.NetworkClient;
 import com.bbn.protelis.networkresourcemanagement.NetworkLink;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
-import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport;
 import com.bbn.protelis.networkresourcemanagement.ResourceReport.EstimationWindow;
@@ -157,9 +157,14 @@ public class LinkUtilizationTest {
             LOGGER.info("Service 1 is running in container {}", containerIdRunningService1);
 
             final ContainerSim serverEContainer = sim.getContainerById(containerIdRunningService1);
+            if(true) {
+                throw new RuntimeException("HACK for testing");
+            }
+            /*            
 
             // apply client request
-            final NodeNetworkFlow flowToApply = ClientSim.createNetworkFlow(clientId, serverEContainer.getIdentifier());
+            final RegionNetworkFlow flowToApply = ClientSim.createNetworkFlow(clientId,
+                    serverEContainer.getIdentifier());
             final List<NetworkLink> networkPath = sim.getPath(client, serverE);
 
             final ImmutableMap<LinkAttribute, Double> networkLoadAsAttribute = req.getNetworkLoadAsAttribute();
@@ -171,9 +176,9 @@ public class LinkUtilizationTest {
             AbstractClientSimulator.applyNetworkDemand(sim, clientId, clientId, 0, networkLoadAsAttribute,
                     networkLoadAsAttributeFlipped, service, duration, serverEContainer, flowToApply, networkPath);
 
-            final NodeNetworkFlow expectedFlow = new NodeNetworkFlow(containerIdRunningService1, clientId,
+            final RegionNetworkFlow expectedFlow = new RegionNetworkFlow(containerIdRunningService1, clientId,
                     containerIdRunningService1);
-            final NodeNetworkFlow expectedFlowFlipped = new NodeNetworkFlow(expectedFlow.getDestination(),
+            final RegionNetworkFlow expectedFlowFlipped = new RegionNetworkFlow(expectedFlow.getDestination(),
                     expectedFlow.getSource(), expectedFlow.getServer());
 
             // check all NCPs starting at the client
@@ -198,7 +203,7 @@ public class LinkUtilizationTest {
             final ContainerResourceReport containerResourceReport = serverEContainer
                     .getContainerResourceReport(EstimationWindow.SHORT);
             assertThat("Container Service resource report", containerResourceReport, notNullValue());
-
+*/
         }
     }
 
@@ -208,13 +213,13 @@ public class LinkUtilizationTest {
             final NodeIdentifier clientNeighbor,
             final NodeIdentifier serverNeighbor,
             final double tolerance,
-            final NodeNetworkFlow expectedFlow,
+            final RegionNetworkFlow expectedFlow,
             final double rx,
             final double tx,
-            final NodeNetworkFlow expectedFlowFlipped,
+            final RegionNetworkFlow expectedFlowFlipped,
             final double rxFlipped,
             final double txFlipped) {
-        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> serverANetLoad = getNetworkLoad(
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> serverANetLoad = getNetworkLoad(
                 sim, ncpId);
         int expectedMapSize = 0;
 
@@ -227,14 +232,14 @@ public class LinkUtilizationTest {
         }
         assertThat(serverANetLoad, aMapWithSize(expectedMapSize));
         if (null != clientNeighbor) {
-            final Optional<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> load = serverANetLoad
+            final Optional<ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> load = serverANetLoad
                     .entrySet().stream().filter(entry -> entry.getKey().getNeighbors().contains(clientNeighbor))
                     .map(Map.Entry::getValue).findFirst();
             assertTrue(load.isPresent());
             checkNeighborLoad(service, tolerance, rx, tx, expectedFlow, load.get());
         }
         if (null != serverNeighbor) {
-            final Optional<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> load = serverANetLoad
+            final Optional<ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> load = serverANetLoad
                     .entrySet().stream().filter(entry -> entry.getKey().getNeighbors().contains(serverNeighbor))
                     .map(Map.Entry::getValue).findFirst();
             assertTrue(load.isPresent());
@@ -243,7 +248,7 @@ public class LinkUtilizationTest {
         }
     }
 
-    private ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> getNetworkLoad(
+    private ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> getNetworkLoad(
             final Simulation sim,
             final NodeIdentifier id) {
         final Controller ncp = sim.getControllerById(id);
@@ -256,7 +261,7 @@ public class LinkUtilizationTest {
         final ResourceReport report = manager.getCurrentResourceReport(EstimationWindow.SHORT);
         assertThat(report, notNullValue());
 
-        final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> netLoad = report
+        final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> netLoad = report
                 .getNetworkLoad();
         return netLoad;
     }
@@ -265,8 +270,8 @@ public class LinkUtilizationTest {
             final double tolerance,
             final double expectedRx,
             final double expectedTx,
-            final NodeNetworkFlow expectedFlow,
-            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborNetworkLoad) {
+            final RegionNetworkFlow expectedFlow,
+            final ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> neighborNetworkLoad) {
         assertThat(neighborNetworkLoad, aMapWithSize(1));
         assertThat(neighborNetworkLoad, hasKey(expectedFlow));
 

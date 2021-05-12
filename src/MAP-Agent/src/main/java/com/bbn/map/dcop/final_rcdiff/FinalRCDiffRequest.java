@@ -1,7 +1,6 @@
 package com.bbn.map.dcop.final_rcdiff;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -28,12 +27,6 @@ public final class FinalRCDiffRequest implements FinalRCDiffMessageContent, Seri
     
     private final int hop;
     
-    private static int counter = 0;
-    
-    private final int objectCounter;
-    
-    private final LocalDateTime timeStamp;
-            
     /**
      * @return a FinalRCDiffRequest object with root=null, loadMap=empty map, hop = Integer.MAX_VALUE
      */
@@ -65,8 +58,6 @@ public final class FinalRCDiffRequest implements FinalRCDiffMessageContent, Seri
         this.root = root;
         this.loadMap.putAll(loadMap);
         this.hop = hop;
-        this.timeStamp = LocalDateTime.now();
-        this.objectCounter = counter++;
     }
     
     /**
@@ -102,11 +93,7 @@ public final class FinalRCDiffRequest implements FinalRCDiffMessageContent, Seri
      * @return true if the reques is empty
      */
     public boolean isEmptyRequest() {
-        return root == null
-                && loadMap.isEmpty()
-                && hop == Integer.MAX_VALUE;
-        // Do not use equals in case they're having same value but with different construction time
-//        return this.equals(FinalRCDiffRequest.emptyRequest());
+        return this.equals(FinalRCDiffRequest.emptyRequest());
     }
     
     
@@ -133,25 +120,7 @@ public final class FinalRCDiffRequest implements FinalRCDiffMessageContent, Seri
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("FinalRCDiffRequest [root=");
-        builder.append(root);
-        builder.append(", loadMap=");
-        builder.append(loadMap);
-        builder.append(", hop=");
-        builder.append(hop);
-        builder.append(", objectCounter=");
-        builder.append(objectCounter);
-        builder.append(", timeStamp=");
-        builder.append(timeStamp);
-        builder.append("]");
-        return builder.toString();
+        return "FinalRCDiffRequest [root=" + root + ", loadMap=" + loadMap + ", hop=" + hop + "]";
     }
 
-    /**
-     * @return timeStamp
-     */
-    public LocalDateTime getTimeStamp() {
-        return timeStamp;
-    }
 }

@@ -1,7 +1,6 @@
 package com.bbn.map.dcop.final_rcdiff;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
@@ -28,12 +27,6 @@ public final class FinalRCDiffServerToClient implements FinalRCDiffMessageConten
     
     private final double load;
     
-    private static int counter = 0;
-    
-    private final int objectCounter;
-    
-    private final LocalDateTime timeStamp;
-
     /**
      * @param server .
      * @param client .
@@ -58,8 +51,6 @@ public final class FinalRCDiffServerToClient implements FinalRCDiffMessageConten
         this.client = client;
         this.service = service;
         this.load = load;
-        this.timeStamp = LocalDateTime.now();
-        this.objectCounter = counter++;
         // don't include anything that does a fuzzy match in equals
         this.hashCode = Objects.hash(server, client, service);
     }
@@ -90,13 +81,6 @@ public final class FinalRCDiffServerToClient implements FinalRCDiffMessageConten
      */
     public double getLoad() {
         return load;
-    }
-    
-    /**
-     * @return timeStamp
-     */
-    public LocalDateTime getTimeStamp() {
-        return timeStamp;
     }
 
     private final int hashCode;
@@ -129,6 +113,8 @@ public final class FinalRCDiffServerToClient implements FinalRCDiffMessageConten
     @Override
     public String toString() {
         return "FinalRCDiffServerToClient [server=" + server + ", client=" + client + ", service=" + service + ", load="
-                + load + ", objectCounter=" + objectCounter + ", timeStamp=" + timeStamp + "]";
+                + load + "]";
     }
+    
+    
 }

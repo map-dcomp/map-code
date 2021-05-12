@@ -133,11 +133,30 @@ try "${mydir}"/run-chartgen.sh \
     --output "${chart_output}" \
     > "${chart_output}"/chartgen.log 2>&1
 
-
+load_unit=""
+if [ -n "$(find ${chart_output}/client_demand -maxdepth 1 -name '*-CPU.csv' -print -quit)" ]; then
+    load_unit=CPU
+elif [ -n "$(find ${chart_output}/client_demand -maxdepth 1 -name '*-TASK_CONTAINERS.csv' -print -quit)" ]; then
+    load_unit=TASK_CONTAINERS
+else
+    error "Unable to determine load unit for gnuplot graphs"
+fi
 
 try "${mydir}"/get_sim-start_timestamp.sh \
     --sim "${sim_output}" \
     > "${chart_output}"/start_simulation.timestamp
+
+if [ -n "${load_unit}" ]; then
+    log "Generating gnuplot charts see ${gnuplot_graph_output}/gnuplot_graphs.log for output"
+    "${mydir}"/gnuplot/generate_gnuplot_charts.sh \
+          --sim "${sim_output}" \
+	      --chart_output "${chart_output}" \
+	      --load_unit "${load_unit}" \
+          --window_suffix "SHORT" \
+	      --run_title "$(basename $(dirname ${sim_output}))" \
+	      --output "${gnuplot_graph_output}" \
+	      > "${gnuplot_graph_output}"/gnuplot_graphs.log 2>&1 &
+fi
 
 log "Running overflow-plan-analysis see ${graph_output}/overflow-plan-analysis.log for output"
 "${mydir}"/overflow-plan-analysis.py \

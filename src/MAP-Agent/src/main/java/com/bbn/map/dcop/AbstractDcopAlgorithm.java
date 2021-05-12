@@ -303,16 +303,9 @@ public abstract class AbstractDcopAlgorithm {
     
     /**
      * @param summary .
-     * @param dcopRun .
-     * @return return null if dcopRun >= 1, otherwise return default plan that sheds all load to the data center
+     * @return the plan by default when this region processes all the load
      */
-    protected RegionPlan defaultPlan(ResourceSummary summary, int dcopRun) {
-        // Return null plan if DCOP run >= 1
-        // Only return non-empty plan in the first DCOP run
-        if (dcopRun >= 1) {
-            return null;
-        }
-        
+    protected RegionPlan defaultPlan(ResourceSummary summary) {
         Builder<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, Double>> servicePlanBuilder = new Builder<>();
         
         for (final ApplicationSpecification spec : AppMgrUtils.getApplicationManager().getAllApplicationSpecifications()) {
@@ -618,27 +611,11 @@ public abstract class AbstractDcopAlgorithm {
      * @postcondition neighborSet contains the set of neighbors
      */
     protected void retrieveNeighborSetFromNetworkLink(ResourceSummary summary) {
-        // To get the most up-to-date neighbor set
-        neighborSet.clear();
-        
+//        neighborSet.addAll(summary.getNetworkCapacity().keySet());
         neighborSet.addAll(dcopInfoProvider.getAllDcopSharedInformation().keySet());
         neighborSet.remove(regionID);
         neighborSet.remove(RegionIdentifier.UNKNOWN);
-        LOGGER.info("My neighbors are: {}", getNeighborSet());
-    }
-    
-    /**
-     * @param topology .
-     * @postcondition neighborSet contains the set of neighbors
-     */
-    protected void retrieveNeighborSetFromTopology(RegionalTopology topology) {
-        // To get the most up-to-date neighbor set
-        neighborSet.clear();
-        
-        neighborSet.addAll(topology.getNeighboringRegions(regionID));
-        neighborSet.remove(regionID);
-        neighborSet.remove(RegionIdentifier.UNKNOWN);
-        LOGGER.info("My neighbors are: {}", getNeighborSet());
+        LOGGER.info("My neighbors are: {}", getNeighborSet().toString());
     }
     
     /**
@@ -774,7 +751,7 @@ public abstract class AbstractDcopAlgorithm {
         }
         
         if (compareDouble(sumValues(incomingLoadMap), 0) == 0) {
-            RegionPlan defaultRegionPlan = defaultPlan(summary, lastIteration);
+            RegionPlan defaultRegionPlan = defaultPlan(summary);
             LOGGER.info("DCOP Run {} Region Plan Region {}: {}", lastIteration, getRegionID(), defaultRegionPlan);
             return defaultRegionPlan;
         }

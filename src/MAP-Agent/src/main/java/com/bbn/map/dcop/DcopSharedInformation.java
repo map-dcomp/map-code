@@ -30,12 +30,6 @@ public final class DcopSharedInformation implements Serializable {
     private DcopReceiverMessage asynchronousMessage = new DcopReceiverMessage();
 
     private final LocalDateTime constructionTime = LocalDateTime.now();
-    
-    /**
-     * DCOP Run -> Construction time of this object
-     * Used by DCOP regions to get the construction time for the current DCOP run 
-     */
-    private final Map<Integer, LocalDateTime> constructionTimeMap = new HashMap<>();
 
     /**
      * Default constructor.
@@ -56,9 +50,6 @@ public final class DcopSharedInformation implements Serializable {
                 this.putMessageAtIteration(entry.getKey(),
                         new DcopReceiverMessage(msg, AgentConfiguration.getInstance().getDcopAlgorithm()));
             }
-            
-            // Copy construction time map when copying the object
-            constructionTimeMap.putAll(o.getConstructionTimeMap());
 
             asynchronousMessage = new DcopReceiverMessage(o.getAsynchronousMessage(),
                     AgentConfiguration.getInstance().getDcopAlgorithm());
@@ -176,10 +167,6 @@ public final class DcopSharedInformation implements Serializable {
         builder.append(asynchronousMessage);
         builder.append(", constructed at=");
         builder.append(constructionTime);
-        builder.append(", constructionTimeMap=");
-        builder.append(constructionTimeMap);
-        builder.append(", protelisState=");
-        builder.append(protelisState);
         builder.append("]");
         return builder.toString();
     }
@@ -228,12 +215,5 @@ public final class DcopSharedInformation implements Serializable {
      */
     public Map<CodePath, Object> getProtelisState() {
         return protelisState;
-    }
-
-    /**
-     * @return construction time map
-     */
-    public Map<Integer, LocalDateTime> getConstructionTimeMap() {
-        return constructionTimeMap;
     }
 }

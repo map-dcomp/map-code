@@ -146,7 +146,7 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
 
         // Not running the first DCOP run due to incomplete neighbor information
         if (firstIteration == 0) {
-            return defaultPlan(summary, 0);
+            return defaultPlan(summary);
         }
                 
         final ImmutableMap<ServiceIdentifier<?>, ImmutableMap<RegionIdentifier, ImmutableMap<NodeAttribute, Double>>> inferredServerDemand = allocateComputeBasedOnNetwork(
@@ -185,9 +185,9 @@ public class CdiffAlgorithm extends AbstractDcopAlgorithm {
                 e.printStackTrace();
                 LOGGER.warn("InterruptedException when waiting for messages. Return the default DCOP plan: {} ",
                         e.getMessage(), e);
-                return defaultPlan(summary, iteration);
-            
+                return defaultPlan(summary);
             }
+            
             LOGGER.info("Iteration {} Region {} has receivedCdiffMessageMap {}", iteration, getRegionID(), receivedCdiffMessageMap);
             
             for (Entry<RegionIdentifier, CdiffDcopMessage> entry : receivedCdiffMessageMap.entrySet()) {

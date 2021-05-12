@@ -1440,7 +1440,7 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
             final NodeIdentifier reportNode,
             final Set<NodeIdentifier> containersOnReportNode,
             final RegionLookupService nodeToRegion,
-            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> source,
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<RegionNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> source,
             final Map<RegionIdentifier, Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>>> dest) {
 
         source.forEach((neighborInterface, neighborData) -> {
@@ -1453,35 +1453,19 @@ public class Controller extends NetworkServer implements DcopInfoProvider, RlgIn
                     final Map<RegionNetworkFlow, Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>>> destNeighborData = dest
                             .computeIfAbsent(neighborRegion, k -> new HashMap<>());
 
-                    neighborData.forEach((nodeFlow, sourceData) -> {
-                        final NodeIdentifier nodeSource = nodeFlow.getSource();
-                        final NodeIdentifier nodeDest = nodeFlow.getDestination();
-                        final RegionIdentifier regionSource = nodeToRegion.getRegionForNode(nodeSource);
-                        final RegionIdentifier regionDest = nodeToRegion.getRegionForNode(nodeDest);
-                        final NodeIdentifier serverNode = nodeFlow.getServer();
+                    neighborData.forEach((regionFlow, sourceData) -> {
+                        final RegionIdentifier regionSource = regionFlow.getSource();
+                        final RegionIdentifier regionDest = regionFlow.getDestination();
+                        final RegionIdentifier serverRegion = regionFlow.getServer();
 
-                        final RegionIdentifier serverRegion;
-                        if (serverNode.equals(NodeIdentifier.UNKNOWN)) {
-                            serverRegion = RegionIdentifier.UNKNOWN;
-                        } else {
-                            serverRegion = nodeToRegion.getRegionForNode(serverNode);
-                        }
-
-                        final RegionNetworkFlow regionFlow = new RegionNetworkFlow(regionSource, regionDest,
-                                serverRegion);
                         final Map<ServiceIdentifier<?>, Map<LinkAttribute, Double>> destSourceData = destNeighborData
                                 .computeIfAbsent(regionFlow, k -> new HashMap<>());
 
-                        final boolean includeBandwidth;
-                        if (regionSource.equals(regionDest)) {
-                            // only include bandwidth if the node generating the
-                            // report is running the container that is the
-                            // server
-                            includeBandwidth = containersOnReportNode.contains(serverNode)
-                                    || reportNode.equals(serverNode);
-                        } else {
-                            includeBandwidth = true;
-                        }
+                        final boolean includeBandwidth = true; // handled in
+                                                               // collection now
+                                                               // that we
+                                                               // collect at the
+                                                               // region level
 
                         sourceData.forEach((service, serviceData) -> {
                             final Map<LinkAttribute, Double> destServiceData = destSourceData.computeIfAbsent(service,

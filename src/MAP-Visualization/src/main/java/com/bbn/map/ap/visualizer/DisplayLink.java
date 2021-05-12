@@ -101,8 +101,12 @@ public class DisplayLink extends DisplayEdge {
             // computed for the short time interval
             final ResourceReport report = controller.getResourceReport(ResourceReport.EstimationWindow.SHORT);
 
-            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = report
-                    .getNetworkLoad();
+            final ImmutableMap<InterfaceIdentifier, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> networkLoad = ImmutableMap.of();
+            if(true) {
+            throw new RuntimeException("HACK");
+            }
+                    //report
+                    //.getNetworkLoad();
             final Optional<ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkLoad = networkLoad
                     .entrySet().stream().filter(e -> e.getKey().getNeighbors().contains(neighbor.getNodeIdentifier()))
                     .map(Map.Entry::getValue).findAny();

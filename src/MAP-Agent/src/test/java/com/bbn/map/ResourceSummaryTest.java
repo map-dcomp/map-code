@@ -133,8 +133,12 @@ public class ResourceSummaryTest {
                 ServiceStatus.RUNNING, estimationWindow, serverCapacity, serverLoad, serverDemand,
                 serverAverageProcessingTime);
 
-        final ResourceReport report = new ResourceReport(nodeName, timestamp, estimationWindow, serverCapacity,
-                networkCapacity, networkLoad, networkDemand, ImmutableMap.of(containerId, containerReport), 1, 1);
+        final ResourceReport report = null;
+        if(true) {
+        throw new RuntimeException("HACK for testing");
+        }
+        //new ResourceReport(nodeName, timestamp, estimationWindow, serverCapacity,
+          //      networkCapacity, networkLoad, networkDemand, ImmutableMap.of(containerId, containerReport), 1, 1);
 
         final TestRegionLookup regionLookup = new TestRegionLookup();
         regionLookup.addMapping(nodeName, region);

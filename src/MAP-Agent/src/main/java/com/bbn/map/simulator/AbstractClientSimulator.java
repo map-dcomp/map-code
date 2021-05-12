@@ -58,6 +58,7 @@ import com.bbn.protelis.networkresourcemanagement.NetworkNode;
 import com.bbn.protelis.networkresourcemanagement.NodeIdentifier;
 import com.bbn.protelis.networkresourcemanagement.NodeNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.RegionIdentifier;
+import com.bbn.protelis.networkresourcemanagement.RegionNetworkFlow;
 import com.bbn.protelis.networkresourcemanagement.ServiceIdentifier;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -312,38 +313,43 @@ import com.google.common.collect.ImmutableMap;
             // our way down the path from the client to the server, the
             // transmitting node needs to match the TX value in the load, which
             // will be the node closest to the server.
-            final ImmutableTriple<RequestResult, LinkLoadEntry, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkResult = lmgr
-                    .addLinkLoad(now + Math.round(pathLinkDelay), networkLoadAsAttribute, networkLoadAsAttributeFlipped,
-                            service, networkDuration, flow, localDest);
+            throw new RuntimeException("HACK for compile");
+//            final ImmutableTriple<RequestResult, LinkLoadEntry, ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>>> linkResult = lmgr
+//                    .addLinkLoad(now + Math.round(pathLinkDelay), networkLoadAsAttribute, networkLoadAsAttributeFlipped,
+//                            service, networkDuration, flow, localDest);
+//
+//            final RequestResult requestResult = linkResult.getLeft();
+//            final LinkLoadEntry appliedLinkLoad = linkResult.getMiddle();
+//            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkLoad = linkResult
+//                    .getRight();
+//            linkLoads.add(linkLoad);
+//
+//            pathLinkDelay += computeLinkDelay(link);
+//
+//            result = RequestResult.chooseWorstResult(result, requestResult);
+//            if (linkResult.getLeft() == RequestResult.FAIL) {
+//                LOGGER.trace("Failed for network load at link {}", link);
+//
+//                // no sense going farther
+//                break;
+//            } else {
+//                appliedLoads.add(appliedLinkLoad);
+//            }
 
-            final RequestResult requestResult = linkResult.getLeft();
-            final LinkLoadEntry appliedLinkLoad = linkResult.getMiddle();
-            final ImmutableMap<NodeNetworkFlow, ImmutableMap<ServiceIdentifier<?>, ImmutableMap<LinkAttribute, Double>>> linkLoad = linkResult
-                    .getRight();
-            linkLoads.add(linkLoad);
-
-            pathLinkDelay += computeLinkDelay(link);
-
-            result = RequestResult.chooseWorstResult(result, requestResult);
-            if (linkResult.getLeft() == RequestResult.FAIL) {
-                LOGGER.trace("Failed for network load at link {}", link);
-
-                // no sense going farther
-                break;
-            } else {
-                appliedLoads.add(appliedLinkLoad);
-            }
-
-            localSource = localDest;
+//            localSource = localDest;
         } // foreach link in the path
 
         if (RequestResult.FAIL != result && null != serviceContainer) {
             // apply to the container
+            //FIXME hacked in so that things compile, lo-fi won't work
+            throw new RuntimeException("HACK");
+            /*
             final Pair<RequestResult, LinkLoadEntry> containerResult = serviceContainer.addLinkLoad(
                     now + Math.round(pathLinkDelay), networkLoadAsAttribute, networkLoadAsAttributeFlipped, service,
                     networkDuration, clientId);
 
             result = RequestResult.chooseWorstResult(result, containerResult.getLeft());
+            */
         }
 
         if (RequestResult.FAIL == result) {
@@ -412,11 +418,11 @@ import com.google.common.collect.ImmutableMap;
      *            the server container in the flow
      * @return the flow object to use
      */
-    /* package */ static NodeNetworkFlow createNetworkFlow(final NodeIdentifier clientId,
-            final NodeIdentifier destContainerId) {
+    /* package */ static RegionNetworkFlow createNetworkFlow(final RegionIdentifier clientId,
+            final RegionIdentifier destContainerId) {
         // the flow source is the server since the client load requests are
         // from the perspective of the server
-        final NodeNetworkFlow flow = new NodeNetworkFlow(destContainerId, clientId, destContainerId);
+        final RegionNetworkFlow flow = new RegionNetworkFlow(destContainerId, clientId, destContainerId);
         return flow;
     }
 
